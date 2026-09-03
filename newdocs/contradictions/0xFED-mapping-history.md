@@ -77,3 +77,30 @@ initially suspected HERE too and explicitly checked: this block uses
 
 Lean: session 6's reading is correct; the discrepancy is closed with this
 testimony unless someone produces a pre-session-5 head.S without the block.
+
+## ADDENDUM 2026-09-03 (session-3 native context: why the UART VA is 0xFED at all)
+
+Session 3 (2026-08-31 evening) is the session that REBASED the UART virtual
+address from 0xFEB20000 to 0xFED20000 (and PL310_VA from 0xFEB21000 to
+0xFEB42000) in omap4bc.S, as part of the earlyprintk-abort fix. The
+constraint that forced the rebase: a 1 MB section descriptor encodes one PA
+base, and the pre-rebase layout had UART3 (PA base 0x48000000) and PL310
+(PA base 0x48200000) sharing VA section 0xFEB while sitting in DIFFERENT PA
+1 MB bases — they could not both be early-mapped correctly in the same
+section. The rebase preserved (VA - section base) == (PA - PA section base)
+for each device: UART → section 0xFED00000 (PA base 0x48000000), PL310 →
+section 0xFEB00000 (PA base 0x48200000, PL310 at offset 0x42000, i.e.
+0xFEB42000), with head.S early-mapping the PL310 section explicitly
+(`0xFEB00000 -> 0x48200000` — still in the current head.S).
+
+This testimony resolves the history completely: (a) the VA is 0xFED because
+of the collision, not by choice; (b) from the rebase onward, head.S's
+addruart-computed DEBUG_LL block (session 4's addendum) necessarily mapped
+section 0xFED — the rebase changed addruart's return, and the computed idiom
+followed; (c) session 5's literal-section addition may therefore have been a
+duplicate of what the computed idiom already provided (harmless — same
+VA→PA), which is consistent with session 6's reading and with the added code
+surviving. Note the 0xFEB42000 PL310 VA also explains the later "0xFEC
+PA-encoding bug" era: the PL310 early-map section and the debug_ll_io_init
+static map must agree on the same 1 MB PA base, which is only true with the
+offset-preserving scheme.

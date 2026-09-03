@@ -2,7 +2,22 @@
 
 ## The conflicting claims
 
-**Session 6 (docs/03 evening/late sections, HANDOFF_2026-09-02_night):**
+**Session 3** (2026-08-31 evening, SESSION-RECORD_2026-08-31): a single-bit
+DRAM corruption observed on-device — the DTB magic in bc[6] (0x90000018),
+written 0xedfe0dd0 by the payload pre-jump, read back post-WDT2-reboot as
+0xadfe0dd0 (bit 30 flipped). Not the 0xAA churn pattern. This was the
+session's stated prime suspect for the kernel's silent deaths
+(placement-dependent corruption of the kernel image/table). Caveats recorded
+at the time: (a) the bc page was OUTSIDE the later memtest's coverage
+(session 4 swept the fallback buffer region only); (b) write path was
+NOCACHE, read path memdump3 after a warm reset + QNX reboot — a lost write
+could mimic a flip; (c) single observation; (d) several of session 3's
+"deaths" were later re-attributed to infra bugs (ssh-timeout SIGHUP, missing
+WDT2 kicks), so the session's run matrix is weak evidence — but the flip
+itself stands as an unexplained single event in a page that is otherwise
+read-back-reliable.
+
+**Session 6** (docs/03 evening/late sections, HANDOFF_2026-09-02_night):
 "The machine corrupts/loses DRAM transactions under QNX's secure-domain L2
 config... Every wild write/|0x80 byte/corrupted pv-patch site this session =
 this, and it is placement-dependent." Evidence cited: probe.S bare-metal

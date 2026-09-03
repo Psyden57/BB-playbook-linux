@@ -96,3 +96,20 @@ Distrust everything past bc[5] unless this run's code demonstrably wrote it.
 - The eMMC rootfs path (`root=/dev/mmcblk0p2`) is in the cmdline but the
   kernel has no rootfs yet (T4, not started).
 - `qnx-env.sh` hardcodes `/home/psyden` paths (machine-specific, benign).
+
+## 9. The TTBR0 walk-attribute strip in head.S is standing and untested (session 3)
+
+`__enable_mmu` contains `bic r4, r4, #0x6A` — it strips TTB_FLAGS_SMP
+(S|NOS|RGN|IRGN: shareable + cacheable-WBWA PTW-read attributes) that
+`v7_ttb_setup` OR'd into r4 in place. Rationale (session 3, 2026-08-31,
+never disproven): a *shareable* PTW read goes through the SCU and snoops
+CPU1, which D2 holds in PRCM warm reset and which cannot respond — a
+theoretical deadlock on the very first walk after MMU-on. Every session-3
+test of that theory was confounded by the ring-map shift bug; the ring-map
+fix (session 4) unlocked M=1 *with the strip still in place*, so nobody has
+observed whether shareable walks actually deadlock on this machine or not.
+Removing the strip for one run is a cheap experiment: if shareable walks
+are fine, the strip is dead weight (and the non-cacheable walk it forces is
+slower than a WBWA walk-cache-able one would be). If the boot wedges at M=1
+without it, the strip is load-bearing and the D2 decision (CPU1 in reset
+vs parked alive) needs revisiting for SMP coherence reasons.
