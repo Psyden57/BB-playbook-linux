@@ -78,6 +78,17 @@ After a reboot the bc page's tail (bc[6]+) holds garbage while magic +
 bc[1] survive — QNX's own boot tramples DRAM. Mirror pages can be zeroed.
 Always verify magic + nonce before trusting a readback.
 
+Session-4 addendum (2026-09-01): the trap is older and subtler — **bc_arm
+sanitizes only bc[0..5] + the ring headers**, so bc[6] (the probe's DTB-magic
+canary 0xedfe0dd0) and bc[7] (the probe's PL310 cache-id 0x410000c4) SURVIVE
+from previous runs and look like fresh evidence. A 2026-09-01 run was
+briefly misread this way (the probe appeared to have run when it had not —
+bc[4] was the tell: it held the payload's value, not the probe's dtb_phys).
+Also: bc[2] reads 0x60540100 in any pre-probe dump (the probe's raw LE load
+of the big-endian DTB totalsize field) — it is probe residue, not kernel
+output. And bc[12] (0x90000030) holds dtb_phys with no identified writer.
+Distrust everything past bc[5] unless this run's code demonstrably wrote it.
+
 ## 8. Miscellaneous
 
 - The payload requires root + `ThreadCtl(_NTO_TCTL_IO_PRIV)`; all device

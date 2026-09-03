@@ -82,6 +82,10 @@ Built standalone memtest payload (`memtest.c`, `memtest` binary) per mission:
 
 ## Session 2026-09-01 Evening (M=1 WALL BROKEN — ring-map bug fixed)
 **Reference**: `SESSION-HANDOFF/SESSION-RECORD_2026-09-01_ring-map-fix_early-C-wedge.md`
+Run-by-run narrative, dead-end reasoning chains, and micro-decodes (the
+'K'/leading-NUL ring decode, the 0x60540100 probe residue, the 0x5a15 ring3
+header decode, the pre-sweep placement rejections, the invalid-constant
+assembler detour): `newdocs/session-notes/session-04.md`.
 
 ### The breakthrough
 **Root cause of the 122-ceiling found and fixed**: head.S PlayBook ring-map block

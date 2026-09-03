@@ -45,3 +45,35 @@ case this stays a recorded discrepancy).
 UNRESOLVED as history; MOOT for the current code (the console is
 rings-only; UART3 writes are removed entirely; the 0xFED section exists in
 head.S either way).
+
+## ADDENDUM 2026-09-03 (session-4 native context: direct evidence for session 6's claim)
+
+Session 4 (2026-09-01 evening, BEFORE session 5's edits) read the then-
+current head.S DEBUG_LL block (then at ~lines 445-454, `#ifdef
+CONFIG_DEBUG_LL` → "Map in IO space for serial debugging") and it computed
+the UART section mapping FROM addruart's outputs:
+
+```
+addruart r7, r3, r0
+mov   r3, r3, lsr #SECTION_SHIFT
+mov   r3, r3, lsl #PMD_ENTRY_ORDER
+add   r0, r4, r3            @ table entry for the PHYS section
+mov   r3, r7, lsr #SECTION_SHIFT   @ r7 = the UART VIRT from the macro
+ldr   r7, [r10, #PROCINFO_IO_MMUFLAGS]
+orr   r3, r7, r3, lsl #SECTION_SHIFT
+```
+
+Since omap4bc.S's addruart returns 0xFED20000 as the virtual (rebased in the
+2026-08-31 earlyprintk fix), this computed idiom maps section 0xFED without
+the literal "FED" appearing anywhere in head.S. That explains session 5's
+grep failure (the grep was for the literal) and supports session 6's "always
+mapped via addruart" claim. Caveat kept honest: this proves the computing
+code existed pre-session-5; it does not prove the computed descriptor was
+correct at runtime (the value depends on the addruart return and the
+io_mmuflags load, and this block sits right next to the ring-map block whose
+shift bug session 4 found the same evening — the same lsl-mismatch class was
+initially suspected HERE too and explicitly checked: this block uses
+`lsr #SECTION_SHIFT` on a real PA/VA, the correct idiom).
+
+Lean: session 6's reading is correct; the discrepancy is closed with this
+testimony unless someone produces a pre-session-5 head.S without the block.
