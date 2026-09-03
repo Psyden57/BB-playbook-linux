@@ -26,6 +26,10 @@ Rules of the run (from docs/ + hard experience):
 - A payload SIGSEGV does **not** reboot the device; a WDT2 expiry does (~59 s).
 - An aborted payload run disarms WDT2 (no surprise reboot); the next run's
   kick re-enables it properly.
+- Editing `stub3.S`/`head.S`/`omap4bc.S`? Read session-notes/session-02.md
+  CONFIRMED #1 first — the four assembly traps (inline data executes as
+  code; marker immediates must be ARM-encodable; pbmark clobbers r0+ip;
+  SP is banked — `cps #0x13` before loading sp).
 
 ## Building the payload
 

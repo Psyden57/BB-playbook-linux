@@ -89,6 +89,16 @@ of the big-endian DTB totalsize field) — it is probe residue, not kernel
 output. And bc[12] (0x90000030) holds dtb_phys with no identified writer.
 Distrust everything past bc[5] unless this run's code demonstrably wrote it.
 
+Session-2 backfill (context of 2026-08-31, code-verified 2026-09-03):
+bc[12]'s writer IS identified — the cont's step-211 marker
+(`stub3.S`: `str r7, [r11, #0x30]`) records the enter_stub r7 chain value,
+which is dtb_phys whenever GCC's register pinning held for that run; it is
+chain forensics, not fresh-DTB proof (the chain is unreliable — GCC reused
+r7 as a loop counter in one build; the params block is authoritative). And
+bc[2] is a validity check, not garbage: FDT header fields are big-endian
+per spec — 0x60540100 = BE 0x00015460 = 87136 = the exact DTB file size
+(see session-notes/session-02.md CONFIRMED #5-6).
+
 ## 8. Miscellaneous
 
 - The payload requires root + `ThreadCtl(_NTO_TCTL_IO_PRIV)`; all device

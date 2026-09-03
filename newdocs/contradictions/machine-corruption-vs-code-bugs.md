@@ -50,6 +50,13 @@ save/restore, cont register passing) or exactly the "lost write" class of
 failure session 6 described. W-5 ruled out the 1 GB probe loop but nothing
 else.
 
+Session-2 backfill (2026-08-31 context): the vet CONSTANT is exonerated —
+`head-common.S` defines `OF_DT_MAGIC 0xedfe0dd0` for LE builds (the LE read
+of the big-endian on-disk magic; grep-verified 2026-09-03), and the register
+chain was correct at probe time at least once (bc[4]=0xa1e377f8). So the
+loss, if real, is a wrong r2 or a lost DTB *content* write — not a
+mis-compared magic constant. Leans further toward the code-bug side.
+
 ## What would resolve it
 
 1. Jump the zImage (the decompressor handles r2 natively). If the DTB

@@ -57,6 +57,13 @@ still lost the DTB, so the probe loop is exonerated; the loss is somewhere
 in the r2 chain (cont → kernel entry → head.S r7/r8 save/restore →
 `__vet_atags`).
 
+Session-2 backfill narrows this: the register chain was correct at probe
+time at least once (bc[4]=0xa1e377f8 matched the placement math exactly),
+and the vet constant is exonerated — `head-common.S` defines
+`OF_DT_MAGIC 0xedfe0dd0` for LE builds (the LE read of the big-endian
+magic; grep-verified 2026-09-03), so a valid DTB passes `__vet_atags`
+(see session-notes/session-02.md CONFIRMED #3/#5).
+
 **Decision: park the uncompressed-Image path.** Session 6's proven path is
 the **zImage**: `CONFIG_ARM_APPENDED_DTB=y` + `CONFIG_AUTO_ZRELADDR=y`
 mean the decompressor natively finds the appended DTB and sets r2, and
