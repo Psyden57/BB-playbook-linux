@@ -83,15 +83,18 @@
    silently (runs 24–31). head.S now maps 0xFED00000 → 0x48000000.
 5. **Kernel console = earlycon0 = early_printk.c → printascii → omap4bc.S**
    (the PlayBook DEBUG_LL — NOT omap2plus.S): every char goes to UART3
-   (0x48020000) AND three DRAM rings via busyuart's ring_put (ring3 0xD4000080,
-   ring2 0xD0000080, ring1 0xCC000080 — see the ring1 caveat below), plus a
-   PL310 CIPA+sync per touched line. **ring3 (PA 0x94000100) is the secure
-   monitor's UART3 capture buffer** — persistent across resets, the primary
-   post-mortem evidence. CAVEAT: ring1's VA in omap4bc.S (0xCC000080) maps to
-   PA 0x8C000000 — an unmapped alias (the real ring1 = PA 0x88000000); those
-   writes are silently dropped by the L3. CAVEAT 2: runs 24–31 emitted zero
-   UART3 bytes (console dead pre-0xFED-fix) — run 23's kernel emitted 23 KB
-   (preserved in ring3; recovered to SESSION-HANDOFF/ring3-recovered-log-2026-09-02.txt).
+   (0x48020000) AND three DRAM rings via busyuart's ring_put (ring3
+   0xD4000080, ring2 0xD0000080, ring1 0xC8000080 — CUMULATIVE subtractions;
+   session-5 correction: the old "0xCC000080 wrong-alias" claim here was an
+   arithmetic error — the subtractions stack from the previous ring, not
+   from 0xD4000080). **ring3 (PA 0x94000100) is the secure monitor's UART3
+   capture buffer** — persistent across resets. CAVEAT 2: runs 24–31 emitted
+   zero UART3 bytes (console dead pre-0xFED-fix) — run 23's kernel emitted
+   the preserved log (SESSION-HANDOFF/ring3-recovered-log-2026-09-02.txt;
+   session-6 correction: that "23 KB" is ~15 real lines + 0x55/0xaa filler).
+   Session-6 UPDATE: the per-char PL310 CIPA+sync and the UART LSR drain
+   were REMOVED from omap4bc.S (rings-only console; the UART3 THR write
+   stalled the store buffer on a dead UART).
 6. **Payload SIGSEGV ≠ reboot** (run 31): a user-mode abort in the payload
    (e.g. the PRCM CLKSTCTRL write — the PRCM is secure-filtered) kills the
    process; QNX survives; SSH stays up. Only jump-context deaths (post-GICD-off)

@@ -10,6 +10,19 @@ Session 6 analyzed this as "slab_mutex corruption"; that analysis predates
 the placement/DTB discoveries and may not apply. **Untested with a working
 DTB + full memory** — the zImage run comes first.
 
+Era note (session-5 backfill): runs 23–32 (UNCACHED kernel, L2-off, DTB +
+512 MB) also died at exactly 171, and session 5's finer markers
+(181/182 inside taskstats_init_early, 183–185 inside
+__kmem_cache_create_args) never landed — placing that era's death inside
+kmem_cache_create, before the mutex unlock. The co-occurring **bc[2]=0x3E7
+(999) wild write** was never explained: it is not the pb_bc pair (which
+writes bc[2]=427), not PB_MMU_BC (would need v=0x2E7, no such marker), and
+the console's ring2 char window (PA 0x90000100+) cannot reach bc[2]
+(0x90000008) with a bounded index. If it recurs, dump bc[0x80–0x8F] (the
+console's ring2 header region at the same time) — a corrupted ring2 index
+producing a wild strb is the surviving candidate (see
+session-notes/session-05.md §analyses).
+
 ## 2. DTB delivery broken on the uncompressed-Image path (parked)
 
 `Warning: Neither atags nor dtb found` ×2 despite a verified-correct

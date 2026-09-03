@@ -201,8 +201,9 @@ Scatter test: pages at 16 MB stride in 0x85–0xA1 survive full jump+WDT2+QNX-re
 | L2X0 driver latency write | ⚠️ CONFIG_CACHE_L2X0=y enabled; the driver's NS latency write = SIGBUS — guard cache-l2x0.c |
 | ~~The 171 wall~~ | ✅ SOLVED session 6 (the L2-off bypass cliff + the uncached kernel; the L2-off mode retired) |
 | ~~Console output~~ | ✅ WORKING (cacheable rings + SMC 0x101 flushes; UART3 never written by the kernel) |
-| Uncompressed Image boot | ❌ Architecturally broken |
-| UART pads | ❌ None accessible (2-hour hunt) — the monitor's capture replaces them |
+| Uncompressed Image boot | ❌ Architecturally broken (r2 loss parked — DECISIONS D6) |
+| UART pads | ❌ None accessible (2-hour hunt) — replaced by the DRAM console rings (ring1; see the night update above) |
+| L2X0 by-way op (l2c_enable) | ⚠️ The REAL driver hazard when the boot reaches init_IRQ: `L2X0_INV_WAY` (0x7FC) = the NS deadlock op (KNOWN_ISSUES #3) |
 
 ## Debug UART
 - **Physical**: UART3 @ 0x48020000 (48 MHz clock; console=ttyO2; the QNX IFS

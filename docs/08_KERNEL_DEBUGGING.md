@@ -84,14 +84,15 @@ printk → earlycon0 (early_printk.c console) → early_write → printascii
       → UART3 (PA 0x48020000; VA 0xFED20000 — section 0xFED, mapped in head.S
         since run 32 — BEFORE that it was unmapped and the L3 swallowed every
         MMU-on write silently!)
-      + THREE DRAM ring mirrors via busyuart's ring_put:
-        ring3 = 0xD4000080/0xD4000100 (PA 0x94000080/0x94000100) ← THE MONITOR
-                captures UART3 here too (persistent, cumulative count)
+      + THREE DRAM ring mirrors via busyuart's ring_put (CUMULATIVE
+        subtractions from 0xD4000080 — session-5 correction, the old
+        "0xCC000080 wrong-alias" note here was an arithmetic error):
+        ring3 = 0xD4000080/0xD4000100 (PA 0x94000080/0x94000100)
         ring2 = 0xD0000080/0xD0000100 (PA 0x90000080/0x90000100)
-        ring1 = 0xCC000080/0xCC000100 (WRONG — PA 0x8C000000 unmapped; the
-                correct alias would be 0xC8000080 → PA 0x88000080; the ring1
-                writes are silently dropped by the L3 — known omap4bc.S bug)
-      + a PL310 CIPA+sync per touched line (guarded: skipped when CTRL=0)
+        ring1 = 0xC8000080/0xC8000100 (PA 0x88000080/0x88000100)
+      + (session-6 note: the per-char PL310 CIPA+sync and the UART LSR
+        drain were REMOVED from omap4bc.S — rings-only console; see
+        SESSION-HANDOFF/HANDOFF_2026-09-02_night)
 ```
 
 ### Ring Layout (omap4bc.S)
