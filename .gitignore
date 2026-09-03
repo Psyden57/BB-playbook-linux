@@ -1,0 +1,52 @@
+# ---- secrets (NEVER commit) ----
+rsa
+rsa.pub
+*.key
+*.pem
+
+# ---- proprietary device dumps / third-party material (local-only) ----
+device-binaries/
+dumped4869ifs/
+rootufstest/
+optimized-docs/
+bb10tools-main/
+*.pdf
+swpu231ap.pdf.txt
+pmaports-main.zip
+Texas\ Instruments\ OMAP*.txt
+
+# ---- build artifacts (reproducible via build.sh / mkkernel.sh) ----
+kexec/kernel/
+kexec/*.o
+kexec/*.elf
+kexec/*.bin
+kexec/qnx2linux
+kexec/memdump3
+kexec/memtest
+kexec/memw32
+kexec/scatter
+kexec/sevtap
+kexec/secure-probe
+kexec/smctest
+kexec/xntest
+kexec/xntest2
+kexec/i2c-hammer
+kexec/uart-hunt
+kexec/waitdev
+
+# ---- editor / OS noise ----
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- logs / temp ----
+*.log
+core
+core.*
+
+# ---- device-dumped QNX script (same material as dumped4869ifs/) ----
+startup.sh
