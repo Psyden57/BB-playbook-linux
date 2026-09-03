@@ -54,11 +54,28 @@ Key subsystems inside:
 
 - `tramp_pos_start` (position-independent, runs from the payload's text):
   TTBCR=0, DACR=all, TTBR0=flat table, breadcrumbs 63/64, `bx` to the
-  continuation in IRAM.
+  continuation in IRAM. **Why TTBCR=0 is load-bearing** (session-1
+  discovery, rationale not previously written down): QNX splits the VA
+  space — high VAs walk TTBR1. After switching TTBR0 to the flat table,
+  any identity walk whose VA is above QNX's N-boundary would still use the
+  QNX kernel tables and abort; TTBCR=0 forces every VA onto the flat table
+  (which identity-maps DRAM 0x80000000-0xBFFFFFFF and IRAM). Session-1's
+  first trampoline omitted this and died between breadcrumbs 41 and 21.
 - `cont_start` (copied to IRAM 0x40308040, VA==PA): breadcrumb 21, records
   the DTB chain value to 0x90000030, SVC mode + scratch stack (0x89000000),
   MMU off, `r0=0, r1=~0, r2=params[1]`, `bx r9` → target.
 - NOTE: no TLBIALL here (wedged with CPU1 in reset; redundant).
+- Related session-1 rules that constrain any rewrite of this stage (see
+  newdocs/session-notes/session-01.md for the incidents behind each):
+  the jump buffer must be mapped **PROT_EXEC** (QNX enforces XN on
+  data/anon pages — a heap-resident stub SIGSEGVs at its own address);
+  anything executed after MMU-off must reach DDR via a **NOCACHE write**
+  (cached-written bytes sit in L2 and SO fetches bypass stale lines);
+  **no kernel calls and no console I/O** once interrupts are disabled
+  (procnto unreachable → deadlock; console dead → printf blocks forever);
+  a section-alias table entry `tt[VA>>20] = PA_section` is only exact when
+  `(VA & 0xFFFFF) == (PA & 0xFFFFF)` — prefer reaching code by its
+  physical address (TLBIMVA + bx).
 
 ### kexec/probe.S — bare-metal diagnostic (optional)
 
