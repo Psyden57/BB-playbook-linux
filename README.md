@@ -100,6 +100,14 @@ key, build artifacts) — how to recreate them is in
 - The working unit is treated as precious: **no boot-chain writes, no RPMB
   access, no nuke opcodes, ever.** Flash writes are limited to the UFS
   partition via the established bb10mt repack path.
+- **NVRAM and RPMB are untouchable.** NVRAM holds the OS-downgrade
+  blocklist (0x2819), security bitmaps and boot-chain metadata; an NVRAM
+  wipe bricks the unit ("NVRAM signature error" — Unit A of the wider
+  research effort, unrecoverable without raw flash surgery + RIM-gated
+  loader paths). RPMB's monotonic write counter cannot be rolled back — a
+  botched RPMB interaction bricks the unit ("RPMB error" — Unit B, also
+  unrecovered). The kexec work never goes near either: it runs from QNX
+  userland and DRAM only.
 - Jump experiments are inherently recoverable: anything that hangs is caught
   by the watchdog (WDT2, ~59 s) or the PMIC watchdog (127 s, full power-off),
   and the device returns to an untouched normal QNX boot. The injection

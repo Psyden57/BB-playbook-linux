@@ -10,10 +10,15 @@ original conversation history.
 2. [PROJECT_STATE.md](PROJECT_STATE.md) — current technical state; **wins
    over older docs where they disagree**.
 3. [ARCHITECTURE.md](ARCHITECTURE.md) — components and channels.
-4. [DEVELOPMENT.md](DEVELOPMENT.md) — the daily loop + rules.
-5. The latest `session-notes/session-NN.md` — freshest knowledge.
-6. [contradictions/](contradictions/) — what is genuinely unresolved.
-7. Deep details on demand: `docs/00-08`, `docs/03` (run log), root *.md.
+4. **SAFETY-CRITICAL**: [../PLAYBOOK-REFERENCE.md](../PLAYBOOK-REFERENCE.md)
+   §5 (NVRAM) and §8 (recovery plans) — **NVRAM and RPMB interactions brick
+   units irrecoverably** (two units of the wider research effort are already
+   bricked this way). The kexec work stays in QNX userland + DRAM and must
+   never go near either. Also §1.10 (watchdog), and the README safety model.
+5. [DEVELOPMENT.md](DEVELOPMENT.md) — the daily loop + rules.
+6. The latest `session-notes/session-NN.md` — freshest knowledge.
+7. [contradictions/](contradictions/) — what is genuinely unresolved.
+8. Deep details on demand: `docs/00-08`, `docs/03` (run log), root *.md.
 
 ## What each session must do
 

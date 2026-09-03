@@ -18,6 +18,14 @@ jumped from QNX. The boot currently:
    `kmem_cache_create`. Reached twice on 2026-09-03 (W-4 with the probe,
    bc=171; W-5 without, bc=126 — both with a degraded no-DTB 16 MB
    fallback, see the DTB issue below).
+   **Read the era matrix before analyzing 171**
+   ([contradictions/171-wall-analyses.md](contradictions/171-wall-analyses.md)):
+   run 23 (session 6) also died at 171 with {UNCACHED kernel, L2-off,
+   DTB + full memory}; session 7's deaths were {cacheable, L2-on,
+   16 MB no-DTB}. The untested cell — {cacheable, L2-on, DTB + full
+   memory} — is exactly the next zImage run. Also: the "0x1f7f0000" BUG
+   was `dma_contiguous_remap`, never the dram-barrier mapping (the
+   barrier-disabled run reproduced it identically — session-6 correction).
 
 ## What was fixed in session 7 (the bc=127 wall)
 

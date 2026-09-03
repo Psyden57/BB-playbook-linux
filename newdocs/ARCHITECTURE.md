@@ -158,9 +158,35 @@ writes = secure-filtered (silent SIGSEGV, no reboot).
 
 - **CPU1**: held in warm reset via `RSTCTRL_CPU1` (PRCM 0x4824380C/0x4824340C)
   before the jump; the kernel brings it up itself (SMP).
-- **WDT2** (0x4A314000): armed by the payload so a hung kernel = warm reset
-  = back to QNX = readbacks over SSH. The 58.6 s window is the debugging
-  cadence.
+  - Why CPU1 cannot be redirected instead: on warm reset CPU1 runs a
+    **SAR RAM trampoline** (0x4A326B00-CD0, persistent across boots) that
+    monitor-verifies its saved context (SMC services 0x26/0x27) before
+    resuming — releasing CPU1 with stale state re-enters QNX seamlessly;
+    the context cannot be forged. The real AUX_CORE_BOOT registers are
+    WUGEN 0x48281800/04 (cold-boot only) — 0x4A002E08 is a wrong address.
+  - devpm's offline flow NS-writes the 0x150-byte wake trampoline into SAR
+    0x4A326B00 from a plain mmap — the "monitor-protected" blob is ordinary
+    memory (session-1 RE, unexploited).
+- **Two watchdogs, two failure classes** (the recovery design exploits both):
+  - **WDT2** (0x4A314000, ~58.6 s): warm reset — DRAM survives, so bc/ring
+    readbacks work. The payload arms and kicks it; a hung kernel = reset =
+    back to QNX.
+  - **TWL6030 PMIC watchdog** (I2C1, slave 0x48, reg 0x2C, 127 s): full
+    **power-off — DRAM content is LOST** (observed live once: the device
+    "simply shut down"). This is why the blob holds BOTH cores at the end:
+    nobody services WDT2 → warm reset happens well before the 127 s PMIC
+    deadline, preserving the run's evidence.
+- **QNX's CP15 state at jump time** (payload-measured): ACTLR = 0x41
+  (SMP/nAMP + cache/TLB-op broadcast), diagnostic c15,c0,1 = 0x810 (errata
+  742230/751472 workarounds already applied by QNX). The kernel's proc-v7
+  setup ORs onto this.
+- **The device-op cliff** (sizing rule for any device-access loop): with
+  the L2 ON (QNX's config), sustained strongly-ordered stores wedge the
+  machine at roughly **4-5k operations** (smoke test ~480 ops fine;
+  --l2test phase C wedged inside a ~4k-op loop; the old console died at
+  ~5k ring ops). Cached stores are exempt (the bss clear = megabytes, fine).
+  Distinct from the one-shot by-way deadlock (KNOWN_ISSUES #3).
 - **eMMC / WiFi / display**: untouched; QNX's drivers are simply abandoned
   mid-flight. The kernel needs its own drivers (mainline has them all for
-  OMAP4).
+  OMAP4). The display scanout remains live DRAM traffic unless quiesced —
+  note the display state as a run variable.

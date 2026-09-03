@@ -30,6 +30,24 @@ Rules of the run (from docs/ + hard experience):
   CONFIRMED #1 first — the four assembly traps (inline data executes as
   code; marker immediates must be ARM-encodable; pbmark clobbers r0+ip;
   SP is banked — `cps #0x13` before loading sp).
+- **Verify fixes in the shipped binary, not the build log** — a rebuild has
+  silently produced a stale packed image before (session 3, run 8); build
+  size deltas are the fastest change-check.
+- **Cross-check bc[1] against the ring count** before trusting a low
+  marker — a bc *below* proven execution means the channel regressed, not
+  the kernel.
+- **Payload death taxonomy**: (a) ssh-timeout SIGHUP kill mid-setup → no
+  reboot, bc frozen at the last armed step; (b) procnto crash → WDT2 →
+  reboot, bc survives from pre-crash; (c) successful jump → WDT2 → reboot
+  with kernel markers in bc. jump.sh's 120 s timeout exists because of (a).
+- **Failed payload runs leak their 24 MB buffer by design** (the allocator
+  re-hands a freed rejected block); enough leaks in one boot starve QNX into
+  a WDT2 death — expect a reboot every ~10-12 failed placements.
+- **Distrust bc[6]+ on readback**: bc_arm sanitizes only bc[0..5] + ring
+  headers; deeper slots can hold stale canaries from previous runs
+  (KNOWN_ISSUES #7 has the identified writers).
+- **NVRAM and RPMB are off-limits forever** (brick hazards — see README
+  safety model and PLAYBOOK-REFERENCE.md §5/§8).
 
 ## Building the payload
 
