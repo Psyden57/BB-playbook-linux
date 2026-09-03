@@ -48,3 +48,30 @@ else.
 
 UNRESOLVED but with a strong lean: code bugs explained every inspected
 symptom; one live anomaly (DTB loss) could go either way.
+
+## ADDENDUM 2026-09-03 (session-6 native context: one session-6 claim retracted, two measurements kept)
+
+1. **Retracted: "the barrier stack struct was corrupted".** Session 6's
+   records (docs/03 night, the omap4-common.c comment) attributed the
+   0x1f7f0000 mapping-BUG to a corrupted `dram_io_desc[0].virtual` in
+   omap_barriers_init. But the follow-up run with `omap_barriers_init`
+   DISABLED reproduced the identical BUG — the mapping was
+   `dma_contiguous_remap` all along (it sits exactly between markers 127 and
+   126; the barrier sits in devicemaps_init, later). The session-7
+   unpatched-pv-stub reading is consistent with the corrected attribution.
+   Residual anomaly: dma_mmu_remap[0].base read 0xa1000000 while the CMA
+   printed 0xbe800000 — the base AND the virtual were both wrong in the same
+   struct (two anomalies, or one wild write). Unexplained; the PB-CMA print
+   will catch the next occurrence.
+2. **Kept: the device-op cliff calibration.** With the L2 ON, sustained
+   DEVICE (SO) stores wedge at ~4-5k ops (smoke ~480 fine; --l2test phase C
+   wedged inside a ~4k-op loop; the device-era console died at ~890 chars /
+   ~5k ops). Cached stores do NOT show this (the bss clear = megabytes,
+   fine). Any "corruption" observed on a device-store path may just be this
+   cliff; size device-access loops accordingly.
+3. **Kept with nuance: the 11 GB bare-metal probe-loop stall.** It ran with
+   the L2 ON under QNX's 1/1/1-cycle PL310 latencies and CACHED WB stores —
+   i.e. it is the one corruption-era datum with no kernel code involved, but
+   it shares the L2-config variable with everything else. If the latencies
+   are ever fixed (SMC 0x112 lead, KNOWN_ISSUES #6), rerun that loop before
+   declaring the machine corrupt.

@@ -39,6 +39,11 @@ computes `__phys_to_virt(x) = x - 0x81810000`. The pv fixup code is
 byte-identical to mainline; how a site could stay unpatched is unknown.
 Not reproduced since the placement fixes. The `PB-CMA` print (kernel) will
 catch it (variable correct + VA wrong → site unpatched).
+Correction (session-6 context, see session-06.md): the 0x1f7f0000 BUG was
+`dma_contiguous_remap`, not the barrier (the barrier-disabled run reproduced
+it identically) — and the remap's base ALSO read wrong (0xa1000000 vs the
+printed CMA at 0xbe800000), so either two independent anomalies or one wild
+write hit both fields.
 
 ## 5. Console output stops mid-boot (secondary)
 
