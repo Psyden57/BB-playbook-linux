@@ -74,3 +74,15 @@ legal (proprietary RIM/QNX/TI code), size, and reproducibility.
 No LICENSE file yet (the author's decision, pending). The kernel-tree
 portions are derivative of GPL-2.0 code, which constrains the eventual
 choice; noted in ROADMAP.
+
+## D10: MMU-off helpers are INLINED, never called (session 8)
+
+The called `__fixup_pv_table` never executed a single instruction on
+the zImage path — through `bl`, a computed `blx` with a
+post-mortem-verified target, both L2 states, I=0/1, with byte-correct
+DRAM (KNOWN_ISSUES #10, runs W-9→W-16). The INLINED copy executes
+(W-17) and is build-luck-dependent (W-21/22's pv=0 until the W-24
+C-world invalidate). Rule going forward: any helper that must run
+MMU-off in the streamed region gets INLINED into head.S, never called
+via bl/blx. Mechanism of the paradox: open (session-08 notes hold the
+evidence).
