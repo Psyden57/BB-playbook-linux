@@ -981,4 +981,37 @@ UART smoke test, ring maps, pbmark machinery, instrumentation). Next
 discriminators: (a) inline-test — copy the fixup's first stores into
 head.S directly after pbmark 130 (pins whether even head.S-adjacent
 stores die, isolating the bl/call); (b) resurrect the C/B/S strip on
-kernel #88 (if the fixup passes, bisect the strip vs the prelude growth).
+   kernel #88 (if the fixup passes, bisect the strip vs the prelude growth).
+
+### Run W-10b (2026-09-04): W-10 re-run for LED timings — determinism
+### confirmed; the LED timeline corrects the blue-off semantics
+
+W-10's video failed to save; re-ran the identical configuration
+(PAYLOAD_MODE=--t3 ./jump.sh zImage, kernel #88, L2 off via 0x102) with the
+user recording. jump.sh completed its full cycle this time (700 s caller
+timeout; SSH gone @ t=40s).
+
+Readbacks (nonce 0xcbba7bfa fresh): **identical to W-10 on every
+discriminable slot** — bc[1]=130/131 absent, bc[6]=0 (fixup never entered,
+2/2 with L2 off), bc[2]=0 (no 0x3E7 without the probe, 2/2), bc[3]=
+0xa1200000 (buffer), **bc[12]=0xa1757028 closes exactly again** (buffer
+0xa1200000 is 2MB-aligned → kern_off=0 → load 0xa1208000 + padded 0x54f028
+= 0xa1757028; the t=5s pre-jump poll even caught W-10's bc[12] residue
+0xa1957028 being live-read before this run's cont overwrote it — the
+cont-as-writer identification confirmed in the act). mirror0=70-without-71
+normal; ring1 smoke-only.
+
+User's LED timeline (device local, GMT-3; t=0 = jump.sh launch):
+- 00:05 blue ON (payload start; QNX alive, screen on)
+- ~00:45 the user's SSH heartbeat froze (matches jump.sh t=40s = the jump)
+- 01:34 **blue OFF** — ~2 s before...
+- 01:36 red ON (reboot; QNX booting)
+
+Interpretation (corrects the W-4-era "off during kernel" reading): in
+no-probe runs (--t3) blue = the payload's GPIO1_13 EN held from start
+until the warm reset clears it — **blue-off = the reset instant**, not a
+kernel action. The W-4 "off during kernel" was the PROBE's LED chain
+(W-4 ran the probe). 00:05→01:34 = 89 s ≈ 40 s payload setup + ~50 s
+WDT2 window from arm-at-jump → fire. The kernel's active life was
+seconds (death at 130 within moments of the jump; then a ~50 s dead
+window until WDT2).
