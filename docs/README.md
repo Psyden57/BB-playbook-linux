@@ -56,6 +56,25 @@ corrected them — the corrections are never silent (see
     4-byte group when decoding ring text.
 12. **NVRAM and RPMB are untouchable** (brick hazards — README safety model,
     PLAYBOOK-REFERENCE §5/§8).
+13. **Verify arithmetic with python, not in your head** — every hex
+    conversion, bc-chain closure (kern_off/load/padded/dtb_phys), size
+    delta and address calculation goes through a real computation; the
+    analyst produced three consecutive hex slips (one caused a false
+    84 KB "rebuild anomaly", one a false 512-byte "chain mismatch")
+    before adopting this rule. Mental hex is banned for anything that
+    feeds a conclusion.
+14. **Verify source claims with grep/read, never memory** — recalled
+    code snippets have been fabricated before (omap-secure.c reserve,
+    head-common.S fixup calls — neither exists). Every claim about what
+    a file contains gets a real grep/read first.
+15. **Use the native read/edit/write tools for file work** — no
+    python3/sed one-liner edits (python3 as a calculator for rule 13 is
+    fine); prefer Edit over shell rewrites.
+16. **Verify the shipped binary, not the build log** — after every
+    kernel/payload build, objdump the actual artifact (symbol present,
+    new instructions in place, size delta sane) before running; a
+    rebuild has silently produced a stale packed image before
+    (session 3, run 8).
 
 ## Key Addresses Cheatsheet
 
