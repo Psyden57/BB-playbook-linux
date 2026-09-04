@@ -1708,3 +1708,13 @@ devb slay did not cure it — the corruption source is elsewhere: DISPC
 scanout is the remaining un-quiesced DMA master, its kill still
 unverified), or (b) the devb slay itself perturbed the environment
 (eMMC mid-transaction state). One sample — needs distribution runs.
+
+W-29 LED/SSH timeline (user video, run-local t):
+00:00 jump.sh starts; 00:05 blue ON (payload up, QNX alive; `cat
+/tmp/jump.log` heartbeat still works); 00:50 heartbeat cat fails with
+"sh: cat: cannot execute - No such file or directory" — exec from the
+eMMC rootfs died = **devb already slain** (independent corroboration of
+the slay); 01:16 SSH session freezes + blue OFF = the jump; 01:35-01:38
+connection reset; 01:48-02:11 reconnect timeouts (QNX booting);
+02:24 red LED ON = warm reset — jump+68 s = **WDT2 expiry from the
+bc[1]=121 hang** (58.6 s window + kick drift). Fully consistent.
