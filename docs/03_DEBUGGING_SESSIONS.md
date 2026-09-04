@@ -1494,3 +1494,90 @@ is now verified correct. Session 9 starts here: bisect inside
 iotable_init/create_mapping (the W-4 Image-path run PASSED this exact
 code — the decompressor-handoff delta remains the only structural
 suspect class).
+
+### Run W-25 (2026-09-05): session 9 begins — the iotable_init bisect markers;
+### death pinned between iotable_init entry (150) and the svm alloc (151)
+
+Build: kernel #102 (session-9 marker set, all --l2on): 150/151/152/153 in
+iotable_init, 155 in __create_mapping (pgd loop done), 156/157/158 in
+alloc_init_pte (entry / pte alloc / set_pte_ext loop done), state captures
+bc[10]=md->virtual + bc[13]=pte base. Packed 5,571,161 B (+280 vs #101).
+Marker-number audit done BEFORE the build: 150-159 free (the old cgroup
+160-170 markers are gone from the tree). Shipped vmlinux objdump-verified
+(rule 16: all marker constants + bl pb_bc_put present).
+
+Run: PAYLOAD_MODE=--l2on ./jump.sh zImage. SSH gone t=30s.
+
+Readbacks (nonce 0xcbbad09f fresh vs pre-jump 0x6a9ad092):
+- bc[1] = 150, bc[2] = 0x17F. The pair value proves the LAST pair-writer
+  was map_kernel's PB_MMU_BC(127) — bc[1]=150 is a SINGLE-CHANNEL write
+  past 127 → **the iotable_init entry marker (150) landed; 151 did not.**
+- bc[4]=143, bc[5]=144, bc[6]=0xe0000000 (the inline fixup's markers ✓);
+  bc[8]=1/bc[9]=0x111 (--l2on probe ✓); bc[10]=0xc0de0002 / bc[13]=0x66 =
+  RESIDUE (my writes sit after 151 — consistent); nonce fresh.
+- **Ring1 = 1256 chars = W-24's clean run (1169) + exactly one new line:
+  "BUG: not creating mapping for 0x00000000 at 0x20000000 in user region"**
+  (printed between PB-ADJ#2 and PB-CMA; ~87 chars). A create_mapping call
+  with pfn=0 / va=__va(0)=0x20000000 fired the (harmless, early-return)
+  BUG — present in the W-21/22/23 pv-broken runs too, ABSENT in W-24's
+  #101. Layout-sensitive caller or a stale zero read; writer unidentified.
+- Console otherwise identical to W-24 (pv_off=ffffffffe0000000, no
+  pv BUG, CMA reserved 16 MiB at 0xbe800000).
+
+**Death: inside `memblock_alloc_or_panic(sizeof(*svm))` — the 44-byte svm
+allocation at iotable_init's entry** (objdump: bl __memblock_alloc_or_panic
+sits exactly between the 150 and 151 calls). This is the FIRST time the
+death has been inside a plain small memblock alloc.
+
+### Run W-26 (2026-09-05): the split svm-alloc bisect — THE STACK-PROTECTOR
+### CAUGHT THE DEATH RED-HANDED: wild stack smash in fdt_get_property_namelen
+
+Build: kernel #103 (W-26): the svm allocation split at the call site into
+memblock_phys_alloc (find+reserve, PA → bc[13]) / __va / memset with markers
+159/160/161 between (Packed 5,571,529 B; shipped objdump-verified). No
+other changes — mmu.c layout shifted ~+100 B vs #102.
+
+Run: PAYLOAD_MODE=--l2on ./jump.sh zImage. SSH gone t=50s.
+
+Readbacks (nonce 0xcbead397 fresh vs pre-jump 0x6a9ad36c):
+- bc[1] = 133, bc[2] = 0x185, **mirror0 = 0x46 (70, payload-era)**.
+- **MARKER-NUMBER COLLISION DISCOVERED AND RESOLVED**: setup.c:1171 has
+  pb_bc(133) = "parse_early_param done" (setup_arch, BEFORE
+  arm_memblock_init) — mmu.c's PB_MMU_BC(133) = "map_lowmem done" shares
+  the number. The discriminator is the MIRROR: setup.c's pb_bc writes the
+  pair only (bc[1]/bc[2], no mirror); PB_MMU_BC also writes
+  0xD4000004=v|0x200. mirror0 = 0x46 → the mmu.c 133 triple NEVER fired →
+  **W-26's 133 = setup.c's parse_early_param-done, and the death is
+  BETWEEN setup.c:1171 and the next writer.**
+- **The console caught the death: "Kernel panic - not syncing:
+  stack-protector: Kernel stack is corrupted in:
+  fdt_get_property_namelen_+0x184/0x188" — right after
+  "PB-RES r[0]=a1d42eb0+15519", i.e. INSIDE arm_memblock_init's
+  early_init_fdt_scan_reserved_mem FDT walk.** printk was demonstrably
+  alive (the panic line itself printed; no missing-prints gap) — the
+  console chronology is INTACT this run. PB-PANIC notifier worked (3
+  lines into the ring). Ring count 1473.
+- **INTERPRETATION: a wild write smashed the boot stack frame of
+  fdt_get_property_namelen (CONFIG_STACKPROTECTOR_STRONG=y detected it)
+  during the reserved-memory FDT walk — the machine's silent-corruption
+  class caught red-handed for the first time with a named victim.** The
+  FDT walk passed in W-25's #102 (same boot phase) and died in #103 —
+  the layout shift (~+100 B in mmu.c) moved the death EARLIER; with the
+  W-20 60-byte-shift precedent this is the session-8 layout/nondeterminism
+  class again, now possibly TIMING-dependent (a rogue DMA master? eMMC
+  ADMA / WiFi SDIO are idle-but-enabled; DISPC scanout still live).
+
+CORRECTIONS:
+- W-20's "bc[1]=133 = map_lowmem done (mmu.c)" reading is now DOUBTFUL —
+  if setup.c's pb_bc(133) existed in #97, W-20's 133 = parse_early_param
+  done (which fits W-20's own evidence: the bank-mismatch prints are
+  arm_memblock_init-era). Kernel tree has no git history to confirm when
+  setup.c's markers landed; recorded as an open correction.
+- W-25's bc[1]=150 re-confirmed as the mmu.c iotable_init marker (a
+  main.c pb_bc(150) pair-writer exists in start_kernel — if IT had been
+  the last 150, bc[2] would read 0x196; it read 0x17F, so the final 150
+  was single-channel, past the 127 pair — consistent).
+
+Session-9 state: the front is no longer "iotable_init" — the boot's real
+enemy is a wild write hitting the boot stack (and per W-25, the svm alloc
+region), layout/timing-sensitive, first evidenced by the stack-protector.
