@@ -148,7 +148,7 @@
  #endif
 
 --- a/arch/arm/kernel/head.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head.S	2026-09-04 10:26:19.116387673 +0000
++++ b/arch/arm/kernel/head.S	2026-09-04 11:12:39.012387539 +0000
 @@ -98,6 +98,125 @@
   THUMB(	.thumb			)	@ switch to Thumb now.
   THUMB(1:			)
@@ -314,7 +314,7 @@
  	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid
  	movs	r10, r5				@ invalid processor (r5=0)?
   THUMB( it	eq )		@ force fixup-able long branch encoding
-@@ -124,19 +275,127 @@
+@@ -124,19 +275,123 @@
  #else
  	ldr	r8, =PLAT_PHYS_OFFSET		@ always constant in this case
  #endif
@@ -359,19 +359,15 @@
 +	@ PlayBook W-16: the CIPA + sync-poll are REMOVED from this block —
 +	@ SO stores + dsb only (testing whether the CIPA batch on a disabled
 +	@ PL310 is the wedge that eats the call delivery).
-+	@ PlayBook W-14: clear SCTLR.I — uncached instruction fetches for
-+	@ the fixup. Rationale: the streamed region's I-lines filled fine,
-+	@ but the fixup's never-fetched second line kills every delivery
-+	@ mechanism (W-11/12/13); runs 23-32 (uncached builds) passed the
-+	@ fixup. If the I-clear fixes it, the I-fetch mechanism is the
-+	@ culprit. NOTE: bc[6] is no longer written by this block — it is
-+	@ now the fixup's own entry store, so it discriminates delivery.
-+	mrc	p15, 0, r0, c1, c0
-+	bic	r0, r0, #0x1000		@ clear I (bit 12)
-+	mcr	p15, 0, r0, c1, c0
-+	mcr	p15, 0, r0, c7, c10, 4	@ dsb
-+	mcr	p15, 0, r0, c7, c5, 4	@ isb
-+	@ --- end W-11/W-12/W-14/W-16 block ---
++	@ PlayBook W-19 (2026-09-04): the W-14 SCTLR.I clear is REMOVED. It
++	@ was a fixup-delivery experiment (it failed its purpose — W-14
++	@ still died at the fixup) but it LEFT THE C WORLD RUNNING WITH I=0:
++	@ every kernel fetch an uncached DRAM read = the known "sustained
++	@ traffic wedges the bypass path" mode (runs 33-50). W-17/W-18 died
++	@ identically at bc=127 with L2 off AND on — consistent with fetch
++	@ traffic, not L2 state; W-4 (I=1) sailed past 127. The fixup is
++	@ INLINED now (W-17), so no I-clear is needed anywhere.
++	@ --- end W-11/W-12/W-14/W-16/W-19 block ---
 +	@ --- PlayBook W-17: the pv fixup INLINED (no call, no jump) ---
 +	@ W-11..W-16: the fixup never executes a single instruction via ANY
 +	@ delivery mechanism (bl, computed blx with a verified target;
@@ -443,7 +439,7 @@
  
  	/*
  	 * The following calls CPU specific code in a position independent
-@@ -229,6 +488,12 @@
+@@ -229,6 +484,12 @@
  #endif
  
  	ldr	r7, [r10, #PROCINFO_MM_MMUFLAGS] @ mm_mmuflags
@@ -456,7 +452,7 @@
  
  	/*
  	 * Create identity mapping to cater for __enable_mmu.
-@@ -343,6 +608,99 @@
+@@ -343,6 +604,99 @@
  	str	r3, [r0], #4
  #endif
  
@@ -556,7 +552,7 @@
  #else /* CONFIG_DEBUG_ICEDCC || CONFIG_DEBUG_SEMIHOSTING */
  	/* we don't need any serial debugging mappings */
  	ldr	r7, [r10, #PROCINFO_IO_MMUFLAGS] @ io_mmuflags
-@@ -373,6 +731,7 @@
+@@ -373,6 +727,7 @@
  #ifdef CONFIG_ARM_LPAE
  	sub	r4, r4, #0x1000		@ point to the PGD table
  #endif
@@ -564,7 +560,7 @@
  	ret	lr
  ENDPROC(__create_page_tables)
  	.ltorg
-@@ -465,6 +824,13 @@
+@@ -465,6 +820,13 @@
   *  r13 = *virtual* address to jump to upon completion
   */
  __enable_mmu:
@@ -578,7 +574,7 @@
  #if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
  	orr	r0, r0, #CR_A
  #else
-@@ -482,6 +848,13 @@
+@@ -482,6 +844,13 @@
  #ifdef CONFIG_ARM_LPAE
  	mcrr	p15, 0, r4, r5, c2		@ load TTBR0
  #else
@@ -592,7 +588,7 @@
  	mov	r5, #DACR_INIT
  	mcr	p15, 0, r5, c3, c0, 0		@ load domain access register
  	mcr	p15, 0, r4, c2, c0, 0		@ load page table pointer
-@@ -506,12 +879,28 @@
+@@ -506,12 +875,28 @@
  	.align	5
  	.pushsection	.idmap.text, "ax"
  ENTRY(__turn_mmu_on)
