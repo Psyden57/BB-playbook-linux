@@ -148,7 +148,7 @@
  #endif
 
 --- a/arch/arm/kernel/head.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head.S	2026-09-04 08:49:40.928387863 +0000
++++ b/arch/arm/kernel/head.S	2026-09-04 09:18:59.164385295 +0000
 @@ -98,6 +98,125 @@
   THUMB(	.thumb			)	@ switch to Thumb now.
   THUMB(1:			)
@@ -308,7 +308,7 @@
  	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid
  	movs	r10, r5				@ invalid processor (r5=0)?
   THUMB( it	eq )		@ force fixup-able long branch encoding
-@@ -124,19 +269,55 @@
+@@ -124,19 +269,66 @@
  #else
  	ldr	r8, =PLAT_PHYS_OFFSET		@ always constant in this case
  #endif
@@ -338,12 +338,11 @@
 +	sub	r4, r4, #0xC0000000
 +	add	r4, r4, r8		@ r4 = runtime PA of __fixup_pv_table
 +	ldr	ip, =0x90000000
-+	str	r8, [ip, #0x18]		@ bc[6] = r8 (PHYS_OFFSET)
 +	str	r4, [ip, #0x34]		@ bc[13] = the computed call target
 +	mov	r0, #142		@ marker 142 = inline stores reached
 +	str	r0, [ip, #4]		@ bc[1]
 +	dsb
-+	ldr	r3, =0x48242768		@ CIPA bc line 0 (covers bc[1]/[6]/[13])
++	ldr	r3, =0x48242768		@ CIPA bc line 0 (covers bc[1]/[13])
 +	str	ip, [r3]
 +	ldr	r3, =0x48242730		@ SYNC + bounded poll (r0 count, ip read)
 +	mov	r0, #0x100000
@@ -353,7 +352,19 @@
 +	subs	r0, r0, #1
 +	bne	969b
 +970:	dsb
-+	@ --- end W-11/W-12 block ---
++	@ PlayBook W-14: clear SCTLR.I — uncached instruction fetches for
++	@ the fixup. Rationale: the streamed region's I-lines filled fine,
++	@ but the fixup's never-fetched second line kills every delivery
++	@ mechanism (W-11/12/13); runs 23-32 (uncached builds) passed the
++	@ fixup. If the I-clear fixes it, the I-fetch mechanism is the
++	@ culprit. NOTE: bc[6] is no longer written by this block — it is
++	@ now the fixup's own entry store, so it discriminates delivery.
++	mrc	p15, 0, r0, c1, c0
++	bic	r0, r0, #0x1000		@ clear I (bit 12)
++	mcr	p15, 0, r0, c1, c0
++	mcr	p15, 0, r0, c7, c10, 4	@ dsb
++	mcr	p15, 0, r0, c7, c5, 4	@ isb
++	@ --- end W-11/W-12/W-14 block ---
  #ifdef CONFIG_ARM_PATCH_PHYS_VIRT
 -	bl	__fixup_pv_table
 +	blx	r4			@ W-12: computed call, not bl
@@ -365,7 +376,7 @@
  
  	/*
  	 * The following calls CPU specific code in a position independent
-@@ -229,6 +410,12 @@
+@@ -229,6 +421,12 @@
  #endif
  
  	ldr	r7, [r10, #PROCINFO_MM_MMUFLAGS] @ mm_mmuflags
@@ -378,7 +389,7 @@
  
  	/*
  	 * Create identity mapping to cater for __enable_mmu.
-@@ -343,6 +530,99 @@
+@@ -343,6 +541,99 @@
  	str	r3, [r0], #4
  #endif
  
@@ -478,7 +489,7 @@
  #else /* CONFIG_DEBUG_ICEDCC || CONFIG_DEBUG_SEMIHOSTING */
  	/* we don't need any serial debugging mappings */
  	ldr	r7, [r10, #PROCINFO_IO_MMUFLAGS] @ io_mmuflags
-@@ -373,6 +653,7 @@
+@@ -373,6 +664,7 @@
  #ifdef CONFIG_ARM_LPAE
  	sub	r4, r4, #0x1000		@ point to the PGD table
  #endif
@@ -486,7 +497,7 @@
  	ret	lr
  ENDPROC(__create_page_tables)
  	.ltorg
-@@ -465,6 +746,13 @@
+@@ -465,6 +757,13 @@
   *  r13 = *virtual* address to jump to upon completion
   */
  __enable_mmu:
@@ -500,7 +511,7 @@
  #if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
  	orr	r0, r0, #CR_A
  #else
-@@ -482,6 +770,13 @@
+@@ -482,6 +781,13 @@
  #ifdef CONFIG_ARM_LPAE
  	mcrr	p15, 0, r4, r5, c2		@ load TTBR0
  #else
@@ -514,7 +525,7 @@
  	mov	r5, #DACR_INIT
  	mcr	p15, 0, r5, c3, c0, 0		@ load domain access register
  	mcr	p15, 0, r4, c2, c0, 0		@ load page table pointer
-@@ -506,12 +801,28 @@
+@@ -506,12 +812,28 @@
  	.align	5
  	.pushsection	.idmap.text, "ax"
  ENTRY(__turn_mmu_on)
