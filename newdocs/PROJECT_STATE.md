@@ -80,6 +80,19 @@ PHYS_OFFSET 512 MB-aligned → pv-fixup-safe). Session 6's recovered log
 proves it worked (`OF: fdt: Machine model: BlackBerry PlayBook`,
 `cma: Reserved 16 MiB at 0xbe800000`).
 
+**W-6 (2026-09-04, first zImage test): the pivot FAILED to reach the wall —
+the boot died EARLIER, inside `__fixup_pv_table` (bc=107 post-fixup_smp;
+ring = smoke test only).** Details: `docs/03` run W-6. Key facts: the
+chain held (bc[4]/bc[12] = dtb_phys), the DTB magic validated, zImage word
+0 confirmed — and **bc[2]=0x3E7 (999), the unexplained session-5/6 wild
+write, returned on the zImage path exactly as in runs 23-32**. The zImage
+environment differs from the Image path in one structural way: the
+decompressed kernel lands OUTSIDE the payload buffer (0xa0080000,
+decompressor-written, never verified) instead of the payload's
+memcmp-verified copy. The Image-path binary remains the deepest boot
+(bc=171); the zImage path now needs its own diagnosis before it can deliver
+the DTB+full-memory test the era matrix wants.
+
 **Next run**: `PAYLOAD_MODE=--l2on ./jump.sh zImage`.
 
 ## The secure monitor — RE closed (session 7)

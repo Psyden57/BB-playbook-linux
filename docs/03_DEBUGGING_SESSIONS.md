@@ -710,6 +710,58 @@ correct path.
   but unreproduced since the W-series fixes; the PB-CMA print is in place
   to catch it.
 
+### Run W-6 (2026-09-04): the zImage pivot's first test — early death INSIDE __fixup_pv_table; bc[2]=0x3E7 returns
+
+PAYLOAD_MODE=--l2on ./jump.sh zImage (fresh build, kernel #85: PB-CMA print +
+current DTS + config). SSH died t=40s (jump happened). Readbacks:
+
+- **bc[1] = 107** — the AMBIGUOUS marker (two sites: addruart-done @head.S:210
+  AND post-__fixup_smp @:248). Resolved by ring count: ring1 = 0x14 = 20 =
+  19 smoke chars + 'K', and the 'K' is ring-committed at busyuart (109) —
+  so the ENTIRE UART diag block passed, the r1/r2 restore ran, and 107 =
+  **post-__fixup_smp**. Death = between head.S:248 and :252 → **inside
+  `__fixup_pv_table`** (line 250).
+- **bc[2] = 0x3E7 (999) — the session-5/6 wild-write signature is BACK.**
+  Historical correlation: runs 23-32 (the last zImage era) showed exactly
+  this value; the Image-path W-4/W-5 runs showed other values (0x163/0x17e).
+  bc[2]'s writer remains unidentified (KNOWN_ISSUES #1 — the probe's
+  totalsize echo would be 0x19550100 for the current 87KB DTB, not 0x3E7).
+- bc[3]=0xa1400000 (buffer/kern base), bc[4]=0xa1957080 = the probe's r2
+  echo (dtb_phys — the chain HELD this run), bc[5]=0xe1a00000 = **zImage
+  word 0** (`mov r0,r0` NOP — confirms the probe chained into the zImage),
+  bc[6]=0xedfe0dd0 (DTB magic OK), bc[8]=1/bc[9]=0x111 (PL310 on, latency
+  as before), bc[12]=0xa1957080 (the r7 chain = dtb_phys — chain held).
+- ring1 = smoke ONLY (20 chars): zero kernel-proper console output —
+  consistent with a death before start_kernel's first prints.
+- mirror0 = 0x46 (70, "jump started", without 71 = NORMAL).
+- Auto-zreladdr math: load 0xa1408000 → zreladdr 0xa0080000 (no
+  self-relocation — no overlap with the 5.5 MB compressed image) →
+  PHYS_OFFSET 0xa0000000 → pv delta 0xE0000000 (2MB-aligned, passes the
+  fixup's alignment check).
+- The decompressor does NOT run the kernel's pv fixup (grepped — only DTB
+  relocation), and the decompressed kernel lands OUTSIDE the payload buffer
+  (0xa0080000-0xa128xxxx vs buffer 0xa1400000+) — written through the L2 by
+  the decompressor, unverified by anything.
+
+**Interpretation**: the W-4/W-5 Image path survived `__fixup_pv_table`
+(delta 0xE0400000/0xE0C00000-class); the zImage path (delta 0xE0000000,
+kernel at 0xa0080000, decompressor-written DRAM) dies inside it. The delta
+VALUE itself is encodable either way — the difference is the environment:
+decompressor-written DRAM (L2-dirty, never verified) vs payload-NOCACHE-
+copied DRAM (memcmp-verified). The lost-write/corruption ledger
+(contradictions/machine-corruption-vs-code-bugs.md) gains its strongest
+datum yet: a verified-channel death in a function whose only state is the
+pv table in DRAM.
+
+**Next-step candidates** (need user approval, all = 1 run each):
+1. Make the 100-110 markers unique (101-109 renumbered) + add markers at
+   __fixup_pv_table entry/exit + store the computed delta to a bc slot —
+   pinpoints the death to the check, the table walk, or the str_l stores.
+2. Dump the pv-table region + __pv_offset from DRAM post-mortem (the
+   decompressed kernel's layout is computable from System.map).
+3. Re-run the SAME Image-path binary for a control (it died at 171 — the
+   fixup_pv death is zImage-specific so far).
+
 ### Run W-1 (2026-09-03): the pin refused the jump — placement made adaptive
 
 PAYLOAD_MODE=--l2on: the payload ABORTED pre-jump exactly as designed —

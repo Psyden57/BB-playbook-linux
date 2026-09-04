@@ -23,6 +23,16 @@ console's ring2 header region at the same time) — a corrupted ring2 index
 producing a wild strb is the surviving candidate (see
 session-notes/session-05.md §analyses).
 
+**UPDATE 2026-09-04 (W-6): 0x3E7 is BACK — and it is zImage-correlated.**
+Run W-6 (the first zImage run of the session-7 kernel) returned bc[2]=0x3E7
+exactly, while the Image-path runs (W-4/W-5) showed other values
+(0x163/0x17e). Runs 23-32 were also zImage. Two candidate readings: (a) a
+writer specific to the zImage environment (the decompressor's
+cache-clean/decompress traffic interacting with DRAM), or (b) 0x3E7 is a
+legitimate kernel/payload value for a code path only the zImage reaches.
+bc[2]'s writer remains unidentified. On the next zImage run, dump
+bc[0x80–0x8F] alongside as planned.
+
 ## 2. DTB delivery broken on the uncompressed-Image path (parked)
 
 `Warning: Neither atags nor dtb found` ×2 despite a verified-correct
