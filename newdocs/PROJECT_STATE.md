@@ -115,21 +115,28 @@ memcmp-verified copy. The Image-path binary remains the deepest boot
 (bc=171); the zImage path now needs its own diagnosis before it can deliver
 the DTB+full-memory test the era matrix wants.
 
-**Next run** (W-31): the unifying hypothesis is on the table — the
-per-run kernel corruption (W-25 svm alloc / W-26 FDT stack smash / W-27
-pte alloc / W-29 MMU-enable) may be the kernel booting INSIDE a 24MB
-window QNX still partially owns/DMA-to (the sweep's "free" slot varies
-per run). W-30 proved the class: the payload's OWN memtest/copy writes
-killed QNX mid-setup (died between bc 31 and bc 39, box frozen, WDT2
-reset ~1 min, no jump). W-31: re-run with bc[18]=placement recorded
-BEFORE the memtest (payload edit, shipped-verified) — correlate deaths
-with placements; the DISPC kill is CONFIRMED working (screen-tap test:
-no wake after blue-ON). The devb slay stays (only removes devb's DMA).
-Also open: bc[2]=0x3E7; the probe still clobbers bc[7] (readbacks live
-in bc[16]/bc[17] now, read via memdump3 90000040 0x20). Marker-number
-audit: setup.c's pb_bc(130-136) pairs COLLIDE with mmu.c's PB_MMU_BC
-numbers — discriminate via the mirror channel. See docs/03 W-25..W-30
-and SESSION-HANDOFF/BOOTSTRAP_SESSION_9.md.
+**Next run** (W-32): the leading noise-reduction step — extend the W-24
+C-world dual-level invalidate from the 2 pv variables to the WHOLE
+kernel image (L1 DCCISW-all + SMC 0x101 by-PA clean+inv over
+[kern_phys, _end], C world's first act): kills the decompressor-era
+stale-D/I-line class (the pv-stale regime returned in W-27/W-31 — the
+2-variable fix is per-run unreliable) and shrinks the randomness before
+re-bisecting. Session-9 death map (all with devb slain + DISPC
+register-confirmed dead): W-25 svm alloc call / W-26 FDT stack smash /
+W-27 map_lowmem pte alloc / W-29 MMU-enable pre-C / W-31 svm memset —
+objects are wherever the boot works, NOT confined to the payload window
+(W-31's dying svm at 0xbfdfffd4 vs placement 0xa1c00000). W-30 remains
+explained (payload memtest trampled live QNX memory inside the window —
+bc[18]=placement now captured pre-phase). Disconfirmed this session:
+DISPC scanout (kill confirmed 0/0 + no-wake), eMMC devb (slain; MMCHS
+regs NOT NS-accessible — W-28 SIGBUS + box freeze). Remaining suspect
+classes: L2 transaction-loss under QNX's 1/1/1 latencies, the SGX/PVR
+pool (invisible to pidin, unquiesced), decompressor stale lines.
+bc[16]/bc[17] = DISPC readbacks, bc[18] = placement — read via
+`memdump3 90000040 0x20`. Marker-number audit: setup.c's pb_bc(130-136)
+pairs COLLIDE with mmu.c's PB_MMU_BC numbers — discriminate via the
+mirror channel. See docs/03 W-25..W-31 and
+SESSION-HANDOFF/BOOTSTRAP_SESSION_9.md.
 
 ## The secure monitor — RE closed (session 7)
 
