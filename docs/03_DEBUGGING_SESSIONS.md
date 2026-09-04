@@ -1817,3 +1817,15 @@ under QNX's 1/1/1 PL310 config, (b) an unidentified DMA master (SGX/PVR
 pool is invisible to pidin and unquiesced), (c) decompressor-era stale
 D/I lines (per-run — explains the pv-stale regime; the W-24 fix covers
 only the 2 pv variables, NOT the whole image).
+
+W-31 LED/SSH timeline (user video, run-local t) — REINTERPRETATION:
+00:05 blue ON; 00:13 swipe no-wake; 00:33 SSH frozen; **00:36 blue OFF =
+the JUMP (normal — the jump sequence kills console/SSH; NOT a QNX
+freeze)**; 01:00-01:05 connection reset; 01:44 red LED = 00:36 + 68 s =
+WDT2 expiry from the bc[1]=161 C-world death. Fully consistent, no
+freeze. NOTE: user swiped at 00:13 (8 s after blue-ON) — an
+UNCONTROLLED interaction variable present in several runs (W-29/30/31
+all had swipes/taps at varying times). A controlled A/B (hands-off vs
+swipe) on the current build is the next cheapest science; the touch
+controller (I2C) and power-button (PMIC paths) are candidate
+perturbation sources the user themselves flagged.
