@@ -1981,3 +1981,46 @@ before 164 = the first 16B store wedges; 166-landed + bc[19]≠0 = the
 store didn't stick (L2/DRAM weirdness); 151 = past the whole memset.
 Packed 5,569,561 B; shipped vmlinux verified (164/165/166/151 in
 iotable_init). kernel-patches regenerated, apply-check clean.
+
+### Run W-35 (2026-09-05): build #107 — the placement-overlap mechanism
+### pinned: this run's window overlapped the zreladdr inflation region and
+### the boot died in head.S's tail (bc[1]=142, ring 0, 0x3E7 back)
+
+Build: kernel #107 (memset chunk markers 164/165/166 — NEVER REACHED).
+Run: PAYLOAD_MODE=--dmaquiet ./jump.sh zImage, hands-off. Jump ~t=30s;
+reboot at 2 min 25 s (user).
+
+Readbacks (nonce 0xca7b1ca4 fresh): **bc[1] = 142 (head.S's post-MMU
+fixup-region marker — pre-C-world), bc[4]/bc[5] = 143/144 fresh, delta
+✓, ring1 count = 0 (ZERO console chars — death before the first banner
+byte), bc[2] = 0x3E7 (the mystery wild-write, BACK, head.S-era death
+like W-29's 121), bc[3] = 0xa0e00000 + bc[18] = 0xa0e00000 (the payload
+wrote the buffer phys — placement fresh), bc[12] = 0xa1357c20 = the
+cont's dtb_phys (the cont ran).** The memset chunk markers 164/165/166
+and everything C-world never fired.
+
+**THE MECHANISM: W-35's placement 0xa0e00000 is the FIRST RUN EVER whose
+window overlaps the zreladdr inflation region [0xa0008000, ~0xa0f80000)
+— overlap = 0x180000 (1.5 MB). The decompressor had to relocate itself
+and its malloc pool into/above the destination — inside the payload's
+own window — trampling the zImage body/DTB mid-decompression; the
+kernel started (142/143/144 fired) but died in head.S's tail
+(__mmap_switched/C-entry era). ALL previous runs placed ≥ 0xa1200000 =
+no overlap = passed head.S.** The sweep was blind to the inflation
+region. (W-29's head.S-era 121 death predates this guard — separate
+event, likely the stale-pv era's dice; the pv fix now covers that
+class.)
+
+FIX (payload): buf_placement_bad now rejects any window intersecting
+[0xa0000000, 0xa1000000) — 16 MB reserved for the inflation + relocated
+decompressor + heap margin. Every clean run placed ≥ 0xa1200000. Built
+clean. (Also noted: do_t3's setvbuf(_IONBF) overrides main()'s 64KB
+buffer — harmless in practice: qnx6's write-back cache absorbs the
+jump.log writes when devb is dead; only the cache-flush thread needs
+devb. The W-29 "cat: cannot execute" = an exec needing a devb READ —
+consistent.)
+
+0x3E7 hunt: the bc[0x80-0x8F] dump after W-35 shows only sanitized
+ring2 headers (0/0) + ASCII residue — no diagnostic value (the region
+is sanitized each run; the wild writer remains unidentified, now seen
+in head.S-era deaths W-29/W-35).

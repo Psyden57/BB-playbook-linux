@@ -584,6 +584,16 @@ static int buf_placement_bad(uint8_t *b, off64_t p, size_t size)
         if (p < prot[i] + 0x400000ull && end > prot[i] - 0x400000ull)
             return 1;
     }
+    /* PlayBook W-35 (2026-09-05): the zImage decompressor inflates the
+     * kernel to the BAKED zreladdr [0xa0008000, _end≈0xa0f80000) and
+     * relocates itself + its malloc pool just above the destination when
+     * they overlap. A window overlapping that region (W-35: 0xa0e00000 —
+     * 1.5 MB overlap) tramples the zImage body/DTB mid-decompression and
+     * died in head.S's tail (bc[1]=142, ring 0, the 0x3E7 wild write).
+     * Reserve [0xa0000000, 0xa1000000): inflation + relocated
+     * decompressor + heap margin. Every clean run placed >= 0xa1200000. */
+    if (p < 0xA1000000ull && end > 0xA0000000ull)
+        return 1;
     return p > 0xBE000000ull;
 }
 
