@@ -148,7 +148,7 @@
  #endif
 
 --- a/arch/arm/kernel/head.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head.S	2026-09-04 01:05:40.776424399 +0000
++++ b/arch/arm/kernel/head.S	2026-09-04 08:30:43.544387367 +0000
 @@ -98,6 +98,125 @@
   THUMB(	.thumb			)	@ switch to Thumb now.
   THUMB(1:			)
@@ -308,7 +308,7 @@
  	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid
  	movs	r10, r5				@ invalid processor (r5=0)?
   THUMB( it	eq )		@ force fixup-able long branch encoding
-@@ -124,19 +269,27 @@
+@@ -124,19 +269,53 @@
  #else
  	ldr	r8, =PLAT_PHYS_OFFSET		@ always constant in this case
  #endif
@@ -326,6 +326,32 @@
 +	pbmark	130			@ post-__fixup_smp (was 107 — that value
 +				@ is duplicated at the addruart-done site,
 +				@ which cost W-6 its diagnosis; unique now)
++	@ --- PlayBook W-11 inline-test (2026-09-04) ---
++	@ W-9/W-10 proved the fixup's entry stores never land: the death is
++	@ between pbmark 130's flush and the fixup's own CIPA (~25 proven
++	@ instructions + the bl). Execute the fixup's FIRST stores HERE, in
++	@ the head.o region, before the bl. Marker 142 = inline stores
++	@ reached. r0/r3/ip scratch (r1/r2 = boot args, r8 = PHYS_OFFSET,
++	@ r9/r10 = cpuid/procinfo — all preserved).
++	ldr	ip, =0x90000000
++	str	r8, [ip, #0x18]		@ bc[6] = r8 (the fixup's own store, inline)
++	mov	r0, #142		@ marker 142 = inline stores reached
++	str	r0, [ip, #4]		@ bc[1]
++	dsb
++	ldr	ip, =0x48242768		@ CIPA both bc lines (the W-8 lesson)
++	ldr	r0, =0x90000000
++	str	r0, [ip]
++	ldr	r0, =0x90000040
++	str	r0, [ip]
++	ldr	ip, =0x48242730		@ SYNC + bounded poll (r0 count, r3 read)
++	mov	r0, #0x100000
++969:	ldr	r3, [ip]
++	tst	r3, #1
++	beq	970f
++	subs	r0, r0, #1
++	bne	969b
++970:	dsb
++	@ --- end W-11 inline-test ---
  #ifdef CONFIG_ARM_PATCH_PHYS_VIRT
  	bl	__fixup_pv_table
  #endif
@@ -336,7 +362,7 @@
  
  	/*
  	 * The following calls CPU specific code in a position independent
-@@ -229,6 +382,12 @@
+@@ -229,6 +408,12 @@
  #endif
  
  	ldr	r7, [r10, #PROCINFO_MM_MMUFLAGS] @ mm_mmuflags
@@ -349,7 +375,7 @@
  
  	/*
  	 * Create identity mapping to cater for __enable_mmu.
-@@ -343,6 +502,99 @@
+@@ -343,6 +528,99 @@
  	str	r3, [r0], #4
  #endif
  
@@ -449,7 +475,7 @@
  #else /* CONFIG_DEBUG_ICEDCC || CONFIG_DEBUG_SEMIHOSTING */
  	/* we don't need any serial debugging mappings */
  	ldr	r7, [r10, #PROCINFO_IO_MMUFLAGS] @ io_mmuflags
-@@ -373,6 +625,7 @@
+@@ -373,6 +651,7 @@
  #ifdef CONFIG_ARM_LPAE
  	sub	r4, r4, #0x1000		@ point to the PGD table
  #endif
@@ -457,7 +483,7 @@
  	ret	lr
  ENDPROC(__create_page_tables)
  	.ltorg
-@@ -465,6 +718,13 @@
+@@ -465,6 +744,13 @@
   *  r13 = *virtual* address to jump to upon completion
   */
  __enable_mmu:
@@ -471,7 +497,7 @@
  #if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
  	orr	r0, r0, #CR_A
  #else
-@@ -482,6 +742,13 @@
+@@ -482,6 +768,13 @@
  #ifdef CONFIG_ARM_LPAE
  	mcrr	p15, 0, r4, r5, c2		@ load TTBR0
  #else
@@ -485,7 +511,7 @@
  	mov	r5, #DACR_INIT
  	mcr	p15, 0, r5, c3, c0, 0		@ load domain access register
  	mcr	p15, 0, r4, c2, c0, 0		@ load page table pointer
-@@ -506,12 +773,28 @@
+@@ -506,12 +799,28 @@
  	.align	5
  	.pushsection	.idmap.text, "ax"
  ENTRY(__turn_mmu_on)
