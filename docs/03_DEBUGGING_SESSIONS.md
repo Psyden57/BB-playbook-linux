@@ -1495,7 +1495,7 @@ iotable_init/create_mapping (the W-4 Image-path run PASSED this exact
 code — the decompressor-handoff delta remains the only structural
 suspect class).
 
-### Run W-25 (2026-09-05): session 9 begins — the iotable_init bisect markers;
+### Run W-25 (2026-09-04): session 9 begins — the iotable_init bisect markers;
 ### death pinned between iotable_init entry (150) and the svm alloc (151)
 
 Build: kernel #102 (session-9 marker set, all --l2on): 150/151/152/153 in
@@ -1529,7 +1529,7 @@ allocation at iotable_init's entry** (objdump: bl __memblock_alloc_or_panic
 sits exactly between the 150 and 151 calls). This is the FIRST time the
 death has been inside a plain small memblock alloc.
 
-### Run W-26 (2026-09-05): the split svm-alloc bisect — THE STACK-PROTECTOR
+### Run W-26 (2026-09-04): the split svm-alloc bisect — THE STACK-PROTECTOR
 ### CAUGHT THE DEATH RED-HANDED: wild stack smash in fdt_get_property_namelen
 
 Build: kernel #103 (W-26): the svm allocation split at the call site into
@@ -1582,7 +1582,7 @@ Session-9 state: the front is no longer "iotable_init" — the boot's real
 enemy is a wild write hitting the boot stack (and per W-25, the svm alloc
 region), layout/timing-sensitive, first evidenced by the stack-protector.
 
-### Run W-27 (2026-09-05): identical #103 re-run — THE DEATH MOVED ON THE SAME
+### Run W-27 (2026-09-04): identical #103 re-run — THE DEATH MOVED ON THE SAME
 ### BINARY: per-run nondeterminism CONFIRMED; pv-stale regime returned; died in
 ### map_lowmem's pte-path pte-table memblock alloc
 
@@ -1635,7 +1635,7 @@ stack-protector catch (W-26) proves real memory corruption happens; the
 bc/ring channels are evidently just as vulnerable (readbacks could
 themselves be victims — interpret with care).
 
-### Run W-28 (2026-09-05): --dmaquiet v1 — direct MMC2 register access is DEAD
+### Run W-28 (2026-09-04): --dmaquiet v1 — direct MMC2 register access is DEAD
 ### (SIGBUS fltno=5 on the first SYSCONFIG read); no jump; the box then FROZE
 
 Build: kernel #103 unchanged; payload + `--dmaquiet` mode v1: softreset MMC2
@@ -1656,7 +1656,7 @@ healthy. The user power-held it back to life. An external abort on a
 device read can wedge the interconnect even from a "cheap" user-mode
 crash — treat MMCHS-class SIGBUS as device-wedging, not cheap.
 
-### Run W-29 (2026-09-05): --dmaquiet v2 (devb slay) — the jump happened;
+### Run W-29 (2026-09-04): --dmaquiet v2 (devb slay) — the jump happened;
 ### NEW DEATH POINT: bc[1]=121 (enable_mmu entered, 122 never) with ZERO
 ### console output
 
@@ -1719,7 +1719,7 @@ connection reset; 01:48-02:11 reconnect timeouts (QNX booting);
 02:24 red LED ON = warm reset — jump+68 s = **WDT2 expiry from the
 bc[1]=121 hang** (58.6 s window + kick drift). Fully consistent.
 
-### Run W-30 (2026-09-05): NO JUMP — the payload's own 24MB writes killed QNX
+### Run W-30 (2026-09-04): NO JUMP — the payload's own 24MB writes killed QNX
 ### mid-setup (memtest/copy phase); DISPC kill CONFIRMED working by screen tap
 
 Build: kernel #103 unchanged; payload: DISPC readbacks moved to bc[16]/
@@ -1768,7 +1768,7 @@ corroboration: jump.sh already slays the display stack, so no-wake could
 partly reflect "no driver to revive the LCD" — the register readback
 (bc[16]/bc[17], this run) is the definitive check.
 
-### Run W-31 (2026-09-05): placement captured (0xa1c00000); DISPC kill
+### Run W-31 (2026-09-04): placement captured (0xa1c00000); DISPC kill
 ### register-confirmed (0/0); new death: the svm memset (161→151), pv-stale
 ### regime again
 
@@ -1830,7 +1830,7 @@ swipe) on the current build is the next cheapest science; the touch
 controller (I2C) and power-button (PMIC paths) are candidate
 perturbation sources the user themselves flagged.
 
-### Run W-32a (2026-09-05): hands-off baseline — THE WALL REPRODUCED
+### Run W-32a (2026-09-04): hands-off baseline — THE WALL REPRODUCED
 ### DETERMINISTICALLY; the root cause identified: stale-pv __va/__pa wedges
 
 Build: kernel #103 unchanged. USER DID NOTHING (no swipe, no tap, no
@@ -1876,7 +1876,7 @@ and __pv_phys_pfn_offset == 0xa0000. bc[10] = the retry count, marker
 the want-compare, the loop). kernel-patches regenerated, git apply
 --check clean.
 
-### Run W-32 (2026-09-05): build #104 — the self-healing block (in
+### Run W-32 (2026-09-04): build #104 — the self-healing block (in
 ### adjust_lowmem_bounds) NEVER RAN; the death moved UPSTREAM to the
 ### early_mm_init/early_paging_init window
 
@@ -1908,7 +1908,7 @@ Packed 5,572,313 B; shipped vmlinux objdump-verified (DCCIMVAC triple +
 literal-delta flushes + ldrd re-read + cmpeq + loop + marker 163,
 inside start_kernel). kernel-patches regenerated, apply-check clean.**
 
-### Run W-33 (2026-09-05): build #105 — the pre-setup_arch invalidate+verify
+### Run W-33 (2026-09-04): build #105 — the pre-setup_arch invalidate+verify
 ### block FAILED 8/8; the clean-step poison identified; W-32c = direct store
 
 Build: kernel #105. Run: PAYLOAD_MODE=--dmaquiet ./jump.sh zImage,
@@ -1948,7 +1948,7 @@ tries → bc[19] (0x9000004C, read via memdump3 90000040 0x20). Packed
 5,571,801 B; shipped vmlinux verified (DCCIMVAC triple + cmpeq + 163 in
 start_kernel). kernel-patches regenerated, apply-check clean.
 
-### Run W-34 (2026-09-05): build #106 — THE PV FIX WORKS (tries=0, correct
+### Run W-34 (2026-09-04): build #106 — THE PV FIX WORKS (tries=0, correct
 ### values end-to-end) — and the svm wall survives it: the memset dies with
 ### CORRECT pv
 
@@ -1982,7 +1982,7 @@ store didn't stick (L2/DRAM weirdness); 151 = past the whole memset.
 Packed 5,569,561 B; shipped vmlinux verified (164/165/166/151 in
 iotable_init). kernel-patches regenerated, apply-check clean.
 
-### Run W-35 (2026-09-05): build #107 — the placement-overlap mechanism
+### Run W-35 (2026-09-04): build #107 — the placement-overlap mechanism
 ### pinned: this run's window overlapped the zreladdr inflation region and
 ### the boot died in head.S's tail (bc[1]=142, ring 0, 0x3E7 back)
 
@@ -2025,7 +2025,7 @@ ring2 headers (0/0) + ASCII residue — no diagnostic value (the region
 is sanitized each run; the wild writer remains unidentified, now seen
 in head.S-era deaths W-29/W-35).
 
-### Run W-36 (2026-09-05): build #107 + placement guard — guard works
+### Run W-36 (2026-09-04): build #107 + placement guard — guard works
 ### (0xa1600000, no overlap), head.S passed, pv correct — and the death is
 ### the FIRST 16-byte store of the memset (164/165/166 never fired)
 
@@ -2058,7 +2058,7 @@ pmd_val — a valid section descriptor vs zero/invalid) before the
 stores, then single stores p[0]→167, p[1]→168 to bisect the first-four
 window.
 
-### Run W-37 (2026-09-05): build #108 — THE WILD WRITE CAUGHT IN THE ACT:
+### Run W-37 (2026-09-04): build #108 — THE WILD WRITE CAUGHT IN THE ACT:
 ### the pmd for the svm VA is a bogus TABLE pointer into never-written DRAM
 
 Build: kernel #108. Run: PAYLOAD_MODE=--dmaquiet ./jump.sh zImage,
@@ -2104,7 +2104,7 @@ map_lowmem gap. Packed 5,569,585 B; shipped vmlinux verified (160/161 →
 dumps → 167 → 151, stores compiled out). kernel-patches regenerated,
 apply-check clean.
 
-### Run W-38 (2026-09-05): build #109 — the pmd pattern: the pair
+### Run W-38 (2026-09-04): build #109 — the pmd pattern: the pair
 ### [0xdfc/0xdfd] = IDENTICAL bogus table pointers (the __pmd_populate
 ### signature), deterministic across runs AND placements
 

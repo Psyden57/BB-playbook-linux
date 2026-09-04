@@ -1,7 +1,7 @@
 # PlayBook Bootchain RE — Session Handoff
 **Start here for background: `PLAYBOOK-REFERENCE.md`** — consolidated device/OS/flashing/NVRAM knowledge base (kept current).
 
-> **STATUS (2026-09-05): HISTORICAL EVIDENCE — superseded.** This file is the
+> **STATUS (2026-09-04): HISTORICAL EVIDENCE — superseded.** This file is the
 > pre-repo era handoff (2026-08-31). The live handoff is `newdocs/HANDOFF.md`
 > + `SESSION-HANDOFF/BOOTSTRAP_SESSION_10.md`; the live state is
 > `newdocs/PROJECT_STATE.md`. Several claims below are superseded — notably

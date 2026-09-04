@@ -1,4 +1,4 @@
-# Project State (as of session 9, 2026-09-05)
+# Project State (as of session 9, 2026-09-04)
 
 This file tracks the *current technical state* precisely. Older docs
 (`docs/03`, `SESSION-HANDOFF/`) record how we got here; where they disagree
@@ -45,7 +45,7 @@ W-39 unrun):
    bc[16]/bc[17]; WiFi SDIO never brought up). The randomness SURVIVED
    the quiesce → the source is the stale-view class (see
    [contradictions/machine-corruption-vs-code-bugs.md](contradictions/machine-corruption-vs-code-bugs.md)
-   — characterized 2026-09-05), not a rogue DMA master.
+   — characterized 2026-09-04), not a rogue DMA master.
 5. Marker-number discipline: setup.c's pb_bc(130-136) pairs COLLIDE
    with mmu.c's PB_MMU_BC numbers — discriminate via the mirror
    channel (rule 17 in docs/README). Extended forensics slots
@@ -68,7 +68,7 @@ W-39 unrun):
   (KNOWN_ISSUES #10); the rule stands: MMU-off helpers are INLINED,
   never called. Also session 8: the bank fix (W-21), the surviving-slot
   markers (W-22), the dual-level pv invalidate (W-24 — later superseded).
-- **Session 9 (2026-09-05) — the pv cure + the stale pgd pair**: the
+- **Session 9 (2026-09-04) — the pv cure + the stale pgd pair**: the
   "wandering" early-C deaths (svm alloc W-25/31/32a, FDT walk stack
   smash W-26, map_lowmem pte alloc W-27, MMU-enable W-29, head.S tail
   W-35) all resolved to (a) the stale-pv regime (CURED) and (b) the

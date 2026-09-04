@@ -1,6 +1,6 @@
 # Hardware Reference — BlackBerry PlayBook (Winchester)
 
-## 2026-09-05 UPDATES (session 9 — supersede the details below where they conflict)
+## 2026-09-04 UPDATES (session 9 — supersede the details below where they conflict)
 - **MMC2/eMMC MMCHS registers (0x480B4000+) are NOT NS-accessible**: the
   first SYSCONFIG read from the payload = SIGBUS fltno=5 (external abort,
   W-28) — and that abort class then FROZE the box completely (SSH dead,

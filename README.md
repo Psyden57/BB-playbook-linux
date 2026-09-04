@@ -9,7 +9,7 @@ Status: **the complete jump mechanism is proven working on real hardware**,
 and **mainline Linux 6.15.11 boots through `start_kernel`**. The secure
 monitor is used to keep the L2 cache enabled across the jump, all kernel
 console output is captured into DRAM and survives the watchdog reset
-cycle. Session 9 (2026-09-05) root-caused the per-run early-C deaths (the
+cycle. Session 9 (2026-09-04) root-caused the per-run early-C deaths (the
 stale-pv regime — cured by a direct-store fix) and characterized the
 "silent corruption" as a stale-view class; the current wall is the stale
 pgd pair at the top of the linear map (see

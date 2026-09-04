@@ -1,4 +1,4 @@
-# Session 9 Notes (2026-09-05 — the pv wall, the stale pgd pair, and the
+# Session 9 Notes (2026-09-04 — the pv wall, the stale pgd pair, and the
 # placement-overlap guard)
 
 ## THE RUN MAP (W-25 → W-38, all --l2on/--dmaquiet, kernel #102 → #110)

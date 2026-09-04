@@ -1,6 +1,6 @@
 # Kernel Debugging Guide
 
-## 2026-09-05 UPDATES (session 9 — the marker map + the pv/pmd fixes)
+## 2026-09-04 UPDATES (session 9 — the marker map + the pv/pmd fixes)
 - **The pv cure moved to start_kernel** (init/main.c, right after the
   first-printk marker 141): the W-32c block directly stores the build
   constants (__pv_offset = 0xffffffffe0000000, __pv_phys_pfn_offset =

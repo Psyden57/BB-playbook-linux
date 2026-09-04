@@ -52,7 +52,7 @@ on -C 0 /tmp/qnx2linux --t2        # T2: jump test (maxcount via hello.bin build
 on -C 0 /tmp/qnx2linux --t3        # T3: real kernel (zImage + appended DTB)
 ```
 
-**NOTE (2026-09-05, session 9): the run commands go through `jump.sh` with
+**NOTE (2026-09-04, session 9): the run commands go through `jump.sh` with
 the PAYLOAD_MODE env — the session-9 default is
 `PAYLOAD_MODE=--dmaquiet ./jump.sh zImage`** (= --l2on: keep QNX's PL310 +
 `slay devb-mmcsd-winchester` after the file reads + the DISPC kill with

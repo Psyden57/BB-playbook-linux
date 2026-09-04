@@ -1,6 +1,6 @@
 # kexec Architecture Deep Dive
 
-## 2026-09-05 UPDATES (session 9 — the pv cure + the placement guard + the quiesce)
+## 2026-09-04 UPDATES (session 9 — the pv cure + the placement guard + the quiesce)
 1. **The pv cure = the W-32c block in start_kernel** (init/main.c,
    marker 163): direct store of the build constants + DCCIMVAC. The
    W-24 dual-level invalidate in adjust_lowmem_bounds was REMOVED —

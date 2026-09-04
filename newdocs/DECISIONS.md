@@ -47,7 +47,7 @@ offset inside it (`kern_off`), and patch the DTB /memory node's reg at
 runtime to match (`fdt_patch_memory`). **UPDATE 2026-09-04 (W-21): the
 DTS-baked bank must be 0xa0000000 + 512 MB** (zreladdr = 0xa0008000 ⇒
 PHYS_OFFSET = 0xa0000000 — the old "0xa4000000 + 448 MB" default put the
-kernel outside its own memory). **UPDATE 2026-09-05 (session 9): the
+kernel outside its own memory). **UPDATE 2026-09-04 (session 9): the
 sweep also REJECTS any window intersecting [0xa0000000, 0xa1000000) —
 the zreladdr inflation region (W-35: the decompressor relocates itself
 into an overlapping window and the boot died in head.S's tail).**

@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-## NEW (2026-09-05, session 9 — the session-9 failure modes; the sections below = earlier eras)
+## NEW (2026-09-04, session 9 — the session-9 failure modes; the sections below = earlier eras)
 
 ### The early-C death ladder (bc[1]=161/156/133/142/121) — ONE root class
 - The "random wandering" early-C deaths (svm alloc W-25/31/32a, FDT walk

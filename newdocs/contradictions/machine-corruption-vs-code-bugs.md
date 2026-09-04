@@ -68,14 +68,14 @@ mis-compared magic constant. Leans further toward the code-bug side.
 
 ## Current status
 
-CHARACTERIZED as of session 9 (see the 2026-09-05 addendum below): the
+CHARACTERIZED as of session 9 (see the 2026-09-04 addendum below): the
 corruption is real but stale-view, not random damage — QNX-era /
 decompressor-era L2 content served to the C world's cached reads or the
 PTW, per-run. One live anomaly (the W-26 stack-protector catch) still
 leans either way; one live victim (the stale pgd pair) is worked around
 but not cured.
 
-## ADDENDUM 2026-09-05 (session 9: the corruption class CHARACTERIZED —
+## ADDENDUM 2026-09-04 (session 9: the corruption class CHARACTERIZED —
 ## both sides were right)
 
 Session 9 resolved the ledger's framing: the "corruption" is real but it

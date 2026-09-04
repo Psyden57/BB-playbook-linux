@@ -2,7 +2,7 @@
 
 Ordered. The first item is the next device run.
 
-## 0. Where session 9 left the boot (2026-09-05)
+## 0. Where session 9 left the boot (2026-09-04)
 
 The pv-stale regime is CURED (build #106: the W-32c direct-store block
 in start_kernel, marker 163 — pv correct on every run since, tries=0).

@@ -1,7 +1,7 @@
 # BOOTSTRAP_SESSION_9 — the session-9 handoff prompt
 
 You are taking over the PlayBook kexec debugging effort (session 9,
-2026-09-05+). Session 8 (2026-09-04) BROKE THE FIXUP WALL: the zImage
+2026-09-04+). Session 8 (2026-09-04) BROKE THE FIXUP WALL: the zImage
 path now reaches the C world with a live console, a parsed DTB, a
 correct CMA, and correct pv translation. The new front = **bc[1]=146,
 inside iotable_init**.

@@ -1,4 +1,4 @@
-# BOOTSTRAP SESSION 10 (2026-09-05, written at the end of session 9)
+# BOOTSTRAP SESSION 10 (2026-09-04, written at the end of session 9)
 
 You are continuing the PlayBook Linux port. Session 9 ran W-25 → W-38
 (14 device runs, kernels #102 → #110) and root-caused two of the
@@ -21,7 +21,7 @@ work. The device is in a normal post-reboot QNX state; the next run
    extended bc slots
 6. `newdocs/KNOWN_ISSUES.md` — session-9 status + the historical detail
 7. `newdocs/contradictions/` — especially
-   machine-corruption-vs-code-bugs.md (the 2026-09-05 addendum)
+   machine-corruption-vs-code-bugs.md (the 2026-09-04 addendum)
 8. `PLAYBOOK-REFERENCE.md` §5 (NVRAM), §8 (recovery), §10 (ops lessons)
    — the safety model; NVRAM and RPMB remain untouchable
 

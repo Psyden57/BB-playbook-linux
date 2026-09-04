@@ -1,13 +1,13 @@
 # Known Issues & Open Problems
 
-Current as of session 9 (2026-09-05). Ordered by blocking priority.
+Current as of session 9 (2026-09-04). Ordered by blocking priority.
 Session-9 updates are appended per issue; the session-7-era text stands
 for context. See docs/03 W-25..W-38 and
 newdocs/session-notes/session-09.md.
 
 ## 1. bc=171 wall — taskstats_init_early / kmem_cache_create
 
-**SESSION-9 UPDATE (2026-09-05): the 171 wall is NOT the front anymore.**
+**SESSION-9 UPDATE (2026-09-04): the 171 wall is NOT the front anymore.**
 The boots now die BEFORE it, and the randomness is root-caused: the
 stale-pv regime (see #4's update) broke every C-world __va/__pa inline,
 producing the "wandering" deaths (svm alloc W-25/31/32a, FDT walk
@@ -30,7 +30,7 @@ Unchanged: the by-way 0x7FC deadlock risk vs CONFIG_CACHE_L2X0=n.
 **Session-9 note: the boot has never reached init_IRQ this session —
 this is the NEXT hazard after the paging region is passed.**
 
-## 4. The unpatched-pv-stub signature — **SOLVED AS A CLASS (2026-09-05)**
+## 4. The unpatched-pv-stub signature — **SOLVED AS A CLASS (2026-09-04)**
 
 **SESSION-9 UPDATE: root-caused and cured.** The stale reads came from
 decompressor-era L2 lines surviving eviction (per-run luck): the

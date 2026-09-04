@@ -106,7 +106,7 @@ corrected them — the corrections are never silent (see
 
 ```
 bc[15] nonce fresh? ── no ──► stale readback; investigate before concluding
-bc[1] after jump? (the zImage ladder, W-9→W-38 era; 2026-09-05)
+bc[1] after jump? (the zImage ladder, W-9→W-38 era; 2026-09-04)
 ├─ 142/143/144 (head.S fixup region) ──► head.S-tail death, pre-C world —
 │                                      W-35: a placement overlapping the
 │                                      zreladdr inflation region; check the
