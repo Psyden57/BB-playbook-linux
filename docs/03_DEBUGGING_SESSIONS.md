@@ -819,3 +819,29 @@ DTS bank (0xa4000000) remains as the baked default; the copy handed to the
 kernel via r2 is the patched one. Host-tested: reg (0xA8000000,0x18000000)
 round-trips correctly. One walker bug found+fixed on the way (node-name NUL
 is not word-aligned — byte-scan then round up).
+
+### Run W-7 (2026-09-04): [RECONSTRUCTED 2026-09-04 from the session-8
+bootstrap and PROJECT_STATE — this run never got its own record; appended
+here per the append-only protocol, facts as recorded in those sources]
+
+PAYLOAD_MODE=--l2on ./jump.sh zImage (the run between W-6's kernel #85 and
+W-8's #87 — the pbmark/pbmark3 CIPA-flush build or its immediate
+predecessor; the exact build number and this run's bc[3]/bc[4]/ring1
+readbacks are NOT recoverable). Recorded facts (bootstrap + PROJECT_STATE):
+- bc[1] = 130 post-__fixup_smp, never 131 — same as W-6 (whose ambiguous
+  107 was renumbered to unique 130/131) and W-8; ring1 = smoke test only.
+- bc[2] = 0x3E7 — the zImage-correlated value, second of three (W-6/W-7/W-8).
+- THE W-7 POST-MORTEM (this run's real contribution, technique now in
+  newdocs/COMMANDS.md "Post-mortem"): dumped the decompressed kernel from
+  DRAM after the WDT2 reboot before QNX trampled it — System.map
+  `c00085c8 T __fixup_pv_table` → PA = VA − 0x20000000 (zImage-path
+  PHYS_OFFSET 0xa0000000). Findings: the fixup code bytes were BYTE-INTACT
+  in the decompressed image, the `bl __fixup_pv_table` intact, and
+  `__pv_offset`/`__pv_phys_pfn_offset` read back 0 (the pre-fixup state —
+  either the fixup died before its .data stores, or the stores were
+  L2-dirty and discarded).
+- The lost instrumentation stores from this post-mortem exposed the
+  persistence model: SO bc stores only DIRTY the PL310; QNX's L2 re-init
+  after the warm reset discards dirty lines. W-8 then CIPA-flushed the
+  pbmark/pbmark3 markers by PA (0x768/0x730) — the fixup's OWN stores
+  stayed unflushed until the session-8 phys2virt.S edit (commit e842c33).
