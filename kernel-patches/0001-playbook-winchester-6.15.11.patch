@@ -991,8 +991,84 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-04 12:43:37.364388223 +0000
-@@ -1147,6 +1147,21 @@
++++ b/arch/arm/mm/mmu.c	2026-09-04 14:17:48.748387252 +0000
+@@ -758,18 +758,27 @@
+ 	return arm_pte_alloc(pmd, addr, prot, early_alloc);
+ }
+ 
++/* PlayBook session 9: C-world bc channel (proven primitive, main.c). */
++noinline void pb_bc_put(unsigned int addr, unsigned int v);
++
+ static void __init alloc_init_pte(pmd_t *pmd, unsigned long addr,
+ 				  unsigned long end, unsigned long pfn,
+ 				  const struct mem_type *type,
+ 				  void *(*alloc)(unsigned long sz),
+ 				  bool ng)
+ {
+-	pte_t *pte = arm_pte_alloc(pmd, addr, type->prot_l1, alloc);
++	pte_t *pte;
++
++	pb_bc_put(0xD0000004, 156);	/* PlayBook W-25: alloc_init_pte entry */
++	pte = arm_pte_alloc(pmd, addr, type->prot_l1, alloc);
++	pb_bc_put(0xD0000034, (unsigned int)pte);	/* bc[13]: pte base */
++	pb_bc_put(0xD0000004, 157);	/* PlayBook W-25: pte table allocated */
+ 	do {
+ 		set_pte_ext(pte, pfn_pte(pfn, __pgprot(type->prot_pte)),
+ 			    ng ? PTE_EXT_NG : 0);
+ 		pfn++;
+ 	} while (pte++, addr += PAGE_SIZE, addr != end);
++	pb_bc_put(0xD0000004, 158);	/* PlayBook W-25: set_pte_ext loop done */
+ }
+ 
+ static void __init __map_init_section(pmd_t *pmd, unsigned long addr,
+@@ -965,6 +974,7 @@
+ 		phys += next - addr;
+ 		addr = next;
+ 	} while (pgd++, addr != end);
++	pb_bc_put(0xD0000004, 155);	/* PlayBook W-25: pgd loop done */
+ }
+ 
+ /*
+@@ -1022,10 +1032,29 @@
+ 	if (!nr)
+ 		return;
+ 
+-	svm = memblock_alloc_or_panic(sizeof(*svm) * nr, __alignof__(*svm));
++	pb_bc_put(0xD0000004, 150);	/* PlayBook W-25: iotable_init entry */
++
++	{
++		/* PlayBook W-26: split memblock_alloc_or_panic to localize
++		 * the wedge between markers 150 and 151 (W-25: died inside). */
++		phys_addr_t svm_pa;
++		pb_bc_put(0xD0000004, 159);	/* before find_in_range+reserve */
++		svm_pa = memblock_phys_alloc(sizeof(*svm) * nr,
++					     __alignof__(*svm));
++		pb_bc_put(0xD0000034, (unsigned int)svm_pa);	/* bc[13] */
++		pb_bc_put(0xD0000004, 160);	/* find+reserve done */
++		svm = svm_pa ? __va(svm_pa) : NULL;
++		if (!svm)
++			panic("PB iotable_init: svm alloc failed");
++		pb_bc_put(0xD0000004, 161);	/* __va done */
++		memset(svm, 0, sizeof(*svm) * nr);
++		pb_bc_put(0xD0000004, 151);	/* memset done */
++	}
+ 
+ 	for (md = io_desc; nr; md++, nr--) {
++		pb_bc_put(0xD0000028, (unsigned int)md->virtual); /* bc[10] */
+ 		create_mapping(md);
++		pb_bc_put(0xD0000004, 152);	/* PlayBook W-25: create_mapping done */
+ 
+ 		vm = &svm->vm;
+ 		vm->addr = (void *)(md->virtual & PAGE_MASK);
+@@ -1035,6 +1064,7 @@
+ 		vm->flags |= VM_ARM_MTYPE(md->type);
+ 		vm->caller = iotable_init;
+ 		add_static_vm_early(svm++);
++		pb_bc_put(0xD0000004, 153);	/* PlayBook W-25: add_static_vm done */
+ 	}
+ }
+ 
+@@ -1147,6 +1177,21 @@
  	map.length = PAGE_SIZE;
  	map.type = MT_DEVICE;
  	iotable_init(&map, 1);
@@ -1014,7 +1090,7 @@
  }
  #endif
  
-@@ -1250,6 +1265,38 @@
+@@ -1250,6 +1295,38 @@
  
  	arm_lowmem_limit = lowmem_limit;
  
@@ -1053,7 +1129,7 @@
  	high_memory = __va(arm_lowmem_limit - 1) + 1;
  
  	if (!memblock_limit)
-@@ -1363,6 +1410,19 @@
+@@ -1363,6 +1440,19 @@
   * Any other function or debugging method which may touch any device _will_
   * crash the kernel.
   */
@@ -1073,7 +1149,7 @@
  static void __init devicemaps_init(const struct machine_desc *mdesc)
  {
  	struct map_desc map;
-@@ -1375,12 +1435,20 @@
+@@ -1375,12 +1465,20 @@
  	vectors = early_alloc(PAGE_SIZE * 2);
  
  	early_trap_init(vectors);
@@ -1095,7 +1171,7 @@
  
  	if (__atags_pointer) {
  		/* create a read-only mapping of the device tree */
-@@ -1445,10 +1513,16 @@
+@@ -1445,10 +1543,16 @@
  		mdesc->map_io();
  	else
  		debug_ll_io_init();
@@ -1112,7 +1188,7 @@
  
  	/*
  	 * Finally flush the caches and tlb to ensure that we're in a
-@@ -1457,10 +1531,13 @@
+@@ -1457,10 +1561,13 @@
  	 * back.  After this point, we can start to touch devices again.
  	 */
  	local_flush_tlb_all();
@@ -1127,7 +1203,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1842,9 @@
+@@ -1765,7 +1872,9 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1137,7 +1213,7 @@
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +1852,13 @@
+@@ -1773,9 +1882,13 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1151,7 +1227,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +1868,7 @@
+@@ -1785,6 +1898,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
