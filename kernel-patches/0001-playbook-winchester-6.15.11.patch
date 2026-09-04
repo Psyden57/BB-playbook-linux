@@ -991,7 +991,7 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-02 20:40:47.726632227 +0000
++++ b/arch/arm/mm/mmu.c	2026-09-04 12:43:37.364388223 +0000
 @@ -1147,6 +1147,21 @@
  	map.length = PAGE_SIZE;
  	map.type = MT_DEVICE;
@@ -1014,7 +1014,7 @@
  }
  #endif
  
-@@ -1250,6 +1265,15 @@
+@@ -1250,6 +1265,38 @@
  
  	arm_lowmem_limit = lowmem_limit;
  
@@ -1022,6 +1022,29 @@
 +	 * (vmalloc_limit <= the region base) and current_limit=0 made every
 +	 * memblock_phys_alloc fail — the omap secure-RAM steal panicked.
 +	 * Fall back to the end of DRAM so bring-up allocations work. */
++	/* PlayBook W-24 (2026-09-04): the pv fixup runs MMU-off (head.S
++	 * inline) and its stores reach DRAM (W-23 post-mortem: __pv_offset
++	 * = 0xffffffffe0000000, pfn = 0xa0000 — byte-correct), but this C
++	 * world's cached reads hit decompressor-era stale lines (pv_off=0
++	 * in the PB-CMA print; the head.S L2-only CIPA did not cure it).
++	 * Invalidate BOTH levels for the two pv variables: L1 DCCIMVAC by
++	 * VA + the monitor's SMC 0x101 L2 clean+inv by PA range (the
++	 * pb_bc_put-proven primitive). Before the first pv consumer. */
++	{
++		extern noinline void pb_smc_flush(unsigned long pa,
++						  unsigned long size);
++		extern u64 __pv_offset;
++		extern unsigned long __pv_phys_pfn_offset;
++		unsigned long va0 = (unsigned long)&__pv_phys_pfn_offset;
++		unsigned long va1 = (unsigned long)&__pv_offset;
++
++		asm volatile("mcr p15, 0, %0, c7, c14, 1" :: "r" (va0 & ~0x1f));
++		asm volatile("mcr p15, 0, %0, c7, c14, 1" :: "r" (va1 & ~0x1f));
++		asm volatile("mcr p15, 0, %0, c7, c14, 1" :: "r" ((va1 & ~0x1f) + 32));
++		dsb(ish);
++		pb_smc_flush(__pa(va0) & ~0x3f, 128);
++		pb_smc_flush(__pa(va1) & ~0x3f, 128);
++	}
 +	pr_notice("PB-ADJ: vmalloc_limit=%llx lowmem_limit=%llx\n",
 +		  vmalloc_limit, (u64)arm_lowmem_limit);
 +	if (!arm_lowmem_limit)
@@ -1030,7 +1053,7 @@
  	high_memory = __va(arm_lowmem_limit - 1) + 1;
  
  	if (!memblock_limit)
-@@ -1363,6 +1387,19 @@
+@@ -1363,6 +1410,19 @@
   * Any other function or debugging method which may touch any device _will_
   * crash the kernel.
   */
@@ -1050,7 +1073,7 @@
  static void __init devicemaps_init(const struct machine_desc *mdesc)
  {
  	struct map_desc map;
-@@ -1375,12 +1412,20 @@
+@@ -1375,12 +1435,20 @@
  	vectors = early_alloc(PAGE_SIZE * 2);
  
  	early_trap_init(vectors);
@@ -1072,7 +1095,7 @@
  
  	if (__atags_pointer) {
  		/* create a read-only mapping of the device tree */
-@@ -1445,10 +1490,16 @@
+@@ -1445,10 +1513,16 @@
  		mdesc->map_io();
  	else
  		debug_ll_io_init();
@@ -1089,7 +1112,7 @@
  
  	/*
  	 * Finally flush the caches and tlb to ensure that we're in a
-@@ -1457,10 +1508,13 @@
+@@ -1457,10 +1531,13 @@
  	 * back.  After this point, we can start to touch devices again.
  	 */
  	local_flush_tlb_all();
@@ -1104,7 +1127,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1819,9 @@
+@@ -1765,7 +1842,9 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1114,7 +1137,7 @@
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +1829,13 @@
+@@ -1773,9 +1852,13 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1128,7 +1151,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +1845,7 @@
+@@ -1785,6 +1868,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
