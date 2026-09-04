@@ -1015,3 +1015,34 @@ kernel action. The W-4 "off during kernel" was the PROBE's LED chain
 WDT2 window from arm-at-jump → fire. The kernel's active life was
 seconds (death at 130 within moments of the jump; then a ~50 s dead
 window until WDT2).
+
+### Run W-11 (2026-09-04): inline-test — THE STORES ARE INNOCENT, THE BL
+### NEVER DELIVERS (marker 142 lands; fixup still never entered)
+
+Build: kernel #89 (W-11 inline-test, commit 17a0b83): the fixup's first
+stores (bc[6]=r8 + marker 142, CIPA-flushed) executed in head.S directly
+after pbmark 130, before the bl. Run: PAYLOAD_MODE=--t3 ./jump.sh zImage
+(LED timings lost — the recording failed; no re-run, the readback was the
+point).
+
+Readbacks (nonce 0xcbaa827b fresh):
+- **bc[1] = 142 — the inline marker LANDED (flushed).**
+- **bc[6] = 0xa0000000 = r8 — the fixup's own store, executed inline,
+  correct value.** PHYS_OFFSET confirmed exactly as derived.
+- **No 140, no 141, no 131** — the fixup still never entered; bc[2]=0
+  (no probe), bc[12]=0xa1956e60 (closes exactly: buffer 0xa1300000 →
+  kern_off 0x100000 → load 0xa1408000 + padded 0x54ee60 — an earlier
+  512-byte "mismatch" was the analyst's own hex error, corrected).
+- ring smoke-only; mirror0 normal.
+
+**Verdict: the fixup's first stores work perfectly in head.o context —
+the `bl __fixup_pv_table` never delivers execution to the fixup.** The
+death is at/inside the bl itself. Decompressor audit (grepped, not
+recalled): the v7 launch path (compressed/head.S) ends with a full-range
+D-clean + ICIALLU + DSB + ISB (iflush) before cache_off (armv7 cache_off
+does TLBIALL + BTCI but NO I-inval — the ICIALLU already ran) — so
+stale-I-cache lines are ruled out; W-7's post-mortem ruled out corrupt
+DRAM bytes (for the W-7 build). The surviving discriminator: the bl
+MECHANISM (encoding/prediction at runtime) vs the target region's
+fetchability. W-12 replaces the bl with a computed absolute call
+(blx r4; the computed target stored to bc[13] for readback verification).
