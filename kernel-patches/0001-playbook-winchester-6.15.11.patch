@@ -148,7 +148,7 @@
  #endif
 
 --- a/arch/arm/kernel/head.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head.S	2026-09-04 09:18:59.164385295 +0000
++++ b/arch/arm/kernel/head.S	2026-09-04 09:55:42.288387677 +0000
 @@ -98,6 +98,125 @@
   THUMB(	.thumb			)	@ switch to Thumb now.
   THUMB(1:			)
@@ -275,13 +275,18 @@
  #ifdef CONFIG_ARM_VIRT_EXT
  	bl	__hyp_stub_install
  #endif
-@@ -105,6 +224,32 @@
+@@ -105,6 +224,38 @@
  	safe_svcmode_maskall r9
  
  	mrc	p15, 0, r9, c0, c0		@ get processor id
 +	pbmark	101
-+	@ ring-capture smoke test: if "PLAYBOOK-HEAD-101" lands in the ring
-+	@ (0x88000100+) the DEBUG_LL ring + PL310 flush path works end-to-end
++	@ PlayBook W-15: the smoke test is DISABLED. Correlation: every
++	@ zImage run WITH the smoke test died at the fixup (W-6..W-14,
++	@ 10/10); every run WITHOUT it passed (W-4/W-5, runs 23-32). The
++	@ ~40 UART3 device accesses (senduart + busyuart polls, MMU off)
++	@ are the only new device traffic in the pre-fixup window. Markers
++	@ kept so the ladder shape is unchanged.
++#if 0
 +	b	9802f
 +	.align	2
 +8091:	.asciz	"PLAYBOOK-HEAD-101\n"
@@ -302,13 +307,14 @@
 +	pbmark	108			@ senduart done
 +	busyuart r2, r3
 +	pbmark	109			@ busyuart done (ring captured)
++#endif
 +	mov	r1, r7			@ RESTORE boot args (machine id, DTB)
 +	mov	r2, r8
 +@ -------------------------------------------------------------------------
  	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid
  	movs	r10, r5				@ invalid processor (r5=0)?
   THUMB( it	eq )		@ force fixup-able long branch encoding
-@@ -124,19 +269,66 @@
+@@ -124,19 +275,66 @@
  #else
  	ldr	r8, =PLAT_PHYS_OFFSET		@ always constant in this case
  #endif
@@ -376,7 +382,7 @@
  
  	/*
  	 * The following calls CPU specific code in a position independent
-@@ -229,6 +421,12 @@
+@@ -229,6 +427,12 @@
  #endif
  
  	ldr	r7, [r10, #PROCINFO_MM_MMUFLAGS] @ mm_mmuflags
@@ -389,7 +395,7 @@
  
  	/*
  	 * Create identity mapping to cater for __enable_mmu.
-@@ -343,6 +541,99 @@
+@@ -343,6 +547,99 @@
  	str	r3, [r0], #4
  #endif
  
@@ -489,7 +495,7 @@
  #else /* CONFIG_DEBUG_ICEDCC || CONFIG_DEBUG_SEMIHOSTING */
  	/* we don't need any serial debugging mappings */
  	ldr	r7, [r10, #PROCINFO_IO_MMUFLAGS] @ io_mmuflags
-@@ -373,6 +664,7 @@
+@@ -373,6 +670,7 @@
  #ifdef CONFIG_ARM_LPAE
  	sub	r4, r4, #0x1000		@ point to the PGD table
  #endif
@@ -497,7 +503,7 @@
  	ret	lr
  ENDPROC(__create_page_tables)
  	.ltorg
-@@ -465,6 +757,13 @@
+@@ -465,6 +763,13 @@
   *  r13 = *virtual* address to jump to upon completion
   */
  __enable_mmu:
@@ -511,7 +517,7 @@
  #if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
  	orr	r0, r0, #CR_A
  #else
-@@ -482,6 +781,13 @@
+@@ -482,6 +787,13 @@
  #ifdef CONFIG_ARM_LPAE
  	mcrr	p15, 0, r4, r5, c2		@ load TTBR0
  #else
@@ -525,7 +531,7 @@
  	mov	r5, #DACR_INIT
  	mcr	p15, 0, r5, c3, c0, 0		@ load domain access register
  	mcr	p15, 0, r4, c2, c0, 0		@ load page table pointer
-@@ -506,12 +812,28 @@
+@@ -506,12 +818,28 @@
  	.align	5
  	.pushsection	.idmap.text, "ax"
  ENTRY(__turn_mmu_on)
