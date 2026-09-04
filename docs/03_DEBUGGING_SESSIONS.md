@@ -1162,6 +1162,42 @@ strip ALL CIPA from the pre-fixup path** (SO-only 130 + inline block
 without CIPA/poll) — if the blx then delivers, the CIPA was the wedge
 and the original claim was right.
 
+### Run W-16 (2026-09-04): CIPA stripped — exonerated; the SO-stores-
+### reach-DRAM claim vindicated; only the structural delivery gap remains
+
+Build: kernel #94 (W-16, commit 10983da): ALL CIPA ops removed from the
+pre-fixup path — the 130 marker is an SO store + dsb, and the inline
+block stores 142/bc[13] + dsb with no flush; the I-clear stays. Run:
+--t3 L2-off.
+
+Readbacks (nonce 0xcbfa9a1d fresh): bc[1]=142, **bc[6]=0 — delivery
+STILL fails with zero CIPA ops anywhere before the blx**; bc[7]=residue;
+bc[13]=0xa00085f0 (target tracked the build ✓); **bc[12]=0xa1b562f8
+closes EXACTLY (python-verified: buffer 0xa1600000 → kern_off 0 → load
+0xa1608000 + padded 0x54e2f8)**; ring empty (sanitize ✓); mirror0
+normal.
+
+**TWO major by-products:**
+1. **The 142/bc[13] markers survived the warm reset with NO CIPA flush
+   whatsoever** — the ORIGINAL stub-proven claim ("MMU-off SO stores
+   reach DRAM directly in both L2 states") is vindicated for the bc
+   page; the W-6/W-7 "dirty-discard" reinterpretation (which motivated
+   the entire pbmark CIPA machinery) is now DOUBTFUL — its evidence
+   (lost bc[6]/bc[2]) likely had a different cause (W-6's death was in
+   the smoke-test era — the duplicated-107 ambiguity, see below).
+2. The CIPA machinery may be dead weight (its device-op cost and
+   wedge-risk bought nothing) — pending confirmation.
+
+**The structural remaining suspect**: in every dying build the fixup
+sits ~0x400-0x800 bytes PAST the streamed frontier, across a gap of
+never-executed helper code (vet/smp/cpt bodies + pools); in every
+passing era (W-4/5, runs 23-32) the fixup sat immediately adjacent to
+the executed flow. The fixup's body is fully position-independent
+(adr_l/str_l = PC-relative movw/movt+add on v7 — assembler.h
+__adldst_l, grepped not recalled). **W-17: the pv fixup INLINED into
+head.S's streamed region** (markers 143/144; falls through to 131; the
+called functions remain for the Image path).
+
 **The correlation re-scan (perfect, 20+ runs):**
 | Kernel era | Smoke test (UART3, MMU-off) | Pre-fixup CIPA | Result |
 | W-4/W-5 (session-6) | absent | absent | PASSED (126/171) |
