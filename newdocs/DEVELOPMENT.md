@@ -57,18 +57,23 @@ no QNX libraries beyond libc. The binary is scp'd to the device by jump.sh.
 
 ## Building the kernel
 
-From `/home/psyden/kernel/linux`:
+The complete kernel diff lives in **[`kernel-patches/`](../kernel-patches/)**
+(base: mainline 6.15.11; `git apply` verified; config = `winchester.config`).
+From a pristine 6.15.11 tree:
 
 ```
-make -j12 ARCH=arm CROSS_COMPILE=<toolchain-prefix> Image dtbs
-/home/psyden/playbook-dev/kexec/mkkernel.sh Image     # or zImage — PREFERRED
+git apply kernel-patches/0001-playbook-winchester-6.15.11.patch
+cp kernel-patches/winchester.config .config
+make -j12 ARCH=arm CROSS_COMPILE=<toolchain-prefix> zImage dtbs
+/home/psyden/playbook-dev/kexec/mkkernel.sh zImage     # appends the DTB
 ```
 
 `mkkernel.sh` appends `omap4-winchester.dtb` and writes `kexec/kernel/`.
 **zImage is the preferred/correct boot path** (its decompressor natively
 delivers the appended DTB and derives zreladdr; see PROJECT_STATE.md).
 
-Kernel files with project patches (all marked `PlayBook` in comments):
+Kernel files with project patches (all marked `PlayBook` in comments —
+the authoritative diff is [`kernel-patches/`](../kernel-patches/README.md)):
 
 | File | What |
 |------|------|

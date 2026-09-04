@@ -1,0 +1,1466 @@
+--- a/arch/arm/Kconfig.debug	2025-08-20 16:36:36.000000000 +0000
++++ b/arch/arm/Kconfig.debug	2026-08-30 21:38:26.498182616 +0000
+@@ -778,6 +778,17 @@
+ 		depends on ARCH_OMAP2PLUS
+ 		select DEBUG_OMAP2PLUS_UART
+ 
++	config DEBUG_PLAYBOOK_BC
++		bool "PlayBook low-level debug: UART3 + RAM breadcrumb ring (blackberry,omap4-winchester)"
++		depends on ARCH_OMAP2PLUS
++		help
++		  DEBUG_LL for the BlackBerry PlayBook (OMAP4430 "winchester"),
++		  booted via a QNX-side kexec-style jump. Every debug character
++		  goes to UART3 (0x48020000) AND into a RAM ring at 0x9FE00100
++		  (count at 0x9FE00080) which survives the WDT2 warm reset and
++		  is read back from the QNX side — the only debug channel when
++		  no UART pads are wired.
++
+ 	config DEBUG_PXA_UART1
+ 		depends on ARCH_PXA
+ 		bool "Use PXA UART1 for low-level debug"
+@@ -1479,6 +1490,7 @@
+ 
+ config DEBUG_LL_INCLUDE
+ 	string
++	default "debug/omap4bc.S" if DEBUG_PLAYBOOK_BC
+ 	default "debug/sa1100.S" if DEBUG_SA1100
+ 	default "debug/palmchip.S" if DEBUG_UART_8250_PALMCHIP
+ 	default "debug/8250.S" if DEBUG_LL_UART_8250 || DEBUG_UART_8250
+
+--- a/arch/arm/kernel/early_printk.c	2025-08-20 16:36:36.000000000 +0000
++++ b/arch/arm/kernel/early_printk.c	2026-09-02 21:52:24.418630911 +0000
+@@ -11,9 +11,43 @@
+ #include <linux/string.h>
+ 
+ extern void printascii(const char *);
++extern void pb_bc_put(unsigned int addr, unsigned int v);	/* PlayBook */
++
++/* PlayBook kexec: mirror all console output into ring3 (PA 0x94000100,
++ * reached through the 0xD4000000 early-map section — same lifetime as the
++ * 0xD00 bc section). The UART output is invisible (no pad wired), but the
++ * ring survives the WDT2 reset and is readable via memdump3. The index is
++ * bounded (8 KB window) and written to the ring header at 0xD4000084 so
++ * the readback knows how much is fresh. */
++static unsigned int pb_ring_idx;
++
++/* PlayBook kexec: batched ring flush. The ring sections (0xC80/0xD00/
++ * 0xD40) are CACHEABLE (r7) — their stores ride the L1/L2 WB path (safe
++ * with the L2 on; sustained DEVICE stores wedge this machine). Push the
++ * touched ring lines to DRAM once per chunk via the secure 0x101 range
++ * flush (synchronous, no sync polls). With the L2 off the guard skips. */
++void pb_flush_rings(void)
++{
++	unsigned int base, pa;
++
++	if (!(*(volatile unsigned int *)0xFEB42100 & 1))
++		return;					/* L2 off: nothing dirty */
++
++	for (base = 0xD4000000u; ; base -= 0x4000000u) {	/* 0xD40/0xD00/0xC80 */
++		extern void pb_smc_flush(unsigned long pa, unsigned long size);
++		pa = (base + 0x80) - 0x40000000u;
++		pb_smc_flush(pa, 0x500);		/* count/idx/char window */
++		if (base == 0xC8000000u)
++			break;
++	}
++	dsb(sy);
++}
+ 
+ static void early_write(const char *s, unsigned n)
+ {
++	/* PlayBook kexec: bc[10] = console visibility marker — early_write
++	 * reached. pb_bc_put = L2-aware (flushed when the PL310 is on). */
++	pb_bc_put(0xD0000028, 0xC0DE0002);
+ 	char buf[128];
+ 	while (n) {
+ 		unsigned l = min(n, sizeof(buf)-1);
+@@ -22,7 +56,18 @@
+ 		s += l;
+ 		n -= l;
+ 		printascii(buf);
++		{
++			volatile char *ring = (volatile char *)0xD4000100;
++			unsigned int i;
++
++			for (i = 0; i < l; i++) {
++				ring[pb_ring_idx] = buf[i];
++				pb_ring_idx = (pb_ring_idx + 1) & 0x1FFF;
++			}
++			*(volatile unsigned int *)0xD4000084 = pb_ring_idx;
++		}
+ 	}
++	pb_flush_rings();
+ }
+ 
+ static void early_console_write(struct console *con, const char *s, unsigned n)
+@@ -39,6 +84,9 @@
+ 
+ static int __init setup_early_printk(char *buf)
+ {
++	/* PlayBook kexec: bc[10] = console visibility marker — earlyprintk
++	 * param parsed. pb_bc_put = L2-aware. */
++	pb_bc_put(0xD0000028, 0xC0DE0001);
+ 	early_console = &early_console_dev;
+ 	register_console(&early_console_dev);
+ 	return 0;
+
+--- a/arch/arm/kernel/head-common.S	2025-08-20 16:36:36.000000000 +0000
++++ b/arch/arm/kernel/head-common.S	2026-09-02 19:42:49.544525384 +0000
+@@ -79,6 +79,8 @@
+ 	mov	r7, r1
+ 	mov	r8, r2
+ 	mov	r10, r0
++	pbmarkv	120			@ virtual world entered (r0/r1 dead here)
++	pbmarkv	125			@ PlayBook: 120's macro tail (flush+kick) survived
+ 
+ 	adr	r4, __mmap_switched_data
+ 	mov	fp, #0
+@@ -103,7 +105,18 @@
+  THUMB(	mov	sp, r3 )
+ 	sub	r2, r1, r0
+ 	mov	r1, #0
++	@ PlayBook: dump the bss bounds pre-memset - bc[10]=start, bc[11]=len.
++	@ Plain stores (device VA = DRAM truth), r5/r6/ip scratch; r0/r1/r2
++	@ are the __memset args and must survive.
++	mov	r6, r2
++	ldr	ip, =0xD0000028
++	str	r0, [ip]
++	ldr	ip, =0xD000002C
++	str	r6, [ip]
++	dsb
++1002:
+ 	bl	__memset			@ clear .bss
++	pbmarkv	126			@ PlayBook: bss clear survived
+ 
+ 	adr_l	r0, init_task			@ get swapper task_struct
+ 	set_current r0, r1
+@@ -114,6 +127,12 @@
+ 	str	r8, [r2]			@ Save atags pointer
+ 	cmp	r3, #0
+ 	strne	r10, [r3]			@ Save control register values
++	@ PlayBook: bc = 117 - plain store (the 0xD00 section is DEVICE-mapped;
++	@ no DCCMVAC/CIPA/sync ritual - it wedged the L2-on boot, 2026-09-02).
++	ldr	r0, =0xD0000004
++	mov	r1, #117
++	str	r1, [r0]
++	dsb
+ #ifdef CONFIG_KASAN
+ 	bl	kasan_early_init
+ #endif
+
+--- a/arch/arm/kernel/head.S	2025-08-20 16:36:36.000000000 +0000
++++ b/arch/arm/kernel/head.S	2026-09-02 21:01:15.174105054 +0000
+@@ -98,6 +98,90 @@
+  THUMB(	.thumb			)	@ switch to Thumb now.
+  THUMB(1:			)
+ 
++@ --- PlayBook kexec diagnostic: breadcrumbs + FAN5702 EN (GPIO1_13) ---
++@ r0/r3-r6 free here; r1 (machine) and r2 (dtb) must survive.
++@ Pool safety: every literal pool is placed after an unconditional branch
++@ and jumped over — falling into a pool executes data as instructions.
++	.macro	pbmark, val
++	@ PlayBook 2026-09-02: ritual-free. MMU off -> the PA store is SO and
++	@ reaches DRAM directly in both L2 states (stub stores prove it). The
++	@ old DCCMVAC+CIPA+sync machinery wedged the L2-on boot (bc[1]=120
++	@ with the identical 125 macro right behind never landing). The bc
++	@ page is not cached by anything: no maintenance is ever needed.
++	ldr	ip, =0x90000004
++	mov	r0, #\val
++	str	r0, [ip]
++	dsb
++	@ WDT2 kick: TGR = any write reloads (progress = life)
++	ldr	ip, =0x4A314030
++	mov	r0, #1
++	str	r0, [ip]
++	.endm
++
++	@ MMU-on bc marker (for __mmap_switched etc.): write via the early bc
++	@ section VA 0xD0000004, then DCCMVAC + PL310 flush through the early
++	@ 0xFEB00000 section (VA == PA offsets, so it works with either the
++	@ head.S early map or the later linear/debug maps). Clobbers r0+r1.
++	.macro	pbmarkv, val
++	@ PlayBook 2026-09-02: the 0xD00 section is CACHEABLE (r7) - the store
++	@ sits dirty in L1/L2, so flush the line (DCCMVAC + NS CIPA + bounded
++	@ sync; the 0xFEB section is DEVICE - safe). Markers are rare. Kicks
++	@ WDT2 via device-mapped 0xFEC. Clobbers r0+r1 only.
++	ldr	r0, =0xD0000004
++	mov	r1, #\val
++	str	r1, [r0]
++	dsb	sy
++	mcr	p15, 0, r0, c7, c10, 1		@ DCCMVAC bc line
++	sub	r0, r0, #0x40000000		@ bc PA 0x90000000
++	ldr	r1, =0xFEB42768
++	str	r0, [r1]
++	ldr	r1, =0xFEB42730
++	mov	r0, #0
++	str	r0, [r1]
++	mov	r0, #0x100000
++951:	ldr	r1, =0xFEB42730
++	ldr	r1, [r1]
++	tst	r1, #1
++	beq	952f
++	subs	r0, r0, #1
++	bne	951b
++952:	dsb
++	@ WDT2 kick: TGR = any write reloads (progress = life)
++	ldr	r1, =0xFEC14030
++	mov	r0, #1
++	str	r0, [r1]
++	.endm
++
++	@ Like pbmark but safe where r0 is LIVE (e.g. __enable_mmu/__turn_mmu_on
++	@ carry the SCTLR value in r0). Clobbers r3 + ip only (both dead there);
++	@ r0/r1/r2/r4/r9/r10/r13 preserved. MMU-off only (physical bc/PL310).
++	.macro	pbmark3, val
++	@ PlayBook 2026-09-02: ritual-free (see pbmark). Clobbers r3+ip only;
++	@ r0/r1/r2/r4/r9/r10/r13 preserved. MMU-off PA store + WDT2 kick.
++	ldr	ip, =0x90000004
++	mov	r3, #\val
++	str	r3, [ip]
++	dsb
++	ldr	ip, =0x4A314030
++	mov	r3, #1
++	str	r3, [ip]
++	.endm
++
++	ldr	r5, =0x90000004
++	ldr	r3, =0x4a310194
++	mov	r6, #100
++	str	r6, [r5]			@ bc = 100: stext reached
++	mov	r4, #0x2000
++	str	r4, [r3]			@ EN high -> LED/backlight on
++	mov	r7, r1				@ SAVE boot args: the smoke test
++	mov	r8, r2				@ below clobbers r1/r2 (addruart,
++						@ printascii) — found via the ring
++						@ (r1=0x20, r2=0 at setup_arch,
++						@ 2026-09-02 run 16: mdesc=NULL)
++	b	9801f
++	.ltorg
++	.align	2
++9801:
+ #ifdef CONFIG_ARM_VIRT_EXT
+ 	bl	__hyp_stub_install
+ #endif
+@@ -105,6 +189,32 @@
+ 	safe_svcmode_maskall r9
+ 
+ 	mrc	p15, 0, r9, c0, c0		@ get processor id
++	pbmark	101
++	@ ring-capture smoke test: if "PLAYBOOK-HEAD-101" lands in the ring
++	@ (0x88000100+) the DEBUG_LL ring + PL310 flush path works end-to-end
++	b	9802f
++	.align	2
++8091:	.asciz	"PLAYBOOK-HEAD-101\n"
++	.align	2
++9802:	pbmark	106			@ about to printascii (clobbers r0!)
++	adr	r0, 8091b		@ string ptr AFTER the marker
++	bl	printascii
++	pbmark	105
++	@ --- macro-path bisect: UART write and ring capture, separated ---
++	addruart	r1, r2, r3
++	mrc		p15, 0, r3, c1, c0
++	tst		r3, #1
++	moveq		r3, r1
++	movne		r3, r2
++	mov	r1, #'K'
++	pbmark	107			@ addruart done
++	senduart r1, r3
++	pbmark	108			@ senduart done
++	busyuart r2, r3
++	pbmark	109			@ busyuart done (ring captured)
++	mov	r1, r7			@ RESTORE boot args (machine id, DTB)
++	mov	r2, r8
++@ -------------------------------------------------------------------------
+ 	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid
+ 	movs	r10, r5				@ invalid processor (r5=0)?
+  THUMB( it	eq )		@ force fixup-able long branch encoding
+@@ -124,19 +234,24 @@
+ #else
+ 	ldr	r8, =PLAT_PHYS_OFFSET		@ always constant in this case
+ #endif
++	pbmark	102
+ 
+ 	/*
+ 	 * r1 = machine no, r2 = atags or dtb,
+ 	 * r8 = phys_offset, r9 = cpuid, r10 = procinfo
+ 	 */
+ 	bl	__vet_atags
++	pbmark	103
+ #ifdef CONFIG_SMP_ON_UP
+ 	bl	__fixup_smp
+ #endif
++	pbmark	107
+ #ifdef CONFIG_ARM_PATCH_PHYS_VIRT
+ 	bl	__fixup_pv_table
+ #endif
++	pbmark	108
+ 	bl	__create_page_tables
++	pbmark	119			@ cpt returned; next = proc-init + MMU-on
+ 
+ 	/*
+ 	 * The following calls CPU specific code in a position independent
+@@ -229,6 +344,12 @@
+ #endif
+ 
+ 	ldr	r7, [r10, #PROCINFO_MM_MMUFLAGS] @ mm_mmuflags
++	@ PlayBook 2026-09-02: the C/B/S strip is REMOVED. It left the
++	@ kernel's whole RAM map UNCACHED/Strongly-Ordered: sustained SO
++	@ stores (the __mmap_switched bss clear) wedge the L2 (bc[1]=120,
++	@ 117 never lands) or hit the bypass cliff (the 171 wall). The
++	@ decompressor proves cached WB traffic through the L2 is fine —
++	@ the kernel must run cacheable like every ARM kernel.
+ 
+ 	/*
+ 	 * Create identity mapping to cater for __enable_mmu.
+@@ -343,6 +464,99 @@
+ 	str	r3, [r0], #4
+ #endif
+ 
++	@ --- PlayBook kexec: map the DEBUG_LL breadcrumb/ring pages ---
++	@ VA = PA + 0x40000000 for PA 0x88000000 / 0x90000000 / 0x94000000 —
++	@ identical to the later linear-map addresses, so DEBUG_LL ring
++	@ writes work from MMU-on until paging_init takes over seamlessly.
++	@ r7 = io_mmuflags (from above); clobbers r0, r3 only; r4 preserved.
++	@ r7 = mm_mmuflags (cacheable — kernel RAM must be cached!); the
++	@ special diagnostic sections below must be DEVICE: a cacheable
++	@ linefill against WDT2/PL310 register space stalls the L2 forever
++	@ (2026-09-02: bc[1]=120, wedge in pbmarkv's WDT2 kick — the first
++	@ cached 0xFEC access). Strip C/B/S into r6 for these maps only.
++	bic	r6, r7, #(1 << 3)		@ C
++	bic	r6, r6, #(1 << 2)		@ B
++	bic	r6, r6, #(1 << 16)		@ S
++	pbmark	114			@ ring-map block entered (MMU still off)
++	@ NOTE: values below are PA >> 12 (NOT section numbers), so the shift
++	@ must be 12. The previous build used `lsl #SECTION_SHIFT` (=20 on
++	@ non-LPAE): bits 19,15 of 0x88000 etc. shifted past bit 31 and
++	@ truncated to zero, mapping 0xC80/0xD00/0xD40/0xFEB/0x000/0xFFF to
++	@ PA 0x00000000 (boot ROM) / PA 0x20000000 — the silent M=1 hang.
++	mov	r0, #0xC80		@ VA section 0xC8000000
++	add	r0, r4, r0, lsl #PMD_ENTRY_ORDER
++	mov	r3, #0x88000		@ PA 0x88000000 >> 12
++	orr	r3, r7, r3, lsl #12
++	orr	r3, r3, #PMD_SECT_XN
++	str	r3, [r0]
++	mov	r0, #0xD00		@ VA section 0xD0000000
++	add	r0, r4, r0, lsl #PMD_ENTRY_ORDER
++	mov	r3, #0x90000		@ PA 0x90000000 >> 12
++	orr	r3, r7, r3, lsl #12
++	orr	r3, r3, #PMD_SECT_XN
++	str	r3, [r0]
++	mov	r0, #0xD40		@ VA section 0xD4000000
++	add	r0, r4, r0, lsl #PMD_ENTRY_ORDER
++	mov	r3, #0x94000		@ PA 0x94000000 >> 12
++	orr	r3, r7, r3, lsl #12
++	orr	r3, r3, #PMD_SECT_XN
++	str	r3, [r0]
++	@ PL310 section: VA 0xFEB00000 -> PA 0x48200000 (PL310 @ 0xFEB42000,
++	@ same VA debug_ll_io_init later maps). Without this, any DEBUG_LL
++	@ output with the MMU on but before paging_init (earlyprintk banner
++	@ flush from parse_early_param, CON_PRINTBUFFER) aborts on the PL310
++	@ flush access -> silent death in the 115..110 window.
++	mov	r0, #0xF00		@ VA section 0xFEB00000
++	orr	r0, r0, #0xEB
++	add	r0, r4, r0, lsl #PMD_ENTRY_ORDER
++	mov	r3, #0x48000		@ PA 0x48200000 >> 12
++	orr	r3, r3, #0x200
++	orr	r3, r6, r3, lsl #12
++	orr	r3, r3, #PMD_SECT_XN
++	str	r3, [r0]
++	@ WDT2 section: VA 0xFEC00000 -> PA 0x4A300000 (WDT2 @ 0xFEC14000,
++	@ trigger reg @ 0xFEC14030). The 60 s WDT2 window killed healthy
++	@ boots: the L2-off kernel boots SLOWLY and no one re-kicked after
++	@ the payload's last kick. Every bc marker now kicks (progress=life).
++	mov	r0, #0xF00		@ VA section 0xFEC00000
++	orr	r0, r0, #0xEC
++	add	r0, r4, r0, lsl #PMD_ENTRY_ORDER
++	mov	r3, #0x4A000		@ PA 0x4A300000 >> 12  (0x4A300 = 0x4A000|0x300;
++	orr	r3, r3, #0x300		@ NO 0x200 here — that was PA bits 0x482 in the
++					@ 0xFEB pattern; with it the PA became
++					@ 0x4A500000 and every kick was a no-op!)
++	orr	r3, r6, r3, lsl #12
++	orr	r3, r3, #PMD_SECT_XN
++	str	r3, [r0]
++	@ DEBUG UART section: VA 0xFED00000 -> PA 0x48000000 (UART3 @
++	@ 0xFED20000 per omap4bc.S addruart). WITHOUT this the console's
++	@ MMU-on writes hit an unmapped VA — the L3 swallows them (async
++	@ error) and ALL kernel console output after early boot vanishes
++	@ (observed: the ring3 log frozen at the banner, 2026-09-02).
++	mov	r0, #0xF00		@ VA section 0xFED00000
++	orr	r0, r0, #0xED
++	add	r0, r4, r0, lsl #PMD_ENTRY_ORDER
++	mov	r3, #0x48000		@ PA 0x48000000 >> 12
++	orr	r3, r3, #0x200
++	orr	r3, r6, r3, lsl #12
++	orr	r3, r3, #PMD_SECT_XN
++	str	r3, [r0]
++	@ vector page: VA 0x00000000 and 0xFFFF0000 -> PA 0x9FE00000 (4th
++	@ mirror, no ring header; payload pre-loads abort handlers there).
++	@ A post-M abort then lands in real handler code (writes 0xAB to
++	@ PA 0x900000A0 via VA 0xD00000A0, flushes, spins) instead of
++	@ vector-faulting into a lockup. Executable: io_mmuflags has no XN
++	@ by itself (the ring maps add XN explicitly).
++	mov	r3, #0x9F000		@ PA 0x9FE00000 >> 12
++	orr	r3, r3, #0xE00
++	orr	r3, r6, r3, lsl #12
++	str	r3, [r4]			@ tt[0x000]
++	mov	r0, #0x1000
++	sub	r0, r0, #1			@ 0xFFF
++	add	r0, r4, r0, lsl #PMD_ENTRY_ORDER
++	str	r3, [r0]			@ tt[0xFFF]
++@ -------------------------------------------------------------------------
++
+ #else /* CONFIG_DEBUG_ICEDCC || CONFIG_DEBUG_SEMIHOSTING */
+ 	/* we don't need any serial debugging mappings */
+ 	ldr	r7, [r10, #PROCINFO_IO_MMUFLAGS] @ io_mmuflags
+@@ -373,6 +587,7 @@
+ #ifdef CONFIG_ARM_LPAE
+ 	sub	r4, r4, #0x1000		@ point to the PGD table
+ #endif
++	pbmark	115			@ __create_page_tables completed (MMU off)
+ 	ret	lr
+ ENDPROC(__create_page_tables)
+ 	.ltorg
+@@ -465,6 +680,13 @@
+  *  r13 = *virtual* address to jump to upon completion
+  */
+ __enable_mmu:
++	pbmark3	121			@ enable_mmu entered (r0 = ctrl, preserved)
++	@ PlayBook 2026-09-02: the ACTLR.SMP clear is REMOVED. With the L2
++	@ enabled (the --l2on jump mode), SMP=0 wedges the first sustained
++	@ cached-write loop (the __mmap_switched bss clear — bc[1]=120, the
++	@ 117 marker never lands). The decompressor itself proves SMP=1 +
++	@ L2-on + CPU1-held + MBs of cached traffic is safe. If CPU1-snoop
++	@ deadlocks reappear, revisit with the L2 off.
+ #if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
+ 	orr	r0, r0, #CR_A
+ #else
+@@ -482,6 +704,13 @@
+ #ifdef CONFIG_ARM_LPAE
+ 	mcrr	p15, 0, r4, r5, c2		@ load TTBR0
+ #else
++	@ PlayBook: v7_ttb_setup baked TTB_FLAGS_SMP (0x6A = S|NOS|RGN|IRGN —
++	@ shareable + cacheable-WBWA walk attrs) into r4 IN PLACE. A shareable
++	@ PTW read deadlocks against CPU1 (held in warm reset, no snoop
++	@ response) — silent hang right after MMU-on (observed). Strip the
++	@ flags: raw non-cacheable walk, the path the cont/probe flat-table
++	@ walks prove works on this machine.
++	bic	r4, r4, #0x6A
+ 	mov	r5, #DACR_INIT
+ 	mcr	p15, 0, r5, c3, c0, 0		@ load domain access register
+ 	mcr	p15, 0, r4, c2, c0, 0		@ load page table pointer
+@@ -506,12 +735,28 @@
+ 	.align	5
+ 	.pushsection	.idmap.text, "ax"
+ ENTRY(__turn_mmu_on)
++	pbmark3	122			@ turn_mmu_on entered (r0 = ctrl, preserved)
+ 	mov	r0, r0
+ 	instr_sync
+ 	mcr	p15, 0, r0, c1, c0, 0		@ write control reg
+ 	mrc	p15, 0, r3, c0, c0, 0		@ read id reg
+ 	instr_sync
+-	mov	r3, r3
++	@ PlayBook: 124 — first post-M marker, via VA 0xD0000004 (the early
++	@ ring section, mapped by __create_page_tables — a real kernel-table
++	@ walk). NOTE: the stale-TLB identity trick does NOT work here — the
++	@ zImage decompressor issues TLBIALL before the kernel starts, so all
++	@ QNX/flat-table TLB entries are gone. r0/r3 dead, r1 live.
++	ldr	ip, =0xD0000004
++	mov	r0, #124
++	str	r0, [ip]
++	dsb	sy
++	@ PlayBook 2026-09-02: ritual (DCCMVAC/CIPA/sync) removed - the 0xD00
++	@ section is DEVICE-mapped, plain store = DRAM truth.
++	ldr	ip, =0xD0000004
++	mov	r0, #123
++	str	r0, [ip]
++	dsb	sy
++897:	mov	r3, r3
+ 	mov	r3, r13
+ 	ret	r3
+ __turn_mmu_on_end:
+
+--- a/arch/arm/kernel/setup.c	2025-08-20 16:36:36.000000000 +0000
++++ b/arch/arm/kernel/setup.c	2026-09-02 21:52:57.434630873 +0000
+@@ -1101,7 +1101,37 @@
+ 	if (__atags_pointer)
+ 		atags_vaddr = FDT_VIRT_BASE(__atags_pointer);
+ 
++	/* PlayBook kexec: fine-grained bc markers in the 118..110 window.
++	 * Triple-channel: bc[1] = full flush (DCCMVAC + PL310 CIPA + bounded
++	 * sync poll); bc[2] = flush-free SO store (v|0x100, reaches DRAM only
++	 * if PL310 passes SO writes through); 0x94000004 mirror (v|0x200)
++	 * flushed via TI monitor SMC 0x101 (secure-side, payload-proven).
++	 * bc[2] encoding: v|0x300 = sync-poll timeout. */
++/* pb_bc v7: L2-aware via main.c's pb_bc_put (DCCMVAC+CIPA when the PL310
++ * is on — flush-free stores strand dirty in L2 and die in the WDT2 reset,
++ * observed 2026-09-02; plain SO store when off — the proven v6 path). */
++noinline void pb_bc_put(unsigned int addr, unsigned int v);
++#define pb_bc(v) do { \
++	pb_bc_put(0xD0000004, (v)); \
++	pb_bc_put(0xD0000008, ((v) | 0x100)); \
++	*(volatile unsigned int *)0xFEC14030 = \
++		~*(volatile unsigned int *)0xFEC14030; /* WDT2 kick: \
++progress = life (60 s window killed healthy L2-off boots) */ \
++	dsb(sy); \
++} while (0)
++
++	pb_bc(136);			/* setup_arch entered */
+ 	setup_processor();
++	pb_bc(130);			/* setup_processor done */
++	/* PlayBook 2026-09-02: the ACTLR.SMP re-clear is REMOVED — SMP=0
++	 * wedges sustained cached writes when the L2 is enabled (see the
++	 * head.S __enable_mmu note). setup_processor sets SMP=1 and it STAYS. */
++	if (0) {
++		register unsigned int pb_a __asm__("r0"); \
++		__asm__ volatile("mrc p15, 0, %0, c1, c0, 1" : "=r"(pb_a)); \
++		pb_a &= ~(1u << 6); \
++		__asm__ volatile("mcr p15, 0, %0, c1, c0, 1" : : "r"(pb_a)); \
++	}
+ 	if (atags_vaddr) {
+ 		mdesc = setup_machine_fdt(atags_vaddr);
+ 		if (mdesc)
+@@ -1118,6 +1148,7 @@
+ 			early_print("  r2[]=%*ph\n", 16, atags_vaddr);
+ 		dump_machine_table();
+ 	}
++	pb_bc(131);			/* mdesc resolved (DTB parsed) */
+ 
+ 	machine_desc = mdesc;
+ 	machine_name = mdesc->name;
+@@ -1134,8 +1165,10 @@
+ 
+ 	early_fixmap_init();
+ 	early_ioremap_init();
++	pb_bc(132);			/* early ioremap ready */
+ 
+ 	parse_early_param();
++	pb_bc(133);			/* parse_early_param done (earlyprintk registered) */
+ 
+ #ifdef CONFIG_MMU
+ 	early_mm_init(mdesc);
+@@ -1151,11 +1184,27 @@
+ 	arm_memblock_init(mdesc);
+ 	/* Memory may have been removed so recalculate the bounds. */
+ 	adjust_lowmem_bounds();
++	pb_bc(134);			/* memblock ready */
+ 
+ 	early_ioremap_reset();
++	pb_bc(135);			/* pre-paging_init */
+ 
+ 	paging_init(mdesc);
+ 	kasan_init();
++	/* PlayBook kexec diagnostic: bc + LED off (FAN5702 EN low via
++	 * GPIO1_CLEARDATAOUT). 2026-09-02: the old inline DCCMVAC+CIPA with
++	 * an UNBOUNDED sync poll was the last unbounded poll in the boot —
++	 * it wedged right after the GPIO write (LED off, bc[1] stuck at 132
++	 * with 110 stranded dirty in L2). Replaced with pb_bc_put (bounded,
++	 * 0x101-SMC flush). The GPIO write = proof this code ran. */
++	{
++		void pb_bc_put(unsigned int addr, unsigned int v);
++		pb_bc_put(0xD0000004, 110);
++	}
++	{
++		void __iomem *g = ioremap(0x4A310000, 0x1000);
++		if (g) { writel_relaxed(0x2000, g + 0x190); iounmap(g); }
++	}
+ 	request_standard_resources(mdesc);
+ 
+ 	if (mdesc->restart) {
+
+--- a/arch/arm/mach-omap2/omap4-common.c	2025-08-20 16:36:36.000000000 +0000
++++ b/arch/arm/mach-omap2/omap4-common.c	2026-09-02 22:15:18.102630801 +0000
+@@ -156,6 +156,14 @@
+ {
+ 	struct map_desc dram_io_desc[1];
+ 
++	/* PlayBook kexec 2026-09-02: DISABLED. On 2026-09-02's L2-on boots
++	 * dram_io_desc[0].virtual (the stack copy of the 0xfe600000
++	 * constant) was corrupted to 0x1f7f0000 by create_mapping time;
++	 * the mapping got skipped, dram_sync stayed unmapped, and the first
++	 * omap4_mb() barrier write aborted -> panic. The barrier is the
++	 * OMAP4 WFI erratum workaround — irrelevant for bring-up. Leave
++	 * soc_mb at the default mb(). */
++#if 0
+ 	dram_io_desc[0].virtual = OMAP4_DRAM_BARRIER_VA;
+ 	dram_io_desc[0].pfn = __phys_to_pfn(dram_sync_paddr);
+ 	dram_io_desc[0].length = dram_sync_size;
+@@ -167,6 +175,8 @@
+ 		&dram_sync_paddr, dram_sync);
+ 
+ 	soc_mb = omap4_mb;
++#endif
++	pr_info("PB: omap_barriers_init disabled (WFI erratum workaround off)\n");
+ }
+ 
+ #endif
+
+--- a/arch/arm/mm/dma-mapping.c	2025-08-20 16:36:36.000000000 +0000
++++ b/arch/arm/mm/dma-mapping.c	2026-09-03 02:50:21.958629509 +0000
+@@ -283,6 +283,17 @@
+ 
+ 		map.pfn = __phys_to_pfn(start);
+ 		map.virtual = __phys_to_virt(start);
++		/* PlayBook 2026-09-03: discriminates the two wall defects.
++		 * va sane (>= PAGE_OFFSET-ish, >= TASK_SIZE) + base inside
++		 * [PHYS_OFFSET, bank end) = placement fixed. va == base -
++		 * 0x81810000 = an UNPATCHED pv stub (the placeholder delta
++		 * __PV_BITS_31_24+__PV_BITS_23_16) while __pv_offset reads
++		 * correct -> the pv-table walk missed the site. */
++		pr_notice("PB-CMA: cma[%d] base=%pa size=%pa va=%08lx "
++			  "pv_off=%llx pfn=%lx\n", i, &start,
++			  &dma_mmu_remap[i].size,
++			  map.virtual, (unsigned long long)__pv_offset,
++			  __pv_phys_pfn_offset);
+ 		map.length = end - start;
+ 		map.type = MT_MEMORY_DMA_READY;
+ 
+
+--- a/arch/arm/mm/init.c	2025-08-20 16:36:36.000000000 +0000
++++ b/arch/arm/mm/init.c	2026-09-02 20:49:32.046630869 +0000
+@@ -183,6 +183,33 @@
+ 
+ void __init arm_memblock_init(const struct machine_desc *mdesc)
+ {
++	/* PlayBook kexec 2026-09-02: print the map BEFORE the platform
++	 * steals — the rings-only console shows it on panic (the
++	 * omap_barrier 1 MB steal panicked with 512 MB "added"). */
++	{
++		unsigned int i;
++		pr_notice("PB-MEM: limit=%llx mem=%u res=%u\n",
++			  (unsigned long long)memblock.current_limit,
++			  memblock.memory.cnt, memblock.reserved.cnt);
++		for (i = 0; i < memblock.memory.cnt; i++)
++			pr_notice("PB-MEM m[%u]=%llx+%llx\n", i,
++				  (unsigned long long)memblock.memory.regions[i].base,
++				  (unsigned long long)memblock.memory.regions[i].size);
++		for (i = 0; i < memblock.reserved.cnt; i++)
++			pr_notice("PB-RES r[%u]=%llx+%llx\n", i,
++				  (unsigned long long)memblock.reserved.regions[i].base,
++				  (unsigned long long)memblock.reserved.regions[i].size);
++	}
++
++	/* PlayBook kexec 2026-09-02: the omap steals need a working limit.
++	 * adjust_lowmem_bounds left it 0 (vmalloc_limit=0x30000000 vs the
++	 * region base 0xa0000000) — force it to end of DRAM here. */
++	if (memblock.current_limit < memblock_end_of_DRAM()) {
++		memblock_set_current_limit(memblock_end_of_DRAM());
++		pr_notice("PB-MEM: limit forced to %llx\n",
++			  (unsigned long long)memblock.current_limit);
++	}
++
+ 	/* Register the kernel text, kernel data and initrd with memblock. */
+ 	memblock_reserve(__pa(KERNEL_START), KERNEL_END - KERNEL_START);
+ 
+
+--- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
++++ b/arch/arm/mm/mmu.c	2026-09-02 20:40:47.726632227 +0000
+@@ -1147,6 +1147,21 @@
+ 	map.length = PAGE_SIZE;
+ 	map.type = MT_DEVICE;
+ 	iotable_init(&map, 1);
++
++#ifdef CONFIG_DEBUG_PLAYBOOK_BC
++	/*
++	 * PlayBook: the DEBUG_LL breadcrumb rings live in DRAM that is only
++	 * reachable past L2 (PL310 @ 0x48242000). omap4bc.S cleans each ring
++	 * line through the PL310 "clean+invalidate by physical address"
++	 * register so the capture survives a warm reset. Map it statically
++	 * next to the debug UART.
++	 */
++	map.pfn = __phys_to_pfn(0x48242000);
++	map.virtual = 0xFEB42000;
++	map.length = PAGE_SIZE;
++	map.type = MT_DEVICE;
++	iotable_init(&map, 1);
++#endif
+ }
+ #endif
+ 
+@@ -1250,6 +1265,15 @@
+ 
+ 	arm_lowmem_limit = lowmem_limit;
+ 
++	/* PlayBook kexec 2026-09-02: the loop above left lowmem_limit=0
++	 * (vmalloc_limit <= the region base) and current_limit=0 made every
++	 * memblock_phys_alloc fail — the omap secure-RAM steal panicked.
++	 * Fall back to the end of DRAM so bring-up allocations work. */
++	pr_notice("PB-ADJ: vmalloc_limit=%llx lowmem_limit=%llx\n",
++		  vmalloc_limit, (u64)arm_lowmem_limit);
++	if (!arm_lowmem_limit)
++		arm_lowmem_limit = memblock_end_of_DRAM();
++
+ 	high_memory = __va(arm_lowmem_limit - 1) + 1;
+ 
+ 	if (!memblock_limit)
+@@ -1363,6 +1387,19 @@
+  * Any other function or debugging method which may touch any device _will_
+  * crash the kernel.
+  */
++/* PlayBook kexec: L2-aware bc markers inside paging_init (the
++ * silent-death zone, 2026-09-02 run 17). pb_bc_put (main.c) flushes the
++ * line when the PL310 is on; plain durable store when off. */
++noinline void pb_bc_put(unsigned int addr, unsigned int v);
++#define PB_MMU_BC(v) do { \
++	pb_bc_put(0xD0000004, (v)); \
++	pb_bc_put(0xD0000008, ((v) | 0x100)); \
++	pb_bc_put(0xD4000004, ((v) | 0x200)); \
++	*(volatile unsigned int *)0xFEC14030 = \
++		~*(volatile unsigned int *)0xFEC14030; /* WDT2 kick */ \
++	dsb(sy); \
++} while (0)
++
+ static void __init devicemaps_init(const struct machine_desc *mdesc)
+ {
+ 	struct map_desc map;
+@@ -1375,12 +1412,20 @@
+ 	vectors = early_alloc(PAGE_SIZE * 2);
+ 
+ 	early_trap_init(vectors);
++	PB_MMU_BC(99);			/* early_trap_init done */
+ 
+ 	/*
+ 	 * Clear page table except top pmd used by early fixmaps
+ 	 */
+-	for (addr = VMALLOC_START; addr < (FIXADDR_TOP & PMD_MASK); addr += PMD_SIZE)
++	for (addr = VMALLOC_START; addr < (FIXADDR_TOP & PMD_MASK); addr += PMD_SIZE) {
++		/* PlayBook: keep the debug UART (0xFEB) + WDT2 (0xFEC)
++		 * sections alive — clearing them killed printascii (panic
++		 * text lost) and the marker WDT2 kicks for the whole late
++		 * boot (2026-09-02). */
++		if (addr == 0xFEB00000 || addr == 0xFEC00000)
++			continue;
+ 		pmd_clear(pmd_off_k(addr));
++	}
+ 
+ 	if (__atags_pointer) {
+ 		/* create a read-only mapping of the device tree */
+@@ -1445,10 +1490,16 @@
+ 		mdesc->map_io();
+ 	else
+ 		debug_ll_io_init();
++	PB_MMU_BC(98);			/* map_io / debug_ll done */
++	/* PlayBook: fill_pmd_gaps()/pci_reserve_io() SILENTLY STALL the
++	 * boot with the L2 bypassed (runs 19-21: 98 without 96, three
++	 * times, abort flag clean). Skipped for bring-up — revisit. */
++#if 0
+ 	fill_pmd_gaps();
+ 
+ 	/* Reserve fixed i/o space in VMALLOC region */
+ 	pci_reserve_io();
++#endif
+ 
+ 	/*
+ 	 * Finally flush the caches and tlb to ensure that we're in a
+@@ -1457,10 +1508,13 @@
+ 	 * back.  After this point, we can start to touch devices again.
+ 	 */
+ 	local_flush_tlb_all();
++	PB_MMU_BC(96);			/* local_flush_tlb_all done */
+ 	flush_cache_all();
+-
++	PB_MMU_BC(97);			/* flush_cache_all done */
+ 	/* Enable asynchronous aborts */
+ 	early_abt_enable();
++	PB_MMU_BC(95);			/* early_abt_enable done */
++
+ }
+ 
+ static void __init kmap_init(void)
+@@ -1765,7 +1819,9 @@
+ 		 kernel_sec_start, kernel_sec_end);
+ 
+ 	prepare_page_table();
++	PB_MMU_BC(134);			/* prepare_page_table done */
+ 	map_lowmem();
++	PB_MMU_BC(133);			/* map_lowmem done */
+ 	memblock_set_current_limit(arm_lowmem_limit);
+ 	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
+ 	/*
+@@ -1773,9 +1829,13 @@
+ 	 * be used
+ 	 */
+ 	map_kernel();
++	PB_MMU_BC(127);			/* map_kernel done */
+ 	dma_contiguous_remap();
++	PB_MMU_BC(126);			/* dma_contiguous_remap done */
+ 	early_fixmap_shutdown();
++	PB_MMU_BC(125);			/* early_fixmap_shutdown done */
+ 	devicemaps_init(mdesc);
++	PB_MMU_BC(129);			/* devicemaps_init done */
+ 	kmap_init();
+ 	tcm_init();
+ 
+@@ -1785,6 +1845,7 @@
+ 	zero_page = early_alloc(PAGE_SIZE);
+ 
+ 	bootmem_init();
++	PB_MMU_BC(128);			/* bootmem_init done */
+ 
+ 	empty_zero_page = virt_to_page(zero_page);
+ 	__flush_dcache_folio(NULL, page_folio(empty_zero_page));
+
+--- a/init/main.c	2025-08-20 16:36:36.000000000 +0000
++++ b/init/main.c	2026-09-02 21:54:41.166630760 +0000
+@@ -86,6 +86,7 @@
+ #include <linux/sched/clock.h>
+ #include <linux/sched/task.h>
+ #include <linux/sched/task_stack.h>
++#include <linux/panic_notifier.h>
+ #include <linux/context_tracking.h>
+ #include <linux/random.h>
+ #include <linux/moduleloader.h>
+@@ -766,17 +767,36 @@
+ }
+ 
+ /* Arch code calls this early on, or if not, just before other parsing. */
++/* PlayBook kexec: L2-aware bc write (see definition below). */
++noinline void pb_bc_put(unsigned int addr, unsigned int v);
++
+ void __init parse_early_param(void)
+ {
+ 	static int done __initdata;
+ 	static char tmp_cmdline[COMMAND_LINE_SIZE] __initdata;
+ 
+-	if (done)
++	/* PlayBook kexec: bc probe — parse_early_param entered (any call).
++	 * pb_bc_put = L2-aware (flushed when the PL310 is enabled). */
++	pb_bc_put(0xD000002C, 0xC0DE0010);			/* bc[11] */
++	if (done) {
++		/* PlayBook kexec: bc[14] = the latch was ALREADY closed at
++		 * this call — an earlier parse_early_param consumed it
++		 * (observed 2026-09-02: bc[10] never got the cmdline head).
++		 * If bc[14] reads 0xC0DE0030, find the early caller. */
++		pb_bc_put(0xD0000038, 0xC0DE0030);		/* bc[14] */
+ 		return;
++	}
++	/* PlayBook kexec: first call only — bc[10] = cmdline head (u32),
++	 * bc[13] = cmdline length. Handler (setup_early_printk) overwrites
++	 * bc[10] with 0xC0DE0001/2 if it runs. */
++	pb_bc_put(0xD0000028,
++		*(volatile unsigned int *)(void *)boot_command_line);
++	pb_bc_put(0xD0000034, strnlen(boot_command_line, 1024)); /* bc[13] */
+ 
+ 	/* All fall through to do_early_param. */
+ 	strscpy(tmp_cmdline, boot_command_line, COMMAND_LINE_SIZE);
+ 	parse_early_options(tmp_cmdline);
++	pb_bc_put(0xD0000030, 0xC0DE0020);			/* bc[12] */
+ 	done = 1;
+ }
+ 
+@@ -892,18 +912,143 @@
+ #endif
+ }
+ 
++/* PlayBook kexec: secure-side L2 range flush via monitor service 0x101
++ * (clean+inv by PA range — payload-proven, synchronous, NO sync polls).
++ * The C-flow SMC shape (r12=0x101) — the ONLY SMC shape that ever
++ * returns reliably; never inline-SMC from asm contexts. Callers must
++ * L2-guard: with the PL310 bypassed there is nothing to flush. */
++noinline void pb_smc_flush(unsigned long pa, unsigned long size)
++{
++	register unsigned long r0 __asm__("r0") = pa;
++	register unsigned long r1 __asm__("r1") = size;
++	register unsigned long r12v __asm__("r12") = 0x101;
++	__asm__ volatile(".word 0xF57FF04F\n"	/* dsb sy */
++			 ".word 0xE320F000\n"	/* smc #0 */
++			 ".word 0xF57FF05F\n"	/* dmb sy */
++			 : "+r"(r0)
++			 : "r"(r1), "r"(r12v)
++			 : "memory");
++}
++
++/* PlayBook kexec: bc write — L2-aware. The 0xD00 section is CACHEABLE
++ * (r7 in the ring-map block) so the store sits dirty in L1/L2; when the
++ * PL310 is on (--l2on mode) push the line to DRAM via the 0x101 SMC
++ * range flush. With the L2 off a plain store is already DRAM-truth. */
++noinline void pb_bc_put(unsigned int addr, unsigned int v)
++{
++	unsigned int line = addr & ~0x1Fu;
++
++	*(volatile unsigned int *)addr = v;
++	dsb(sy);
++	if (*(volatile unsigned int *)0xFEB42100 & 1)
++		pb_smc_flush(line - 0x40000000u, 32);
++}
++
++/* PlayBook kexec: marker shared with early C code (cgroup.c). */
++noinline void pb_bc_mark(unsigned int v)
++{
++	pb_bc_put(0xD0000004, v);
++	pb_bc_put(0xD0000008, v | 0x100u);
++}
++
++/* PlayBook kexec: panic/oops visibility (see start_kernel). */
++static int pb_panic_notify(struct notifier_block *nb, unsigned long action,
++			   void *data)
++{
++	extern __printf(1, 2) void early_print(const char *str, ...);
++	/* The bootconsole is dead by late boot (fixmap teardown), so ALSO
++	 * copy the panic text into ring3 via the 0xD4000000 alias
++	 * (PA 0x94000100 — mapped, DRAM, survives the WDT2 reset).
++	 * Read back with: memdump3 94000100 0x200 */
++	char *ring = (char *)0xD4000100;
++	const char *msg = data ? (const char *)data : "(no msg)";
++	unsigned int n = 0;
++
++	early_print("\nPB-PANIC: ");
++	early_print(msg);
++	early_print("\n");
++	ring += 0x60;			/* past a small header */
++	while (*msg && n < 0x180) {
++		*ring++ = *msg++;
++		n++;
++	}
++	*ring = 0;
++	{
++		extern void pb_flush_rings(void);
++		pb_flush_rings();	/* cached ring lines must reach DRAM */
++	}
++	return NOTIFY_DONE;
++}
++static struct notifier_block pb_panic_nb = {
++	.notifier_call = pb_panic_notify,
++};
++
+ asmlinkage __visible __init __no_sanitize_address __noreturn __no_stack_protector
+ void start_kernel(void)
+ {
+ 	char *command_line;
+ 	char *after_dashes;
+ 
++	/* PlayBook kexec: dump ACTLR into bc[3] (nonce slot — disposable)
++	 * and clear ACTLR.SMP. QNX leaves SMP=1 (ACTLR=0x41); with CPU1 held
++	 * in warm reset, any Inner-Shareable/broadcast operation would wait
++	 * forever for a dead core — silent wedge, no abort. maxcpus=1 for
++	 * now; the secondary bring-up re-sets SMP when/if needed. */
++	/* PlayBook kexec: dump ACTLR into bc[3] (nonce slot — disposable).
++	 * 2026-09-02: the ACTLR.SMP clear is REMOVED — SMP=0 wedges
++	 * sustained cached writes when the L2 is enabled (the bss-clear
++	 * wedge, bc[1]=120 with 117 never landing). The decompressor
++	 * (SMP=1, L2 on, CPU1 held, 5.5 MB of cached writes) proves the
++	 * snoop-deadlock fear wrong at the traffic scale that matters. */
++	{
++		register unsigned int pb_a __asm__("r0");
++		__asm__ volatile("mrc p15, 0, %0, c1, c0, 1" : "=r"(pb_a));
++		pb_bc_put(0xD000000C, pb_a);		   /* bc[3]: ACTLR */
++		pb_bc_put(0xD0000008, 0x1);		   /* bc[2]: done */
++	}
++
++	/* PlayBook kexec diagnostic: bc=118 start_kernel entered — L2-aware
++	 * (pb_bc_put: DCCMVAC+CIPA when the PL310 is on, plain store when
++	 * off). PL310 VA 0xFEB42000 is early-mapped by head.S (section
++	 * 0xFEB00000) before debug_ll_io_init re-maps it. */
++	pb_bc_put(0xD0000004, 118);
++
++	/* PlayBook kexec: dual-channel fine markers (see setup.c pb_bc):
++	 * bc[1] = full flush, bc[2] = flush-free SO store (v|0x100).
++	 * v3: also store v|0x200 to the 0x94000000 mirror (VA 0xD4000004)
++	 * and flush it via the TI monitor SMC 0x101 (secure-side L2 range
++	 * flush — the payload-proven path): if the NS-side direct CIPA
++	 * wedges, the mirror still lands. Bounded sync polls throughout. */
++/* pb_bc v6: flush-free ONLY — SO stores to the bc page reach DRAM
++ * directly (proven on-device: bc[2]=0x1 landed with no CIPA). The SMC/
++ * CIPA/poll machinery is removed from the marker path entirely: if the
++ * kernel still wedges, it is the C code itself, pinned by bc[2]. */
++#define pb_bc(v) do { \
++	*(volatile unsigned int *)0xD0000004 = (v); \
++	*(volatile unsigned int *)0xD0000008 = ((v) | 0x100); \
++	*(volatile unsigned int *)0xFEC14030 = \
++		~*(volatile unsigned int *)0xFEC14030; /* WDT2 kick: \
++progress = life (60 s window killed healthy L2-off boots) */ \
++	dsb(sy); \
++} while (0)
++
+ 	set_task_stack_end_magic(&init_task);
++	pb_bc(150);			/* post set_task_stack_end_magic */
+ 	smp_setup_processor_id();
++	pb_bc(151);			/* post smp_setup_processor_id */			/* post set_task_stack_end_magic + smp_setup_processor_id */
++
++	/* PlayBook kexec: panic/oops visibility. No console exists yet, so a
++	 * BUG/panic here spins silently until WDT2. Dump the panic message
++	 * via early_print (printascii -> breadcrumb rings, works pre-console). */
++	atomic_notifier_chain_register(&panic_notifier_list, &pb_panic_nb);
++
+ 	debug_objects_early_init();
++	pb_bc(144);			/* post debug_objects_early_init */
+ 	init_vmlinux_build_id();
++	pb_bc(145);			/* post init_vmlinux_build_id */
+ 
+ 	cgroup_init_early();
++	pb_bc(143);			/* post cgroup_init_early */
+ 
+ 	local_irq_disable();
+ 	early_boot_irqs_disabled = true;
+@@ -913,9 +1058,19 @@
+ 	 * enable them.
+ 	 */
+ 	boot_cpu_init();
++	pb_bc(140);			/* boot_cpu_init done */
+ 	page_address_init();
+ 	pr_notice("%s", linux_banner);
++	pb_bc(141);			/* first printk done */
+ 	setup_arch(&command_line);
++	/* PlayBook kexec diagnostic: bc + LED on (FAN5702 EN high).
++	 * 2026-09-02: was an inline DCCMVAC+CIPA with an unbounded sync
++	 * poll — replaced with pb_bc_put (0x101-SMC flush). */
++	pb_bc_put(0xD0000004, 111);
++	{
++		void __iomem *g = ioremap(0x4A310000, 0x1000);
++		if (g) { writel_relaxed(0x2000, g + 0x194); iounmap(g); }
++	}
+ 	/* Static keys and static calls are needed by LSMs */
+ 	jump_label_init();
+ 	static_call_init();
+@@ -1032,6 +1187,7 @@
+ 	 * this. But we do want output early, in case something goes wrong.
+ 	 */
+ 	console_init();
++	pb_bc(172);			/* post console_init */
+ 	if (panic_later)
+ 		panic("Too many boot %s vars at `%s'", panic_later,
+ 		      panic_param);
+@@ -1088,12 +1244,18 @@
+ 	pidfs_init();
+ 	cpuset_init();
+ 	cgroup_init();
++	pb_bc(171);			/* post cgroup_init */
+ 	taskstats_init_early();
++	pb_bc(176);			/* post taskstats_init_early */
+ 	delayacct_init();
++	pb_bc(177);			/* post delayacct_init */
+ 
+ 	acpi_subsystem_init();
++	pb_bc(178);			/* post acpi_subsystem_init */
+ 	arch_post_acpi_subsys_init();
++	pb_bc(179);			/* post arch_post_acpi_subsys_init */
+ 	kcsan_init();
++	pb_bc(180);			/* post kcsan_init (pre-rest_init) */
+ 
+ 	/* Do the rest non-__init'ed, we're now alive */
+ 	rest_init();
+@@ -1315,8 +1477,21 @@
+ 		   NULL, ignore_unknown_bootoption);
+ 
+ 	trace_initcall_level(initcall_level_names[level]);
+-	for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++)
++	for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++) {
++		/* PlayBook: per-initcall breadcrumbs + WDT2 kick. bc[6] =
++		 * level, bc[7] = initcall fn VA (the hanging driver, read
++		 * back via System.map), bc[2] = kick nonce. The kernel's
++		 * only WDT kicks in this phase — a driver stall = one
++		 * 60 s window, then reset with the evidence in bc. */
++		*(volatile unsigned int *)0xD0000018 = level;
++		*(volatile unsigned int *)0xD000001C =
++			(unsigned long)initcall_from_entry(fn);
++		*(volatile unsigned int *)0xD0000008 = 0xBEEF;
++		*(volatile unsigned int *)0xFEC14030 =
++			~*(volatile unsigned int *)0xFEC14030;
++		dsb(sy);
+ 		do_one_initcall(initcall_from_entry(fn));
++	}
+ }
+ 
+ static void __init do_initcalls(void)
+@@ -1476,6 +1651,8 @@
+ 	numa_default_policy();
+ 
+ 	rcu_end_inkernel_boot();
++	pb_bc_mark(173);		/* kernel boot complete, running init */
++	pb_bc_mark(174);
+ 
+ 	do_sysctl_args();
+ 
+@@ -1539,6 +1716,7 @@
+ {
+ 	/* Now the scheduler is fully set up and can do blocking allocations */
+ 	gfp_allowed_mask = __GFP_BITS_MASK;
++	pb_bc(186);			/* kernel_init_freeable entered */
+ 
+ 	/*
+ 	 * init can allocate pages on any node
+@@ -1565,6 +1743,7 @@
+ 	page_alloc_init_late();
+ 
+ 	do_basic_setup();
++	pb_bc(187);			/* do_basic_setup done (pre-initcalls) */
+ 
+ 	kunit_run_all_tests();
+ 
+
+--- a/kernel/cgroup/cgroup.c	2025-08-20 16:36:36.000000000 +0000
++++ b/kernel/cgroup/cgroup.c	2026-09-01 16:13:39.677929703 +0000
+@@ -6106,23 +6106,32 @@
+ 	.show_path		= cgroup_show_path,
+ };
+ 
++/* PlayBook kexec early-boot markers (definition in init/main.c): flush-free
++ * SO stores to the bc page — visible in DRAM without any cache maintenance. */
++void pb_bc_mark(unsigned int v);
++
+ static void __init cgroup_init_subsys(struct cgroup_subsys *ss, bool early)
+ {
+ 	struct cgroup_subsys_state *css;
+ 
+ 	pr_debug("Initializing cgroup subsys %s\n", ss->name);
+ 
++	pb_bc_mark(164);
+ 	cgroup_lock();
++	pb_bc_mark(165);
+ 
+ 	idr_init(&ss->css_idr);
+ 	INIT_LIST_HEAD(&ss->cfts);
+ 
+ 	/* Create the root cgroup state for this subsystem */
+ 	ss->root = &cgrp_dfl_root;
++	pb_bc_mark(166);
+ 	css = ss->css_alloc(NULL);
++	pb_bc_mark(167);
+ 	/* We don't handle early failures gracefully */
+ 	BUG_ON(IS_ERR(css));
+ 	init_and_link_css(css, ss, &cgrp_dfl_root.cgrp);
++	pb_bc_mark(168);
+ 
+ 	/*
+ 	 * Root csses are never destroyed and we can't initialize
+@@ -6153,8 +6162,10 @@
+ 	 * registered, no tasks have been forked, so we don't
+ 	 * need to invoke fork callbacks here. */
+ 	BUG_ON(!list_empty(&init_task.tasks));
++	pb_bc_mark(169);
+ 
+ 	BUG_ON(online_css(css));
++	pb_bc_mark(170);
+ 
+ 	cgroup_unlock();
+ }
+@@ -6172,12 +6183,15 @@
+ 	int i;
+ 
+ 	ctx.root = &cgrp_dfl_root;
++	pb_bc_mark(160);
+ 	init_cgroup_root(&ctx);
++	pb_bc_mark(161);
+ 	cgrp_dfl_root.cgrp.self.flags |= CSS_NO_REF;
+ 
+ 	RCU_INIT_POINTER(init_task.cgroups, &init_css_set);
+ 
+ 	for_each_subsys(ss, i) {
++		pb_bc_mark(0x100u | (unsigned int)i);
+ 		WARN(!ss->css_alloc || !ss->css_free || ss->name || ss->id,
+ 		     "invalid cgroup_subsys %d:%s css_alloc=%p css_free=%p id:name=%d:%s\n",
+ 		     i, cgroup_subsys_name[i], ss->css_alloc, ss->css_free,
+@@ -6190,6 +6204,7 @@
+ 		if (!ss->legacy_name)
+ 			ss->legacy_name = cgroup_subsys_name[i];
+ 
++		pb_bc_mark(0x120u | (unsigned int)i);
+ 		if (ss->early_init)
+ 			cgroup_init_subsys(ss, true);
+ 	}
+
+--- a/kernel/taskstats.c	2025-08-20 16:36:36.000000000 +0000
++++ b/kernel/taskstats.c	2026-09-02 11:08:27.166303958 +0000
+@@ -689,12 +689,15 @@
+ void __init taskstats_init_early(void)
+ {
+ 	unsigned int i;
++	void pb_bc_mark(unsigned int v);
+ 
+ 	taskstats_cache = KMEM_CACHE(taskstats, SLAB_PANIC);
++	pb_bc_mark(181);			/* post kmem_cache_create */
+ 	for_each_possible_cpu(i) {
+ 		INIT_LIST_HEAD(&(per_cpu(listener_array, i).list));
+ 		init_rwsem(&(per_cpu(listener_array, i).sem));
+ 	}
++	pb_bc_mark(182);			/* post per-cpu init */
+ }
+ 
+ static int __init taskstats_init(void)
+
+--- a/mm/slab_common.c	2025-08-20 16:36:36.000000000 +0000
++++ b/mm/slab_common.c	2026-09-02 11:49:25.762303339 +0000
+@@ -285,6 +285,7 @@
+ 	struct kmem_cache *s = NULL;
+ 	const char *cache_name;
+ 	int err;
++	void pb_bc_mark(unsigned int v);	/* PlayBook kexec */
+ 
+ #ifdef CONFIG_SLUB_DEBUG
+ 	/*
+@@ -303,6 +304,7 @@
+ #endif
+ 
+ 	mutex_lock(&slab_mutex);
++	pb_bc_mark(183);		/* PlayBook: entered kmem_cache_create */
+ 
+ 	err = kmem_cache_sanity_check(name, object_size);
+ 	if (err) {
+@@ -324,6 +326,7 @@
+ 	if (!args->usersize)
+ 		s = __kmem_cache_alias(name, object_size, args->align, flags,
+ 				       args->ctor);
++	pb_bc_mark(184);		/* PlayBook: merge/alias scan survived */
+ 	if (s)
+ 		goto out_unlock;
+ 
+@@ -335,6 +338,7 @@
+ 
+ 	args->align = calculate_alignment(flags, args->align, object_size);
+ 	s = create_cache(cache_name, object_size, args, flags);
++	pb_bc_mark(185);		/* PlayBook: create_cache survived */
+ 	if (IS_ERR(s)) {
+ 		err = PTR_ERR(s);
+ 		kfree_const(cache_name);
+
+--- a/arch/arm/boot/dts/ti/omap/Makefile	2025-08-20 16:36:36.000000000 +0000
++++ b/arch/arm/boot/dts/ti/omap/Makefile	2026-08-30 21:43:41.518183110 +0000
+@@ -76,10 +76,9 @@
+ 	omap4-panda.dtb \
+ 	omap4-panda-a4.dtb \
+ 	omap4-panda-es.dtb \
+-	omap4-sdp.dtb \
+-	omap4-sdp-es23plus.dtb \
+ 	omap4-var-dvk-om44.dtb \
+ 	omap4-var-stk-om44.dtb \
++	omap4-winchester.dtb \
+ 	omap4-xyboard-mz609.dtb \
+ 	omap4-xyboard-mz617.dtb
+ dtb-$(CONFIG_SOC_AM33XX) += \
+
+--- /dev/null	2026-09-03 12:17:21.613494170 +0000
++++ b/arch/arm/boot/dts/ti/omap/omap4-winchester.dts	2026-09-03 02:19:57.270631175 +0000
+@@ -0,0 +1,113 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * BlackBerry PlayBook (RIM "winchester", OMAP4430 ES2.2 HS).
++ *
++ * Reverse-engineered from the running QNX OS (2.0.0.4869) register map and
++ * the OS 2.0 IFS buildfile; no vendor DT exists.  Booted via a QNX-side
++ * kexec-style jump (r0=0, r1=0xffffffff, r2=DTB), not by the stock boot ROM.
++ *
++ * First-boot scope: memory, UART3 console, TWL6030 PMIC, eMMC on MMC2.
++ * QNX already muxed/ clocked the pads the OS used (UART3, I2C1, MMC2), so
++ * no pinctrl nodes are needed (and none are known yet).
++ */
++
++/dts-v1/;
++
++#include "omap443x.dtsi"
++
++/ {
++	model = "BlackBerry PlayBook (winchester)";
++	compatible = "blackberry,omap4-winchester", "ti,omap4430", "ti,omap4";
++
++	chosen {
++		stdout-path = &uart3;
++		bootargs = "console=ttyO2,115200n8 earlyprintk keep_bootcon ignore_loglevel maxcpus=1";
++	};
++
++	/* 2026-09-03: the bank MUST match the payload's load placement
++	 * (qnx2linux.c want[] = 0xA4000000; head.S derives PHYS_OFFSET from
++	 * the load address). The old 0x80000000+1GB bank put 576 MB of
++	 * memblock BELOW the kernel's PHYS_OFFSET — unlinear-mappable, and
++	 * bottom-up allocs (dram_sync steal, CMA) landing there (0xa1000000)
++	 * BUG'd dma_contiguous_remap with "in user region" (the bc=127 wall).
++	 * 448 MB = 0xa4000000..0xbfffffff. */
++	memory@a4000000 {
++		device_type = "memory";
++		reg = <0xa4000000 0x1c000000>;
++	};
++
++	reserved-memory {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		ranges;
++
++		/* kexec breadcrumb + DEBUG_LL capture rings (scatter-proven
++		 * survivor pages); read back from the QNX side after the WDT2
++		 * warm reset. Reserved (never allocated) but KEPT IN THE LINEAR
++		 * MAP — the kernel-proper's DEBUG_LL ring writes use
++		 * VA = PA + 0x40000000, which must be mapped. */
++		kexec_bc@88000000 {
++			reg = <0x88000000 0x1000>;
++		};
++		/* kexec breadcrumb page: reserved (never allocated) but KEPT IN
++		 * THE LINEAR MAP — kernel C-phase diagnostics write it via
++		 * VA = PA + 0x40000000 (0xD0000004). The ring pages stay no-map. */
++		kexec_bc@90000000 {
++			reg = <0x90000000 0x1000>;
++		};
++		kexec_bc@94000000 {
++			reg = <0x94000000 0x1000>;
++		};
++		kexec_bc@9fe00000 {
++			reg = <0x9fe00000 0x1000>;
++		};
++	};
++
++	/* PL310 L2 — the payload keeps QNX's enabled L2 in whatever state it
++	 * was left; the kernel's l2x0 driver reprograms aux/latency/prefetch
++	 * through omap4_l2c310_write_sec (monitor SMCs 0x102/0x109/0x113).
++	 * Latencies are the conservative 3-cycle values (QNX's 1-cycle
++	 * config is the prime suspect for the session's wedges/corruption). */
++	l2-cache@48242000 {
++		compatible = "arm,pl310-cache";
++		reg = <0x48242000 0x1000>;
++		cache-unified;
++		cache-level = <2>;
++		arm,tag-latency = <3 3 3>;
++		arm,data-latency = <3 3 3>;
++	};
++};
++
++/* PMIC — TWL6030 on I2C1 (0x48072000), slave 0x48, IRQ_SYS_1N */
++&i2c1 {
++	clock-frequency = <400000>;
++
++	twl: twl@48 {
++		reg = <0x48>;
++		interrupts = <GIC_SPI 7 IRQ_TYPE_LEVEL_HIGH>;
++	};
++};
++
++#include "twl6030.dtsi"
++#include "twl6030_omap4.dtsi"
++
++/* Internal eMMC (Samsung, 64 GB class) on MMC2 @ 0x480B4000 — 8-bit, fixed */
++&mmc2 {
++	bus-width = <8>;
++	ti,non-removable;
++	status = "okay";
++};
++
++/* no external SD slot, no wifi SDIO brought up yet */
++&mmc1 {
++	status = "disabled";
++};
++&mmc3 {
++	status = "disabled";
++};
++&mmc4 {
++	status = "disabled";
++};
++&mmc5 {
++	status = "disabled";
++};
+
+--- /dev/null	2026-09-03 12:17:21.613494170 +0000
++++ b/arch/arm/include/debug/omap4bc.S	2026-09-02 20:18:39.913189588 +0000
+@@ -0,0 +1,116 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * omap4bc.S — DEBUG_LL for the BlackBerry PlayBook (OMAP4430 "winchester").
++ *
++ * UART3 is wired internally but no pads are externally accessible, so plain
++ * DEBUG_LL output would be invisible.  Every character is therefore written
++ * to UART3 (0x48020000, as usual) AND mirrored into THREE ring buffers in
++ * DRAM.  Per ring (base page): u32 monotonic count at +0x80, u32 wrapping
++ * index at +0x84, 1024 chars at +0x100..+0x4FF.  Rings (scatter-proven
++ * survivor pages — kexec/scatter.c, SESSION-HANDOFF ROUND 5):
++ *
++ *	0x88000000 / 0x90000000 / 0x94000000
++ *
++ * The pages survive the WDT2 warm reset (and are no-map reserved in the DTS
++ * so the kernel will not allocate over them).  They are read back from the
++ * QNX side with memdump3 after the reboot.
++ *
++ * L2 (PL310) flush: with MMU on the ring VAs are cached-normal; DCCMVAC only
++ * pushes L1->L2, and the ring lines are HOT (re-dirtied every char) so they
++ * never evict — a warm reset then destroys dirty PL310 lines and the capture
++ * is lost (observed).  Direct PL310 access works on this unit (ROUND 4
++ * smcprobe experiments), so every put also issues a PL310 clean+invalidate
++ * by physical address (0x48242000+0x768) to force the lines to DRAM.
++ * MMU on:  PL310 reached through the static map at 0xFEB42000 (set up in
++ *          debug_ll_io_init, arch/arm/mm/mmu.c) and ring PAs derived via
++ *          LOWMEM_DELTA.
++ * MMU off: writes already bypass L1 but still allocate in L2 — same PL310
++ *          CI-by-PA sequence at its physical address, then dsb.
++ *
++ * Register constraints inside printascii/printch (arch/arm/kernel/debug.S):
++ *   r0 = string ptr (dead in busyuart), r1 = char (dead after busyuart),
++ *   r2 = \rd scratch (dead), r3 = \rx UART base (MUST survive busyuart).
++ * We push {r1,r2,r3,r4} for the capture (r4 callee-saved for the C caller);
++ * the bounded LSR drain afterwards uses r1 (free) as countdown.
++ */
++
++#include <linux/serial_reg.h>
++
++#define UART3_BASE	0x48020000
++#define LOWMEM_DELTA	0x40000000	/* PAGE_OFFSET(0xC0..) - PHYS(0x80..)   */
++#define PL310_VA	0xFEB42000	@ static map (debug_ll_io_init); early-
++					@ mapped from head.S as section VA
++					@ 0xFEB00000 -> PA 0x48200000 so the
++					@ MMU-on flush works before paging_init
++#define PL310_PA	0x48242000
++#define PL310_CIPA	0x768		@ clean+invalidate line by PA
++#define PL310_SYNC	0x730		@ cache sync (poll bit0)
++
++		.macro	addruart, rp, rv, tmp
++		ldr	\rp, =UART3_BASE
++		ldr	\rv, =0xFED20000	@ static map by debug_ll_io_init()
++						@ (section VA 0xFED00000 -> PA
++						@  0x48000000, also early-mapped
++						@  from __create_page_tables via
++						@  this same macro)
++		.endm
++
++.macro	senduart, rd, rx
++		@ PlayBook 2026-09-02: UART3 write REMOVED. When L4PER auto-idles,
++		@ a posted store to the dead THR never completes and the next ring
++		@ load stalls on the store buffer (the 132-console-wall). The three
++		@ DRAM rings carry the console text instead.
++		.endm
++
++		.macro	waituarttxrdy, rd, rx
++		.endm
++
++		.macro	waituartcts, rd, rx
++		.endm
++
++		@ ring_put <count-addr-reg> <char-reg> <scratch-reg>
++		@   count addr in \base on entry (and restored on exit);
++		@   \sc left holding the char slot index (0..0x3FF).
++		.macro	ring_put, base, ch, sc
++		ldr	\sc, [\base]		@ monotonic count
++		add	\sc, \sc, #1
++		str	\sc, [\base]
++		ldr	\sc, [\base, #4]	@ wrapping index
++		add	\sc, \sc, #1
++		cmp	\sc, #0xF00		@ 3840-char ring (page is 4 KB)
++		subcs	\sc, \sc, #0xF00
++		str	\sc, [\base, #4]
++		add	\sc, \sc, #0x80		@ char addr = count+0x80+idx
++		strb	\ch, [\base, \sc]	@   (= ring base + 0x100 + idx)
++		sub	\sc, \sc, #0x80
++		.endm
++
++		@ busyuart: mirror char into the 3 breadcrumb rings (device
++		@ stores = DRAM truth, no flush needed), then wait for the UART
++		@ to drain (bounded — a dead/gated UART must not hang the boot).
++		.macro	busyuart, rd, rx
++		push	{r1, r2, r3, r4, r5}
++		mov	r2, r1			@ char
++		mrc	p15, 0, r1, c1, c0, 0	@ SCTLR
++		tst	r1, #1			@ MMU on?
++		ldr	r1, =0xD4000080		@ ring3 count word VA (= PA + LOWMEM_DELTA)
++		subeq	r1, r1, #LOWMEM_DELTA	@ MMU off -> physical address
++		mov	r4, #0			@ remember MMU state in r4: the
++		movne	r4, #1			@ ring_put cmps clobber the flags
++		ring_put r1, r2, r3		@ ring 3: 0x94000080
++		sub	r1, r1, #0x4000000	@ -> 0x90000080
++		ring_put r1, r2, r3		@ ring 2: 0x90000080
++		sub	r1, r1, #0x8000000	@ -> 0x88000080
++		ring_put r1, r2, r3		@ ring 1: 0x88000080
++		@ --- PlayBook 2026-09-02: flush machinery REMOVED. The ring VAs
++		@ are DEVICE-mapped (head.S ring-map block strips C/B/S into r6) in
++		@ both the MMU-on and MMU-off cases, so every ring_put store is
++		@ already DRAM-truth. The old DCCMVAC + NS-CIPA + sync-poll per
++		@ char was ritual and wedged the L2-on boot.
++		b	98f
++
++98:
++		@ PlayBook 2026-09-02: LSR drain removed too - a read from a dead
++		@ UART stalls forever (non-posted). Rings only.
++		pop	{r1, r2, r3, r4, r5}
++		.endm
+\ No newline at end of file
+

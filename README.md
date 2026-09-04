@@ -85,6 +85,7 @@ Deep knowledge (read on demand):
 | Path | Contents |
 |---|---|
 | `kexec/` | the working code: payload, stubs, probes, debug tools |
+| `kernel-patches/` | the complete kernel diff (mainline 6.15.11 → PlayBook) + config + apply guide |
 | `docs/` | the 10-file deep knowledge base |
 | `newdocs/` | project-level docs, session notes, contradictions |
 | `SESSION-HANDOFF/` | per-session records and handoff prompts |
