@@ -14,18 +14,23 @@ jumped from QNX. The boot currently:
 2. Passes `paging_init` region — **the bc=127 wall (`dma_contiguous_remap`
    "in user region" BUG) was root-caused and fixed on 2026-09-03** (see
    below). Boot reached **bc=171** in run W-4.
-3. **bc=171 = the current wall**: `taskstats_init_early` →
-   `kmem_cache_create`. Reached twice on 2026-09-03 (W-4 with the probe,
-   bc=171; W-5 without, bc=126 — both with a degraded no-DTB 16 MB
-   fallback, see the DTB issue below).
-   **Read the era matrix before analyzing 171**
-   ([contradictions/171-wall-analyses.md](contradictions/171-wall-analyses.md)):
-   run 23 (session 6) also died at 171 with {UNCACHED kernel, L2-off,
-   DTB + full memory}; session 7's deaths were {cacheable, L2-on,
-   16 MB no-DTB}. The untested cell — {cacheable, L2-on, DTB + full
-   memory} — is exactly the next zImage run. Also: the "0x1f7f0000" BUG
-   was `dma_contiguous_remap`, never the dram-barrier mapping (the
-   barrier-disabled run reproduced it identically — session-6 correction).
+3. **bc=171 = the old wall, but the CURRENT front moved earlier**: the
+   zImage path (the pivot that delivers DTB + full memory) dies BEFORE
+   `__fixup_pv_table` can run. W-9 (2026-09-04, kernel #88, flushed
+   fixup instrumentation) proved the fixup's entry stores never land:
+   **death between the post-__fixup_smp marker's flush and the fixup's
+   own CIPA** (~25 proven-op-class instructions + the bl). W-6/W-8's
+   "dies inside the fixup" reading is superseded. See docs/03 run W-9.
+   **The era-matrix sharpening**: runs 23-32 (zImage, UNCACHED, L2 OFF)
+   passed the fixup 8+ times; W-6/7/8/9 (zImage, CACHEABLE, L2 ON) died
+   there 4/4. The untested isolation cell — CACHEABLE + L2 OFF — is the
+   next run: `PAYLOAD_MODE=--t3 ./jump.sh zImage` (the proven 0x102
+   disable; no code changes). Also closed this session: the dtb-phys
+   arithmetic (params block exonerated — bc[3] is the BUFFER base,
+   qnx2linux.c:935; both W-6 and W-8 close exactly), the bc[10]/bc[11]
+   writers (parse_early_param + bss-bounds dumps — W-9's values are
+   W-4-era residue), and the ring2 wild-index theory for bc[2]=0x3E7
+   (index sane; bc[2]'s writer still unidentified, 4/4 zImage runs).
 
 ## What was fixed in session 7 (the bc=127 wall)
 
@@ -93,7 +98,9 @@ memcmp-verified copy. The Image-path binary remains the deepest boot
 (bc=171); the zImage path now needs its own diagnosis before it can deliver
 the DTB+full-memory test the era matrix wants.
 
-**Next run**: `PAYLOAD_MODE=--l2on ./jump.sh zImage`.
+**Next run** (W-10): `PAYLOAD_MODE=--t3 ./jump.sh zImage` — the CACHEABLE
+kernel with the L2 disabled via the proven 0x102 path (the untested
+era-matrix cell; see "Where the boot stands" #3).
 
 ## The secure monitor — RE closed (session 7)
 

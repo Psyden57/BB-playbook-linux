@@ -845,3 +845,88 @@ readbacks are NOT recoverable). Recorded facts (bootstrap + PROJECT_STATE):
   after the warm reset discards dirty lines. W-8 then CIPA-flushed the
   pbmark/pbmark3 markers by PA (0x768/0x730) — the fixup's OWN stores
   stayed unflushed until the session-8 phys2virt.S edit (commit e842c33).
+
+### Run W-9 (2026-09-04): flushed fixup instrumentation — the fixup NEVER
+### ENTERED; death pinned to the pre-entry window; the L2 variable sharpens
+
+Build: kernel #88 (phys2virt.S W-8 edit, commit e842c33): entry bc[6]=r8 +
+marker 140 now CIPA-flushed; the 141 site additionally stores the computed
+delta to bc[7] and flushes the __pv_offset .data line(s); zImage packed
+5,566,497 B (raw +2,751 vs W-8 — matches ~90 new words + LZMA shift); the
+shipped vmlinux objdump-verified (c0008884 region: CIPA constants, bounded
+polls, bc[7] store all present). NOTE: an initial "+2,744 B vs raw" panic
+was an apples-to-oranges comparison (packed vs raw) — sizes are consistent.
+
+Run: PAYLOAD_MODE=--l2on ./jump.sh zImage. SSH gone t=45s; reboot ~2 min
+(LED timings pending — the user extracts them from video; device clock is
+GMT-3, host is UTC — convert when comparing).
+
+Readbacks (nonce 0xcb9a6f11 fresh; W-8 was 0xcbca5e14):
+- bc[1] = 130 (post-__fixup_smp, flushed) — 131 absent, same shape as
+  W-6/W-7/W-8.
+- **bc[6] = 0xedfe0dd0 — the probe's DTB magic, NOT r8.** The fixup's
+  entry store is CIPA-flushed now; had the fixup executed its first three
+  instructions, bc[6] would read 0xa0000000 (r8 = PHYS_OFFSET).
+  **The fixup's entry instrumentation never landed.**
+- bc[7] = 0x410000c4 (probe residue, not the delta) — the 141 site never
+  ran either. (W-8 candidate 4 is CLOSED independently: the dtb-phys
+  arithmetic closes EXACTLY for W-8 (buffer 0xa1500000 → kern_off
+  0x100000 → kern_phys 0xa1600000 → dtb_phys 0xa1b56570 = bc[4]) AND for
+  W-6 (buffer 0xa1400000 is itself 2MB-aligned → kern_off 0 →
+  0xa1408000 + 0x54e570 = 0xa1957080 = bc[4]). The "never closed" in the
+  W-8 record came from bc[3]'s ambiguous "buffer/kern base" label — the
+  code (qnx2linux.c:935) writes the BUFFER base. Params block exonerated.)
+- bc[2] = 0x3E7 (4th consecutive zImage run); bc[3]=0xa1000000 (buffer);
+  bc[4]=0xa1557028; bc[5]=0xe1a00000 (zImage word 0 ✓); bc[8]=1/bc[9]=
+  0x111; bc[12]=0xa1557028 (cont chain); bc[14]=0x8be8eae6 (garbage);
+  ring1 count 0x14 = smoke only; mirror0 = 70-without-71 = normal.
+
+**W-9's structural finding: the death is between pbmark-130's CIPA and the
+fixup's own CIPA** — ~25 instructions (pbmark tail: sync-poll exit, dsb,
+kick; bl; mov/orr; str r8; dsb; the mov/orr CIPA constant chains). Every
+instruction class in that window executed successfully multiple times
+earlier in the SAME boot (bc stores to 0x9000000x, CIPA to 0x48242768,
+sync reads 0x48242730, WDT kicks). W-7's post-mortem found these bytes
+byte-intact. With flushed markers, "dies INSIDE __fixup_pv_table"
+(W-6/W-8 reading) is now WRONG — the fixup never meaningfully ran; all
+zImage deaths are consistent with the same pre-entry window.
+
+bc[10]/bc[11] writers IDENTIFIED (grep, not recall): main.c:780 writes
+bc[11]=0xC0DE0010 (parse_early_param entered, any call); main.c:792/799
+write bc[10]=cmdline-head / bc[12]=0xC0DE0020 (first-call completion);
+head-common.S:112-115 writes bc[10]=bss-start/bc[11]=bss-len pre-memset.
+W-9's bc[11]=0xC0DE0010 with bc[12]=dtb_phys (cont's pre-kernel write) and
+bc[14]=garbage (the double-call latch never fired) = **W-4-era residue,
+not fresh** (W-4 reached the C world). bc[10]=1 matches no writer —
+trample/stale. The C world was NOT reached this run.
+
+ring2 dumps (KNOWN_ISSUES #1 follow-up): 0x90000200+ = W-4-era console
+text (banner tail "...#4 SMP Thu Sep 3 02:05:36 UTC 2026" — that is the
+kernel's BUILD timestamp from the host clock (WSL/UTC), not the device
+clock — plus "[    0.0000..." / "CPU: ARMv7 Processor [411fc09...");
+ring2 count @0x90000080 = 0x14 — SANE (this run's 20 smoke chars; the
+banner text at 0x200+ is residue beyond the written prefix).
+**The ring2-wild-index theory for bc[2]=0x3E7 weakens** — the index is
+healthy. bc[2]'s writer remains unidentified.
+
+Post-mortem impossible this run: 0xa0088000 and 0xa0088884 both zeroed
+(QNX's trample won; W-7's dump was a faster race). New operational fact:
+the user can power-hold hard-reset the device at will — useful PRE-run for
+clean residue (bc_arm sanitizes only bc[0..5]); it cannot prevent the
+post-reboot trample (QNX must boot for SSH readback).
+
+**The era-matrix sharpening**: runs 23-32 (zImage, UNCACHED, L2 OFF,
+DTB + full memory) PASSED the fixup 8+ times (died later at 171);
+W-6/7/8/9 (zImage, CACHEABLE, L2 ON) died in the pre-fixup window 4/4
+times. The death is {L2-on + cacheable}-correlated. The untested
+isolation cell: **CACHEABLE kernel + L2 OFF** = `PAYLOAD_MODE=--t3
+./jump.sh zImage` (the proven 0x102 mon_call disable; the mode W-5 ran) —
+no code changes, one run.
+
+Updated session-8 candidate list:
+1. `--t3` zImage L2-off A/B ← the new lead (isolates the L2 variable).
+2. Inline-test: copy the fixup's first stores into head.S right after
+   pbmark 130 (isolates the bl/call from the stores; W-8 candidate 3).
+3. Order-swap fixup_pv/fixup_smp (W-8 candidate 2).
+4. Add an IMMEDIATE 0xa0088884-region dump to jump.sh's readback burst
+   (race the trample like W-7 did).
