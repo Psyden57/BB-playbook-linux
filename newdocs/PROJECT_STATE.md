@@ -115,22 +115,23 @@ memcmp-verified copy. The Image-path binary remains the deepest boot
 (bc=171); the zImage path now needs its own diagnosis before it can deliver
 the DTB+full-memory test the era matrix wants.
 
-**Next run** (W-36): build #107 + payload placement guard. W-35 pinned
-the mechanism: the sweep granted 0xa0e00000 — the FIRST window ever
-overlapping the zreladdr inflation region [0xa0008000, ~0xa0f80000) —
-the decompressor relocated itself into the payload window and the boot
-died in head.S's tail (bc[1]=142, ring 0, bc[2]=0x3E7). The sweep now
-reserves [0xa0000000, 0xa1000000) (buf_placement_bad). The pv regime is
-cured (W-34: direct store + DCCIMVAC, tries=0, bc[19]); DISPC dead
-(0/0); devb slain. Expectation for W-36: placement ≥ 0xa1200000, the
-boot passes head.S, and the front returns to the svm memset region
-(161→151, W-34's correct-pv wall — the chunk markers 164/165/166 +
-bc[19] readback will localize it). If the svm memset completes, the
-boot advances into devicemaps/bootmem and toward the 171 wall
-(KNOWN_ISSUES #3 l2x0 hazards ahead). Marker-number audit: setup.c's
-pb_bc(130-136) pairs COLLIDE with mmu.c's PB_MMU_BC numbers —
-discriminate via the mirror channel. See docs/03 W-25..W-35 and
-SESSION-HANDOFF/BOOTSTRAP_SESSION_9.md.
+**Next run** (W-37): build #108. W-36 confirmed the guard (placement
+0xa1600000, no overlap, head.S passed) and instruction-precise
+localization: the death is inside the FIRST 4 volatile stores of the svm
+zeroing at VA 0xdfdfffd4 (164/165/166 never fired) — a 4-word cached
+store to a mapped, free, never-touched-this-boot DRAM page (PA
+0xbfdfffd4, directly below the CMA remap's own pte table at
+0xbfdff000). Build #108 dumps the ACTUAL pmd entry for the target VA
+(bc[19] = pmd_val — valid section descriptor vs zero) before the
+stores, then single stores with markers 167 (store 1) / 168 (stores
+2-4) / 165 / 166 / 151. Interpretation: pmd=0/invalid → map_lowmem
+never mapped that section (mapping bug); pmd valid + death at store 1 →
+the PTW/walk itself wedges (L2/pmd-line class); stores complete but the
+readback ≠ 0 → stores don't stick. bc[16]/bc[17] = DISPC readbacks,
+bc[18] = placement, bc[19] = pmd value (W-37+). Hands-off protocol.
+Marker-number audit: setup.c's pb_bc(130-136) pairs COLLIDE with mmu.c's
+PB_MMU_BC numbers — discriminate via the mirror channel. See docs/03
+W-25..W-36 and SESSION-HANDOFF/BOOTSTRAP_SESSION_9.md.
 
 ## The secure monitor — RE closed (session 7)
 
