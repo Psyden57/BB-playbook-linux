@@ -991,7 +991,7 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-04 20:08:00.708387612 +0000
++++ b/arch/arm/mm/mmu.c	2026-09-04 20:21:03.108387469 +0000
 @@ -758,18 +758,27 @@
  	return arm_pte_alloc(pmd, addr, prot, early_alloc);
  }
@@ -1029,7 +1029,7 @@
  }
  
  /*
-@@ -1022,10 +1032,80 @@
+@@ -1022,10 +1032,76 @@
  	if (!nr)
  		return;
  
@@ -1087,21 +1087,17 @@
 +				  pmd_val(*pmd_off_k(0xdf400000)));
 +			pb_bc_put(0xD0000060,
 +				  pmd_val(*pmd_off_k(0xdf000000)));
++			pb_bc_put(0xD0000064,			/* bc[25] */
++				  pmd_val(*pmd_off_k(0xdfa00000)));
 +			pb_bc_put(0xD0000004, 167);	/* dumps done */
-+#if 0				/* W-38: the store's PTW wedges — skipped */
 +			p[0] = 0;
-+			pb_bc_put(0xD0000004, 167);	/* store 1 done */
++			pb_bc_put(0xD0000004, 167 | 0x400);	/* store 1 */
 +			p[1] = 0; p[2] = 0; p[3] = 0;
-+			pb_bc_put(0xD0000004, 168);	/* stores 2-4 done */
 +			p[4] = 0; p[5] = 0; p[6] = 0; p[7] = 0;
-+			pb_bc_put(0xD0000004, 165);	/* 32B */
 +			p[8] = 0; p[9] = 0; p[10] = 0;
-+			pb_bc_put(0xD0000004, 166);	/* 44B */
++			pb_bc_put(0xD0000004, 151);	/* memset done */
 +			pb_bc_put(0xD000004C, p[0]);	/* bc[19] readback */
-+#endif
-+			(void)p;
 +		}
-+		pb_bc_put(0xD0000004, 151);	/* memset done */
 +	}
  
  	for (md = io_desc; nr; md++, nr--) {
@@ -1111,7 +1107,7 @@
  
  		vm = &svm->vm;
  		vm->addr = (void *)(md->virtual & PAGE_MASK);
-@@ -1035,6 +1115,7 @@
+@@ -1035,6 +1111,7 @@
  		vm->flags |= VM_ARM_MTYPE(md->type);
  		vm->caller = iotable_init;
  		add_static_vm_early(svm++);
@@ -1119,7 +1115,7 @@
  	}
  }
  
-@@ -1147,6 +1228,21 @@
+@@ -1147,6 +1224,21 @@
  	map.length = PAGE_SIZE;
  	map.type = MT_DEVICE;
  	iotable_init(&map, 1);
@@ -1141,7 +1137,7 @@
  }
  #endif
  
-@@ -1250,6 +1346,27 @@
+@@ -1250,6 +1342,27 @@
  
  	arm_lowmem_limit = lowmem_limit;
  
@@ -1169,7 +1165,7 @@
  	high_memory = __va(arm_lowmem_limit - 1) + 1;
  
  	if (!memblock_limit)
-@@ -1363,6 +1480,19 @@
+@@ -1363,6 +1476,19 @@
   * Any other function or debugging method which may touch any device _will_
   * crash the kernel.
   */
@@ -1189,7 +1185,7 @@
  static void __init devicemaps_init(const struct machine_desc *mdesc)
  {
  	struct map_desc map;
-@@ -1375,12 +1505,20 @@
+@@ -1375,12 +1501,20 @@
  	vectors = early_alloc(PAGE_SIZE * 2);
  
  	early_trap_init(vectors);
@@ -1211,7 +1207,7 @@
  
  	if (__atags_pointer) {
  		/* create a read-only mapping of the device tree */
-@@ -1445,10 +1583,16 @@
+@@ -1445,10 +1579,16 @@
  		mdesc->map_io();
  	else
  		debug_ll_io_init();
@@ -1228,7 +1224,7 @@
  
  	/*
  	 * Finally flush the caches and tlb to ensure that we're in a
-@@ -1457,10 +1601,13 @@
+@@ -1457,10 +1597,13 @@
  	 * back.  After this point, we can start to touch devices again.
  	 */
  	local_flush_tlb_all();
@@ -1243,7 +1239,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1912,9 @@
+@@ -1765,7 +1908,9 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1253,11 +1249,28 @@
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +1922,13 @@
+@@ -1773,9 +1918,30 @@
  	 * be used
  	 */
  	map_kernel();
 +	PB_MMU_BC(127);			/* map_kernel done */
++	/* PlayBook W-39 (2026-09-05): the top 2MB of the linear map (VA
++	 * 0xdfc00000-0xdfe00000 = PA 0xbfc00000-0xbfe00000) reads STALE
++	 * QNX-era pgd content: W-37/38 found the pair [0xdfc/0xdfd] = a
++	 * __pmd_populate-shaped TABLE descriptor (0xbfc1141e, both halves
++	 * identical, deterministic across runs/placements) pointing at
++	 * 0xbfc11400 — a never-allocated address that matches a QNX-era
++	 * pte table for that exact DRAM region. map_lowmem's section write
++	 * for the last pair didn't survive in the view the PTW uses (the
++	 * write-back-loss class, same as the pv variables). The svm/pte
++	 * allocations in that region wedge on the PTW (W-25/31/34/36/37).
++	 * Shave the allocator limit by 2MB so nothing is allocated in the
++	 * poisoned top (bring-up cost: 2MB of RAM reserved forever). The
++	 * last free range's sections [0xbf800000-0xbfc00000) stay mapped
++	 * and healthy (bc[22] = a CORRECT section desc for VA 0xdf8). */
++	if (arm_lowmem_limit > 0xa4000000ull)
++		arm_lowmem_limit -= 0x200000;
++	memblock_set_current_limit(arm_lowmem_limit);
  	dma_contiguous_remap();
 +	PB_MMU_BC(126);			/* dma_contiguous_remap done */
  	early_fixmap_shutdown();
@@ -1267,7 +1280,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +1938,7 @@
+@@ -1785,6 +1951,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();

@@ -2103,3 +2103,49 @@ decides: localized wild write vs the QNX-era stale-pgd-line class vs a
 map_lowmem gap. Packed 5,569,585 B; shipped vmlinux verified (160/161 →
 dumps → 167 → 151, stores compiled out). kernel-patches regenerated,
 apply-check clean.
+
+### Run W-38 (2026-09-05): build #109 — the pmd pattern: the pair
+### [0xdfc/0xdfd] = IDENTICAL bogus table pointers (the __pmd_populate
+### signature), deterministic across runs AND placements
+
+Run: PAYLOAD_MODE=--dmaquiet ./jump.sh zImage, hands-off. Jump ~t=25s;
+reboot ~2 min (user). Boot: bc[1] = 156 (alloc_init_pte entry — WITH the
+stores skipped, the death moved INTO the CMA's own create_mapping: its
+pte-table memblock alloc); mirror0 = 0x27F; ring 1170 (pv correct); the
+pmd dumps all landed (they precede the wedging accesses).
+
+The pmd pattern (bc[19..25]):
+- bc[19] = VA 0xdfd = 0xbfc1141e — the bogus TABLE desc (identical to
+  W-37 — DETERMINISTIC across runs AND placements: W-37 buf 0xa1100000,
+  W-38 buf 0xa2a00000, same value!)
+- bc[20] = VA 0xdfc (pair-mate) = 0xbfc1141e — **IDENTICAL: both halves
+  of the pair point at the SAME table = the __pmd_populate signature**
+- bc[21] = VA 0xdfe (beyond arm_lowmem_limit) = 0 ✓ (never mapped)
+- bc[22] = VA 0xdf8 = **0xbf81141e = a CORRECT SECTION desc for PA
+  0xbf800000 (map_lowmem ✓ the range [0xbf800000-0xbfe00000) was
+  mapped, its FIRST pair healthy)**
+- bc[23] = VA 0xdf4 = 0 (CMA VA range, cleared by the remap's
+  pmd_clear ✓)
+- bc[24] = VA 0xdf0 = 0 (CMA range ✓)
+- bc[25] = VA 0xdfa — UNTESTED YET (added in #110)
+
+**INTERPRETATION: the pair [0xdfc/0xdfd] (the LAST mapped pair of the
+linear map, the final cache line of swapper_pg_dir's populated region)
+holds QNX-era page-table content: 0xbfc11400 = a QNX-era pte table for
+exactly that DRAM region (deterministic = a fixed QNX allocation).
+map_lowmem's section write for that pair didn't survive in the view
+that matters — the write-back-loss class, same as the pv variables.
+NOT a random wild write: the value is structured, reproducible, and
+placement-independent.**
+
+### Build #110 (W-39): the 2MB allocator shave + the middle-pair probe
+
+- paging_init: after map_kernel (127), arm_lowmem_limit -= 2MB (to
+  0xbfc00000) before the CMA remap — nothing is allocated in the
+  poisoned top 2MB (bring-up cost: 2MB RAM reserved).
+- The svm lands at ~0xbfbfffd4 (VA 0xdfbfffd4, pair [0xdfa/0xdfb] —
+  the previously-untested middle pair!) — the stores re-enabled with
+  markers 167 (dumps done), 0x567 (store 1), 151 (memset done), bc[19]
+  = readback; the pmd dumps extended with bc[25] = VA 0xdfa.
+- Fixed a duplicate-151 compile artifact (the leftover pre-split marker).
+Packed 5,572,533 B; kernel-patches regenerated, apply-check clean.
