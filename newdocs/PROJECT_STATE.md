@@ -10,10 +10,16 @@ with this file, this file wins (and any unresolved disagreement is listed in
 Mainline Linux 6.15.11 (omap2plus, non-LPAE, patched for the PlayBook) is
 jumped from QNX. The boot currently:
 
-1. Enters `stext` (breadcrumbs 100-119 fine), MMU on, C flow entered.
-2. Passes `paging_init` region — **the bc=127 wall (`dma_contiguous_remap`
-   "in user region" BUG) was root-caused and fixed on 2026-09-03** (see
-   below). Boot reached **bc=171** in run W-4.
+1. Enters `stext` with the **MMU OFF** (it turns on at `__enable_mmu`,
+   after the pv fixups and `__create_page_tables`). The zImage-path
+   ladder: 101-103 land, **130 = post-__fixup_smp lands, 131 never
+   does** — the current front. (The numbering is non-monotonic:
+   130/131 execute BEFORE 119.)
+2. (Image path — historical, parked) passed the paging_init region —
+   **the bc=127 wall (`dma_contiguous_remap` "in user region" BUG) was
+   root-caused and fixed on 2026-09-03** (see below). Boot reached
+   **bc=171** in run W-4 — still the deepest boot, and the only one that
+   entered the C world.
 3. **bc=171 = the old wall, but the CURRENT front moved earlier**: the
    zImage path (the pivot that delivers DTB + full memory) dies BEFORE
    `__fixup_pv_table` can run. W-9 (2026-09-04, kernel #88, flushed
@@ -94,7 +100,11 @@ proves it worked (`OF: fdt: Machine model: BlackBerry PlayBook`,
 
 **W-6 (2026-09-04, first zImage test): the pivot FAILED to reach the wall —
 the boot died EARLIER, inside `__fixup_pv_table` (bc=107 post-fixup_smp;
-ring = smoke test only).** Details: `docs/03` run W-6. Key facts: the
+ring = smoke test only).** [SUPERSEDED 2026-09-04 by W-9: the "inside the
+fixup" reading was an artifact of unflushed markers — the flushed
+instrumentation proved the fixup's entry stores never landed; see
+"Where the boot stands" #3 and docs/03 run W-9. The bc[4]/bc[12] chain
+facts below stand; the dtb-phys math has since closed exactly (W-8/W-10).] Details: `docs/03` run W-6. Key facts: the
 chain held (bc[4]/bc[12] = dtb_phys), the DTB magic validated, zImage word
 0 confirmed — and **bc[2]=0x3E7 (999), the unexplained session-5/6 wild
 write, returned on the zImage path exactly as in runs 23-32**. The zImage
