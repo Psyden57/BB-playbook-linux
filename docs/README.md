@@ -89,15 +89,31 @@ corrected them — the corrections are never silent (see
 | 0x40309000 / 0x40309800 | probe.bin / params block (kernel entry, DTB phys) |
 | 0x4A314030 | WDT2 TGR (kick = any write; LDR=0x2C, CRR=0x28, SPR=0x48) |
 | 0x4A008700+ | CM2 CORE CLKSTCTRLs (SECURE-FILTERED — no NS writes!) |
-| 0x80008000 | zImage decompress target (zreladdr) |
+| 0xa0008000 | zImage decompress target = zreladdr (AUTO_ZRELADDR bucket 0xa0000000 + TEXT_OFFSET; PHYS_OFFSET = 0xa0000000 — the DTS bank must match, see the W-21 record) |
 
 ## Decision Tree (After a Jump Run)
 
 ```
 bc[15] nonce fresh? ── no ──► stale readback; investigate before concluding
-bc[1] after jump?
-├─ 126/171 (dma_contiguous / taskstats era) ──► see the era matrix in
-│        newdocs/contradictions/171-wall-analyses.md; decode the ring1 tail
+bc[1] after jump? (the zImage ladder, W-9→W-24 era; 2026-09-04)
+├─ 130/142 (fixup region)           ──► the fixup delivery paradox era —
+│                                      SOLVED by inlining (W-17); do not
+│                                      call MMU-off helpers, INLINE them
+├─ 143/144/145/146 (remap markers)  ──► the dma_contiguous_remap bisect —
+│                                      145=pmd_clear, 146=tlb-flush,
+│                                      147=iotable_init (the CURRENT front
+│                                      as of session 8's end: dies AT 146,
+│                                      147 absent — see docs/03 W-24)
+├─ 127/126/125/129/128 (mmu.c)      ──► map_kernel/remap/fixmap/devicemaps/
+│                                      bootmem — passed as of W-24 (with the
+│                                      bank = 0xa0000000+512MB, W-21)
+├─ 133/134 (map_lowmem/prepare)     ──► passed (134 first, then 133)
+├─ pv_off=0 in the console          ──► the decompressor-era stale D-side
+│                                      lines — the W-24 dual-level invalidate
+│                                      (DCCIMVAC + SMC 0x101) in map_lowmem
+│                                      is the fix; keep it
+├─ "BUG: not creating mapping"      ──► the pv values are stale/broken in
+│                                      the C world (W-21/22/23 signature)
 ├─ climbs past 171 → initcall breadcrumbs (bc[6]/bc[7])
 │                                   ──► progress! bc[7] = the hanging driver's
 │                                      fn pointer (resolve via System.map)

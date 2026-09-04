@@ -70,7 +70,11 @@ lines/regions map_kernel/iotable_init touch = the likely fix shape.
 
 ## THE RULES (the short form — the full list = docs/README.md)
 
-- Ask the user before every device run; request LED timings every run.
+- Ask the user before every device run; request LED timings every run
+  (the user records video; recordings are sometimes lost — offer re-runs
+  when timings matter). Print the FULL jump.sh output (never `tail` it —
+  the timing ladder is diagnostic). Decode bc/ring hex with python
+  (rule 13), never mental arithmetic.
 - Verify arithmetic with python (rule 13); grep source claims (rule 14);
   native tools for edits (rule 15); verify the shipped binary (rule 16).
 - Never: inline-stub SMCs, NS PRCM writes, NS PL310 CTRL/AUX/latency,
@@ -78,3 +82,5 @@ lines/regions map_kernel/iotable_init touch = the likely fix shape.
 - NVRAM and RPMB are off-limits forever. The power-hold reset = warm
   (DRAM survives).
 - After every run: append docs/03, update PROJECT_STATE, commit+push.
+- The device clock = GMT-3, the host (WSL) = UTC — convert when
+  comparing LED timelines to logs.

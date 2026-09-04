@@ -1471,6 +1471,10 @@ invalidate (L1 DCCIMVAC by VA + the monitor SMC 0x101 L2 clean+inv by
 PA via pb_smc_flush) for __pv_offset/__pv_phys_pfn_offset, placed in
 map_lowmem before the PB-ADJ print (mmu.c, the first pv consumer).
 Run: --l2on. Death ~01:30 user-clock (the standard wedge profile).
+User's timeline: blue ON 00:05; blue OFF 00:23 (the probe's LED chain);
+SSH frozen 00:25 (the jump ~00:25); SSH reset 00:43-00:45; red ON 01:32
+→ jump-to-reset ≈ 67 s ≈ the WDT2 window + boot lag — the standard
+wedge profile (the C world wedged within seconds of entry).
 
 Readbacks (nonce 0xc8dabe85 fresh): bc[4]=143 ✓, bc[5]=144 ✓, bc[6]=
 0xe0000000 ✓; **bc[1] = 146**; **ring count = 0x491 = 1169 — EXACTLY
