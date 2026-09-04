@@ -1239,6 +1239,35 @@ operation in dma_contiguous_remap; the discriminating run = W-18 with
 **--l2on** (the proper boot mode per D4 — CIPA ops legal, and the mode
 the Image path used when it reached 171).
 
+### Run W-18 (2026-09-04): --l2on — the 127 wedge is L2-INDEPENDENT;
+### the W-14 I-clear unmasked as the sustained-uncached-fetch wedge
+
+Build: kernel #95 unchanged. Run: PAYLOAD_MODE=--l2on (the PROPER boot
+mode — the probe ran: bc[4]=0xa2d56eb8 = the r2 echo, bc[5]=zImage word
+0, bc[6]=DTB magic ✓).
+
+Readbacks (nonce 0xc8eaa61e fresh): **bc[1] = 127, bc[2] = 0x17F,
+mirror0 = 0x27F — the FULL PB_MMU_BC(127) triple (bc[1]=v, bc[2]=v|0x100,
+0xD4000004=v|0x200 → the 0x94000000 mirror) — the boot reached marker
+127's site and died right after it, with L2 ON.** bc[11]/bc[12] =
+0xC0DE0010/0xC0DE0020 (parse_early_param entered+completed ✓). **ring1
+count = 0x491 — IDENTICAL to W-17** (same death point, byte-same
+console length). bc[3]=0x41, bc[14]=0x66 — new values, still
+unidentified (present in both W-17 and W-18).
+
+The L2-off CIPA-wedge theory is DEAD (the wedge is L2-independent). The
+remaining suspect was sitting in plain sight: **the W-14 SCTLR.I clear
+was still in the code — the C world ran with I=0**, i.e. every kernel
+instruction fetch an uncached DRAM read = the KNOWN "sustained traffic
+wedges the bypass path" mode (runs 33-50). W-4 (Image path, I=1) sailed
+past 127 to 171; W-17/18 (I=0) died there with either L2 state —
+consistent with fetch traffic, not L2. **W-19: the I-clear removed**
+(the fixup is inlined since W-17 — no I-clear needed anywhere).
+
+Also noted: jump.sh's timing ladder (t=5s.../ssh-gone timestamps) is
+useful — stop piping it through `tail`; the W-18 ladder showed ssh-gone
+@ t=35s (the earliest jump yet).
+
 **The correlation re-scan (perfect, 20+ runs):**
 | Kernel era | Smoke test (UART3, MMU-off) | Pre-fixup CIPA | Result |
 | W-4/W-5 (session-6) | absent | absent | PASSED (126/171) |
