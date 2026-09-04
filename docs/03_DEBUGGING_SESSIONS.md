@@ -1875,3 +1875,35 @@ and __pv_phys_pfn_offset == 0xa0000. bc[10] = the retry count, marker
 (the DCCIMVAC triple, the literal-delta flushes, the volatile re-read,
 the want-compare, the loop). kernel-patches regenerated, git apply
 --check clean.
+
+### Run W-32 (2026-09-05): build #104 — the self-healing block (in
+### adjust_lowmem_bounds) NEVER RAN; the death moved UPSTREAM to the
+### early_mm_init/early_paging_init window
+
+Build: kernel #104 (the W-32 self-healing block placed in
+adjust_lowmem_bounds). Run: PAYLOAD_MODE=--dmaquiet ./jump.sh zImage,
+hands-off. Jump ~t=25s; reboot at 2 min 04 s (user).
+
+Readbacks (nonce 0xc8cb145b fresh): bc[1] = 133 (setup.c parse_early_
+param-done pair — mirror0 = 0x46 = no mmu.c triple ✓); **bc[10] =
+0xc0de0002 — the W-32 block's retry count NEVER landed (the block never
+ran)**; ring count 732 — the console ends right after the earlycon
+registration lines, NO PB-ADJ print. bc[16]/bc[17] = 0/0 (DISPC ✓),
+bc[18] = 0xa2500000 (this run's placement), fixup markers fresh.
+
+**Death window: setup.c:1171 (pb_bc 133) → adjust_lowmem_bounds' block
+— i.e. early_mm_init(mdesc) (setup.c:1174) = build_mem_type_table +
+early_paging_init — the FIRST major pv consumer after parse_early_param.
+With stale pv, early_paging_init (the pv/table-relocation function) is
+the prime suspect for a silent page-table wedge.** The layout shift
+(#104, -2.5 KB) moved the dice: this run the stale-pv regime killed the
+boot BEFORE the block (which sat downstream in adjust_lowmem_bounds).
+
+**FIX (build #105, W-32b): the self-healing block MOVED to main.c
+start_kernel, right after pb_bc(141) (first printk) — the C world's
+earliest point, BEFORE setup_arch consumes pv anywhere. Literal PA
+delta, volatile re-reads, 8 retries, marker 163 + bc[10] = tries. The
+redundant mmu.c copy removed (its bc[10] write blurred the signal).
+Packed 5,572,313 B; shipped vmlinux objdump-verified (DCCIMVAC triple +
+literal-delta flushes + ldrd re-read + cmpeq + loop + marker 163,
+inside start_kernel). kernel-patches regenerated, apply-check clean.**
