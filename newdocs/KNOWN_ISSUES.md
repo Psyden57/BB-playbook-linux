@@ -133,3 +133,35 @@ are fine, the strip is dead weight (and the non-cacheable walk it forces is
 slower than a WBWA walk-cache-able one would be). If the boot wedges at M=1
 without it, the strip is load-bearing and the D2 decision (CPU1 in reset
 vs parked alive) needs revisiting for SMP coherence reasons.
+
+## 10. The MMU-off delivery paradox (session 8 — mechanism UNKNOWN)
+
+The called `__fixup_pv_table` never executed a single instruction on the
+zImage path: not via `bl`, not via a computed `blx` with a
+post-mortem-verified target (bc[13]), invariant to L2 on/off, SCTLR.I,
+probe presence, smoke test, and CIPA ops — with byte-correct DRAM
+(W-13's dump) and the fixup's first I-cache line shared with
+`__vet_atags`'s executed tail. Bypassed by INLINING the fixup into
+head.S's streamed region (W-17). The inlined copy is itself
+build-luck-dependent (#95/#96 worked untouched; #97's pv went dead until
+W-24's C-world invalidate). RULE: never CALL MMU-off helpers on this
+path — INLINE them. Mechanism: open.
+
+## 11. D-side stale lines after the decompressor (session 8 — mechanism
+identified, fix in place, generalization untested)
+
+The decompressor writes the image cached; its cache_clean_flush cleans
+L1→L2 leaving VALID L2 lines with image-era content. The kernel's
+MMU-off SO stores (the inline pv fixup) reach DRAM (post-mortem-verified,
+W-23) but the C world's CACHED reads hit the stale lines (pv_off=0,
+W-21/22/23). The head.S L2-only CIPA did not cure it; the C-world
+dual-level invalidate (L1 DCCIMVAC by VA + the monitor SMC 0x101 L2
+clean+inv by PA — the W-24 block in map_lowmem) DOES (W-24's console =
+all-correct pv values, no BUG). OPEN: the fix currently covers only the
+two pv variables — if more decompressor-era stale D-side lines bite
+(any structure the fixup or early C writes that the C world reads
+cached), extend the W-24 block or consider a wider L2 invalidate.
+NOTE: the earlier "SO stores only dirty the L2 / QNX discards them"
+model (the W-8-era pbmark CIPA rationale) is FALSIFIED for the bc page
+(W-16: bc markers survive with no flush); the pbmark CIPA machinery is
+dead weight there.

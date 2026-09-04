@@ -104,7 +104,10 @@ Scatter test: pages at 16 MB stride in 0x85–0xA1 survive full jump+WDT2+QNX-re
 2. **QNX IPL/Startup** → initializes DRAM, peripherals, starts procnto
 3. **QNX Userspace** (runlevel 2) → SSH/RNDIS up (~2-3 min)
 4. **Our Payload** (qnx2linux) → kexec jump to Linux
-5. **Linux zImage** → decompresses to 0x80008000, enables MMU, starts kernel
+5. **Linux zImage** → decompresses to 0xa0008000 *(CORRECTION
+   2026-09-04, session 8: was "0x80008000" — AUTO_ZRELADDR's 128 MB
+   bucket for all our buffer placements; PHYS_OFFSET = 0xa0000000, the
+   DTS bank must match — docs/03 run W-21)*, enables MMU, starts kernel
 6. **WDT2** (if not kicked) → resets board **60 s** after the last kick (user-timed
    exactly, 2026-09-01; the "15 s" in older docs = QNX's wdtkick PERIOD, not the window)
 7. **QNX Reboot** → breadcrumbs + rings survive for forensics

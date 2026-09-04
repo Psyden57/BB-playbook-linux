@@ -293,6 +293,10 @@ Kernel's earlyprintk banner flush (CON_PRINTBUFFER, parse_early_param) runs **BE
 
 **zImage is the path**:
 - Decompresses to zreladdr 0x80008000
+  *(CORRECTION 2026-09-04, session 8: AUTO_ZRELADDR computes zreladdr =
+  (the relocated decompressor's PC & 0xF8000000) + 0x8000 = **0xa0008000**
+  for every buffer placement we use — PHYS_OFFSET = 0xa0000000, and the
+  DTS bank must match it. See docs/03 run W-21.)*
 - PHYS_OFFSET = 0x80000000
 - Everything consistent
 - Reached bc=119/122 (decompressor works; kernel enters)

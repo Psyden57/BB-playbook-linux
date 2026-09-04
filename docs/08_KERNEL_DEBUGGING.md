@@ -1,5 +1,18 @@
 # Kernel Debugging Guide
 
+## 2026-09-04 CORRECTION (session 8 — applies to EVERY zreladdr/0x80008000
+mention below)
+AUTO_ZRELADDR computes zreladdr = (the relocated decompressor's PC &
+0xF8000000) + 0x8000 = **0xa0008000** for every buffer placement we use
+(the 0xa0-0xa2 bucket) — PHYS_OFFSET = **0xa0000000**, and the DTS bank
+must be **0xa0000000 + 0x20000000** or the kernel sits outside its own
+memory (the bc=127/146 wedge — docs/03 runs W-17→W-24). The
+"PHYS_OFFSET=0x80000000" and "0x80008000" values below are STALE. Also
+session 8: the pv fixup is INLINED into head.S (the called fixup never
+executed — the delivery paradox), the pv variables need the W-24
+dual-level invalidate in map_lowmem, and the ladder runs 143/144 (the
+inline fixup) → 145/146/147 (the remap) → 127/126/125/129/128 → 134/133.
+
 ## 2026-09-02 NIGHT STATUS UPDATE (session 6 — SUPERSEDES the section below)
 **The console WORKS** (cacheable DRAM rings + batched SMC 0x101 flushes +
 PB-PANIC) and the kernel boots cacheable to **bc=127 (paging_init:
