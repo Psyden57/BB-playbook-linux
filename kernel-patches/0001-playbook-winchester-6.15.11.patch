@@ -1526,8 +1526,8 @@
  dtb-$(CONFIG_SOC_AM33XX) += \
 
 --- /dev/null	2026-09-03 12:17:21.613494170 +0000
-+++ b/arch/arm/boot/dts/ti/omap/omap4-winchester.dts	2026-09-03 02:19:57.270631175 +0000
-@@ -0,0 +1,113 @@
++++ b/arch/arm/boot/dts/ti/omap/omap4-winchester.dts	2026-09-04 12:02:36.388387867 +0000
+@@ -0,0 +1,120 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * BlackBerry PlayBook (RIM "winchester", OMAP4430 ES2.2 HS).
@@ -1554,16 +1554,23 @@
 +		bootargs = "console=ttyO2,115200n8 earlyprintk keep_bootcon ignore_loglevel maxcpus=1";
 +	};
 +
-+	/* 2026-09-03: the bank MUST match the payload's load placement
-+	 * (qnx2linux.c want[] = 0xA4000000; head.S derives PHYS_OFFSET from
-+	 * the load address). The old 0x80000000+1GB bank put 576 MB of
-+	 * memblock BELOW the kernel's PHYS_OFFSET — unlinear-mappable, and
-+	 * bottom-up allocs (dram_sync steal, CMA) landing there (0xa1000000)
-+	 * BUG'd dma_contiguous_remap with "in user region" (the bc=127 wall).
-+	 * 448 MB = 0xa4000000..0xbfffffff. */
-+	memory@a4000000 {
++	/* 2026-09-03: the bank MUST match the kernel's PHYS_OFFSET
++	 * (head.S derives PHYS_OFFSET from the load address). The old
++	 * 0x80000000+1GB bank put 576 MB of memblock BELOW the kernel's
++	 * PHYS_OFFSET — unlinear-mappable, and bottom-up allocs (dram_sync
++	 * steal, CMA) landing there (0xa1000000) BUG'd
++	 * dma_contiguous_remap with "in user region" (the bc=127 wall).
++	 * 2026-09-04 (W-21): the ZIMAGE path decompresses at
++	 * zreladdr = (relocated decompressor PC & 0xF8000000) + 0x8000 =
++	 * 0xa0008000 for every buffer placement we use (all in the
++	 * 0xa0-0xa2 bucket) → PHYS_OFFSET = 0xa0000000. The baked bank
++	 * MUST be 0xa0000000+512 MB or the kernel (at 0xa0008000) sits
++	 * OUTSIDE its own memory (the 127 wedge returned on the zImage
++	 * path: W-17/18/19). The Image path uses the payload's
++	 * fdt_patch_memory'd DTB copy (bank = kern_phys) and is unaffected. */
++	memory@a0000000 {
 +		device_type = "memory";
-+		reg = <0xa4000000 0x1c000000>;
++		reg = <0xa0000000 0x20000000>;
 +	};
 +
 +	reserved-memory {
