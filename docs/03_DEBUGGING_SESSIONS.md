@@ -762,6 +762,49 @@ pv table in DRAM.
 3. Re-run the SAME Image-path binary for a control (it died at 171 — the
    fixup_pv death is zImage-specific so far).
 
+### Run W-8 (2026-09-04): first run with CIPA-flushed markers — the fixup_pv death is CONFIRMED cleanly
+
+PAYLOAD_MODE=--l2on ./jump.sh zImage (kernel #87: pbmark/pbmark3 CIPA-flush
+every marker; kern_phys 0xa1500000 this run). SSH died t=70s. Readbacks:
+- bc[1] = **130** (post-__fixup_smp, FLUSHED — trustworthy) with nonce
+  0xcbca5e14 fresh.
+- **No 131** (post-__fixup_pv_table, also flushed, absent) → with the
+  eviction-luck variable eliminated, the death between head.S:248 and :252
+  = **inside `__fixup_pv_table` is now cleanly confirmed**, consistent with
+  W-6/W-7.
+- **bc[2] = 0x3E7 for the THIRD consecutive zImage run** (W-6/W-7/W-8; the
+  Image-path runs showed other values). zImage-correlation holds.
+- bc[3]=0xa1500000 (buffer/kern base), bc[4]=0xa1b56570 (the probe's r2
+  echo; NOTE — the dtb-phys arithmetic has not closed exactly in ANY zImage
+  run; session 8 should re-derive it with the objdump-assisted build info
+  rather than hand-math), bc[5]=0xe1a00000 (zImage word 0 ✓), bc[6]=
+  0xedfe0dd0 (the probe's DTB magic — see the caveat below), bc[8]=1/
+  bc[9]=0x111, bc[12]=0xa1b56570 (r7 chain held), ring1 = smoke only.
+- CAVEAT on bc[6]/140/141: the phys2virt instrumentation stores (bc[6]=r8,
+  markers 140/141) have NO CIPA flush (r0+ip budget) — they are L2-dirty
+  and can be discarded by QNX's L2 re-init, exactly like the pre-W-8
+  markers. So bc[6] still showing the probe's magic does NOT prove the
+  fixup never ran its first store — it proves the store's value did not
+  survive to DRAM. The reliable discrimination stays 130-vs-131 (both
+  flushed): the death is inside the fixup.
+- Combined with W-7's post-mortem (fixup bytes intact in DRAM, the bl
+  intact, __pv_offset = 0): the boot dies inside a function whose code is
+  verifiably intact and whose bl is verifiably intact. Session 8's task.
+
+**Session-8 candidate experiments** (one run each):
+1. Add the CIPA flush (pbmark3-style, fire-and-forget) to the phys2virt
+   instrumentation stores — makes 140/141/bc[6] trustworthy.
+2. Order swap: call __fixup_pv_table BEFORE __fixup_smp for one run —
+   positional/ordering test (does the SECOND call site die, or does
+   fixup_pv die wherever it is?).
+3. Inline-test: temporarily copy the fixup's first stores into head.S
+   directly (head.o region, proven stores) — isolates "the function" from
+   "the stores".
+4. The W-8 arithmetic check: re-derive bc[4] (dtb_phys) exactly from the
+   build (zImage size, padding, kern_phys) using the arm-linux-objdump —
+   if the payload's computed dtb_phys ≠ the probe's r2 echo, the params
+   block itself is implicated.
+
 ### Run W-1 (2026-09-03): the pin refused the jump — placement made adaptive
 
 PAYLOAD_MODE=--l2on: the payload ABORTED pre-jump exactly as designed —
