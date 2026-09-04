@@ -115,23 +115,25 @@ memcmp-verified copy. The Image-path binary remains the deepest boot
 (bc=171); the zImage path now needs its own diagnosis before it can deliver
 the DTB+full-memory test the era matrix wants.
 
-**Next run** (W-37): build #108. W-36 confirmed the guard (placement
-0xa1600000, no overlap, head.S passed) and instruction-precise
-localization: the death is inside the FIRST 4 volatile stores of the svm
-zeroing at VA 0xdfdfffd4 (164/165/166 never fired) — a 4-word cached
-store to a mapped, free, never-touched-this-boot DRAM page (PA
-0xbfdfffd4, directly below the CMA remap's own pte table at
-0xbfdff000). Build #108 dumps the ACTUAL pmd entry for the target VA
-(bc[19] = pmd_val — valid section descriptor vs zero) before the
-stores, then single stores with markers 167 (store 1) / 168 (stores
-2-4) / 165 / 166 / 151. Interpretation: pmd=0/invalid → map_lowmem
-never mapped that section (mapping bug); pmd valid + death at store 1 →
-the PTW/walk itself wedges (L2/pmd-line class); stores complete but the
-readback ≠ 0 → stores don't stick. bc[16]/bc[17] = DISPC readbacks,
-bc[18] = placement, bc[19] = pmd value (W-37+). Hands-off protocol.
-Marker-number audit: setup.c's pb_bc(130-136) pairs COLLIDE with mmu.c's
-PB_MMU_BC numbers — discriminate via the mirror channel. See docs/03
-W-25..W-36 and SESSION-HANDOFF/BOOTSTRAP_SESSION_9.md.
+**Next run** (W-38): build #109 — the pmd-corruption-pattern dump. W-37
+caught the wild write red-handed: the pmd for VA 0xdfdfffd4 (the svm
+memset target) = 0xbfc1141e = a TABLE descriptor pointing at
+0xbfc11400 — FREE, never-allocated, never-written DRAM (memblock's top
+only reached 0xbfdff000). map_lowmem should have written a SECTION desc
+(~0xbfd00XXe). The svm store's PTW walks into untouched DRAM → garbage
+pte → the machine's signature silent wedge. Even bc[1] showed the
+corruption (0xd0000004 = the marker call's own address argument as the
+value; marker 167 never landed). Prime stale source: QNX-era page-table
+content in the swapper_pg_dir lines (PA 0xa0004000-0xa0008000, written
+MMU-off by head.S, PTW reads through the L2). Build #109 dumps 6 pmds
+via the pgd (safe reads, stores skipped this run): bc[19] = VA 0xdfd,
+bc[20] = VA 0xdfc (pair-mate), bc[21] = VA 0xdfe (beyond limit, expect
+0), bc[22] = VA 0xdf8, bc[23] = VA 0xdf4 (inside the CMA VA range),
+bc[24] = VA 0xdf0. Pattern decides: localized wild write vs the
+stale-pgd-line class vs a map_lowmem gap. Marker-number audit: setup.c's
+pb_bc(130-136) pairs COLLIDE with mmu.c's PB_MMU_BC numbers —
+discriminate via the mirror channel. See docs/03 W-25..W-37 and
+SESSION-HANDOFF/BOOTSTRAP_SESSION_9.md.
 
 ## The secure monitor — RE closed (session 7)
 
