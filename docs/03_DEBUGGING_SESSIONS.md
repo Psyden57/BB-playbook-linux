@@ -1268,6 +1268,31 @@ Also noted: jump.sh's timing ladder (t=5s.../ssh-gone timestamps) is
 useful — stop piping it through `tail`; the W-18 ladder showed ssh-gone
 @ t=35s (the earliest jump yet).
 
+### Run W-19 (2026-09-04): I-clear removed — the uncached-fetch theory
+### is dead too; the wedge survives every varied variable
+
+Build: kernel #96 (W-19, commit b8a9c15): the W-14 SCTLR.I clear removed
+(the C world runs cached, I=1). Run: --l2on (probe ran; bc[4]=0xa2758348
+✓). User's timeline: blue-off at 00:23 = the probe's LED chain (the
+--l2on probe, absent in --t3 runs — explains the "different" feel);
+jump ~00:31; C world → wedge within seconds; ~59 s dead → red 01:31 —
+the standard wedge signature.
+
+Readbacks (nonce 0xc8baa8b2 fresh): **bc[1] = 127, bc[2] = 0x17F,
+mirror0 = 0x27F, ring count = 0x491 — BYTE-IDENTICAL to W-17/W-18.**
+The I-clear theory is DEAD. The complete invariant list for the 127
+wedge: L2 state (on/off), SCTLR.I (0/1), probe (present/absent), smoke
+test (present/absent), CIPA (present/absent), bl vs blx vs inline.
+mmu.c ladder decoded: PB_MMU_BC(127) = "map_kernel done" (mmu.c:1832) —
+the death is INSIDE dma_contiguous_remap (127 lands, 126 doesn't), in
+the pmd_clear loop → flush_tlb_kernel_range → iotable_init sequence,
+after the correct PB-CMA print. **W-20: markers 145/146/147 on those
+three ops** (pb_bc_put single-channel in dma-mapping.c). The remaining
+structural delta vs the passing era: W-4's Image path crossed this exact
+code with the SAME kernel — no decompressor involved; the zImage path's
+decompressor footprint (dirty lines, its clean/ICIALLU, the state it
+hands over) is the last unexplored delta.
+
 **The correlation re-scan (perfect, 20+ runs):**
 | Kernel era | Smoke test (UART3, MMU-off) | Pre-fixup CIPA | Result |
 | W-4/W-5 (session-6) | absent | absent | PASSED (126/171) |
