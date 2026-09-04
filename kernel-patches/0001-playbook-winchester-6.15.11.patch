@@ -991,7 +991,7 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-04 14:17:48.748387252 +0000
++++ b/arch/arm/mm/mmu.c	2026-09-04 18:51:42.108388153 +0000
 @@ -758,18 +758,27 @@
  	return arm_pte_alloc(pmd, addr, prot, early_alloc);
  }
@@ -1090,7 +1090,7 @@
  }
  #endif
  
-@@ -1250,6 +1295,38 @@
+@@ -1250,6 +1295,68 @@
  
  	arm_lowmem_limit = lowmem_limit;
  
@@ -1105,21 +1105,51 @@
 +	 * in the PB-CMA print; the head.S L2-only CIPA did not cure it).
 +	 * Invalidate BOTH levels for the two pv variables: L1 DCCIMVAC by
 +	 * VA + the monitor's SMC 0x101 L2 clean+inv by PA range (the
-+	 * pb_bc_put-proven primitive). Before the first pv consumer. */
++	 * pb_bc_put-proven primitive). Before the first pv consumer.
++	 *
++	 * PlayBook W-32 (2026-09-05): W-24 is per-run unreliable
++	 * (W-24/25/26 cured; W-27/31/32a stale) because its own __pa()
++	 * CONSUMES the stale pv it repairs — in the stale regime the SMC
++	 * flushes targeted VA-as-PA (a no-op) and pv stayed stale, and the
++	 * C world's __va/__pa C-inlines then compute garbage: the
++	 * deterministic wall at the first pv-consuming allocation (the svm
++	 * memset at W-25/31/32a — __va(0xbfdfffd4)=0xbfdfffd4 unmapped).
++	 * Fix: use the LITERAL PA delta (PA = VA - 0x20000000 for this
++	 * build: PHYS_OFFSET 0xa0000000, PAGE_OFFSET 0xc0000000 — no pv
++	 * dependency), and VERIFY the variables read fresh, retrying the
++	 * invalidate up to 8 times. bc[10] records the retry count. */
 +	{
 +		extern noinline void pb_smc_flush(unsigned long pa,
 +						  unsigned long size);
++		extern noinline void pb_bc_put(unsigned int addr,
++					       unsigned int v);
 +		extern u64 __pv_offset;
 +		extern unsigned long __pv_phys_pfn_offset;
 +		unsigned long va0 = (unsigned long)&__pv_phys_pfn_offset;
 +		unsigned long va1 = (unsigned long)&__pv_offset;
++		const long long pa_delta = -0x20000000LL;
++		const u64 want = 0xffffffffe0000000ULL;
++		volatile u64 *pv_off = (volatile u64 *)&__pv_offset;
++		volatile unsigned long *pv_pfn =
++			(volatile unsigned long *)&__pv_phys_pfn_offset;
++		int tries;
 +
-+		asm volatile("mcr p15, 0, %0, c7, c14, 1" :: "r" (va0 & ~0x1f));
-+		asm volatile("mcr p15, 0, %0, c7, c14, 1" :: "r" (va1 & ~0x1f));
-+		asm volatile("mcr p15, 0, %0, c7, c14, 1" :: "r" ((va1 & ~0x1f) + 32));
-+		dsb(ish);
-+		pb_smc_flush(__pa(va0) & ~0x3f, 128);
-+		pb_smc_flush(__pa(va1) & ~0x3f, 128);
++		for (tries = 0; tries < 8; tries++) {
++			asm volatile("mcr p15, 0, %0, c7, c14, 1"
++				     :: "r" (va0 & ~0x1f));
++			asm volatile("mcr p15, 0, %0, c7, c14, 1"
++				     :: "r" (va1 & ~0x1f));
++			asm volatile("mcr p15, 0, %0, c7, c14, 1"
++				     :: "r" ((va1 & ~0x1f) + 32));
++			dsb(ish);
++			pb_smc_flush((va0 & ~0x3f) + pa_delta, 128);
++			pb_smc_flush((va1 & ~0x3f) + pa_delta, 128);
++			dsb(ish);
++			if (*pv_off == want && *pv_pfn == 0xa0000ul)
++				break;
++		}
++		pb_bc_put(0xD0000004, 162);	/* fix ran; bc[10] = tries */
++		pb_bc_put(0xD0000028, (unsigned int)tries);
 +	}
 +	pr_notice("PB-ADJ: vmalloc_limit=%llx lowmem_limit=%llx\n",
 +		  vmalloc_limit, (u64)arm_lowmem_limit);
@@ -1129,7 +1159,7 @@
  	high_memory = __va(arm_lowmem_limit - 1) + 1;
  
  	if (!memblock_limit)
-@@ -1363,6 +1440,19 @@
+@@ -1363,6 +1470,19 @@
   * Any other function or debugging method which may touch any device _will_
   * crash the kernel.
   */
@@ -1149,7 +1179,7 @@
  static void __init devicemaps_init(const struct machine_desc *mdesc)
  {
  	struct map_desc map;
-@@ -1375,12 +1465,20 @@
+@@ -1375,12 +1495,20 @@
  	vectors = early_alloc(PAGE_SIZE * 2);
  
  	early_trap_init(vectors);
@@ -1171,7 +1201,7 @@
  
  	if (__atags_pointer) {
  		/* create a read-only mapping of the device tree */
-@@ -1445,10 +1543,16 @@
+@@ -1445,10 +1573,16 @@
  		mdesc->map_io();
  	else
  		debug_ll_io_init();
@@ -1188,7 +1218,7 @@
  
  	/*
  	 * Finally flush the caches and tlb to ensure that we're in a
-@@ -1457,10 +1561,13 @@
+@@ -1457,10 +1591,13 @@
  	 * back.  After this point, we can start to touch devices again.
  	 */
  	local_flush_tlb_all();
@@ -1203,7 +1233,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1872,9 @@
+@@ -1765,7 +1902,9 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1213,7 +1243,7 @@
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +1882,13 @@
+@@ -1773,9 +1912,13 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1227,7 +1257,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +1898,7 @@
+@@ -1785,6 +1928,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();

@@ -1829,3 +1829,49 @@ all had swipes/taps at varying times). A controlled A/B (hands-off vs
 swipe) on the current build is the next cheapest science; the touch
 controller (I2C) and power-button (PMIC paths) are candidate
 perturbation sources the user themselves flagged.
+
+### Run W-32a (2026-09-05): hands-off baseline — THE WALL REPRODUCED
+### DETERMINISTICALLY; the root cause identified: stale-pv __va/__pa wedges
+
+Build: kernel #103 unchanged. USER DID NOTHING (no swipe, no tap, no
+heartbeat) — the controlled baseline.
+
+Readbacks (nonce 0xcbfb1173 fresh): **bc[1] = 161, bc[13] = 0xbfdfffd4,
+ring count 1137 — byte-identical to W-31** (the svm memset death),
+mirror0 = 0x27F, bc[16]/bc[17] = 0/0 (DISPC ✓), **bc[18] = 0xa1600000 —
+a DIFFERENT placement than W-31's 0xa1c00000.**
+
+Conclusions:
+1. **The swipe/tap interactions are EXONERATED** (zero interaction, same
+   death) — the user's W-32 instinct tested and cleared.
+2. **Placement is exonerated for kernel-era deaths** (two different
+   windows, same death; the dying svm at 0xbfdfffd4 is outside both).
+3. **The death is deterministic per state**: same marker, same svm PA,
+   same ring count, twice in a row (W-31, W-32a).
+
+ROOT CAUSE (identified this run): in the pv-STALE regime, the C world's
+__va/__pa C-inlines read the stale __pv_offset variable (0) — NOT the
+patched asm stubs — so __va(0xbfdfffd4) = 0xbfdfffd4 (an UNMAPPED VA:
+between TASK_SIZE and PAGE_OFFSET) and the 44-byte memset wedges.
+Every "wandering" death = the first pv-consuming allocation of the
+stale regime (W-25 memblock_alloc internals, W-31/32a the split memset;
+W-26/27/29 = earlier pv-consumer manifestations). The randomness is
+ONLY whether pv reads stale (per-run L2 luck).
+
+AND THE W-24 FIX'S FLAW: its own `__pa(va0)` consumed the stale pv it
+was repairing — in the stale regime the SMC 0x101 flushes targeted
+VA-as-PA (no-op on the wrong address) — the fix could never cure the
+regime it exists for. It "worked" in W-24/25/26 only because those runs
+were already fresh (the flush was a harmless no-op on the right PA).
+
+### Build #104 (W-32): the self-healing pv invalidate
+
+The W-24 block replaced: the SMC flushes now use the LITERAL PA delta
+(PA = VA - 0x20000000 for this build — no pv dependency), the pv
+variables are re-read via volatile casts, and the invalidate+flush
+sequence RETRIES up to 8 times until __pv_offset == 0xffffffffe0000000
+and __pv_phys_pfn_offset == 0xa0000. bc[10] = the retry count, marker
+162 = the block ran. Packed 5,568,961 B; shipped vmlinux objdump-verified
+(the DCCIMVAC triple, the literal-delta flushes, the volatile re-read,
+the want-compare, the loop). kernel-patches regenerated, git apply
+--check clean.
