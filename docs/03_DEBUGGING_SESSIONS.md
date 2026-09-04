@@ -1116,3 +1116,31 @@ Readbacks (nonce 0xcb2a8a4a fresh):
   written ONLY by the fixup (removed from the inline block), so it
   discriminates delivery (bc[6]=0xa0000000 = the fixup executed
   instruction 3).
+
+### Run W-14 (2026-09-04): SCTLR.I clear — the I-fetch mechanism is
+### EXONERATED; the smoke-test correlation emerges
+
+Build: kernel #92 (W-14, commit b97d350): SCTLR.I cleared (mrc/bic/mcr +
+dsb + isb) right before the blx; bc[6] removed from the inline block
+(now the fixup's own store — delivery-discriminative). Run: --t3 L2-off.
+
+Readbacks (nonce 0xca4a92f6 fresh): bc[1]=142, **bc[6]=0 — the fixup's
+str r8 (now its exclusive writer) DID NOT EXECUTE even with I=0
+fetches** — the I-cache mechanism is exonerated. bc[7]=residue (no
+sentinel, consistent); bc[13]=0xa00088e4 (target tracked the build ✓);
+bc[12]=0xa13570f0 — **closure anomaly: computed dtb_phys = 0xa12f70f0
+(buffer 0xa0d00000 → kern_off 0x100000 → load 0xa0e08000 + padded
+0x54f0f0) — a +0x60000 delta with NO identified cause; the payload log
+was unreachable this run; bc[12]'s chain value needs the payload's
+kern_off print to resolve**. Ring smoke-only; mirror0 normal.
+
+**The correlation re-scan (perfect, 20+ runs):**
+| Kernel era | Smoke test (UART3, MMU-off) | Pre-fixup CIPA | Result |
+| W-4/W-5 (session-6) | absent | absent | PASSED (126/171) |
+| runs 23-32 (session-5/6) | absent | absent | PASSED (8+, died at 171) |
+| W-6..W-14 (session-7+) | present | present (W-8+) | DIED at the fixup, 10/10 |
+The smoke test — ~40 UART3 device accesses (senduart + busyuart polls,
+MMU off) in the streamed region — is the ONLY invariant separating
+passing from dying runs (the CIPA correlation is imperfect: W-6, kernel
+#85, had no CIPA and still died). **W-15: smoke test disabled** (markers
+kept; one variable).
