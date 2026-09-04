@@ -1907,3 +1907,43 @@ redundant mmu.c copy removed (its bc[10] write blurred the signal).
 Packed 5,572,313 B; shipped vmlinux objdump-verified (DCCIMVAC triple +
 literal-delta flushes + ldrd re-read + cmpeq + loop + marker 163,
 inside start_kernel). kernel-patches regenerated, apply-check clean.**
+
+### Run W-33 (2026-09-05): build #105 — the pre-setup_arch invalidate+verify
+### block FAILED 8/8; the clean-step poison identified; W-32c = direct store
+
+Build: kernel #105. Run: PAYLOAD_MODE=--dmaquiet ./jump.sh zImage,
+hands-off. Jump ~t=20s (SSH gone t=20s); reboot at 1:58 (user).
+
+Readbacks (nonce 0xcbbb1763 fresh): bc[1] = 161 — **the svm memset wall
+again, but this run the boot PASSED early_paging_init** (it reached
+PB-CMA!), bc[13] = 0xbfdfffd4, bc[18] = 0xa1200000, bc[16]/bc[17] = 0/0.
+Ring 1223: **"PB-ADJ vmalloc_limit=30000000 lowmem_limit=0" twice +
+"PB-CMA ... pv_off=0 pfn=0" — pv STILL STALE.** The self-healing
+invalidate+flush+verify loop ran (before setup_arch) and did NOT cure
+the regime — 8/8 failures (the retry count was lost to the parse-era
+bc[10] overwrite — slot mistake; moved to bc[19]).
+
+ROOT CAUSE OF THE FAILURE (identified): SMC 0x101 = CLEAN+inv by PA —
+**the clean step writes the STALE L2 line back to DRAM, poisoning the
+fixup's correct DRAM copy on the very first retry.** After that, every
+refetch (L1/L2/DRAM) is stale forever. Invalidate-only by PA (0x772)
+has no monitor service.
+
+WHY THE REGIME EXISTS AT ALL (the per-run coin flip): the decompressor
+writes the image cached (L2 lines = pre-fixup placeholder content); the
+fixup's MMU-off SO stores bypass the L2 (DRAM = correct, L2 = stale);
+the C world's first pv read HITS the stale L2 line if it survived the
+~10 MB of image streaming (eviction luck), else refetches fresh DRAM.
+Once read stale, the value lives in L1 and the stale L2 line persists.
+
+### Build #106 (W-32c): direct overwrite — no cache maintenance against
+### the stale line at all
+
+The block now STORES the build-time constants directly (offset
+0xffffffffe0000000, pfn 0xa0000 — identical to what the fixup computes,
+bc[6]-verified fresh every run), then DCCIMVACs the two lines: the clean
+carries the CORRECT value through the L2C, overwriting the stale L2
+line. No SMC, no poisoning possible. 8 retries retained; marker 163;
+tries → bc[19] (0x9000004C, read via memdump3 90000040 0x20). Packed
+5,571,801 B; shipped vmlinux verified (DCCIMVAC triple + cmpeq + 163 in
+start_kernel). kernel-patches regenerated, apply-check clean.

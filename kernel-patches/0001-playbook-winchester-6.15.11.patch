@@ -1226,7 +1226,7 @@
  	__flush_dcache_folio(NULL, page_folio(empty_zero_page));
 
 --- a/init/main.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/init/main.c	2026-09-04 19:04:19.940387907 +0000
++++ b/init/main.c	2026-09-04 19:16:48.756387757 +0000
 @@ -86,6 +86,7 @@
  #include <linux/sched/clock.h>
  #include <linux/sched/task.h>
@@ -1417,7 +1417,7 @@
  
  	local_irq_disable();
  	early_boot_irqs_disabled = true;
-@@ -913,9 +1058,59 @@
+@@ -913,9 +1058,65 @@
  	 * enable them.
  	 */
  	boot_cpu_init();
@@ -1425,23 +1425,29 @@
  	page_address_init();
  	pr_notice("%s", linux_banner);
 +	pb_bc(141);			/* first printk done */
-+	/* PlayBook W-32b (2026-09-05): the self-healing pv invalidate moved
-+	 * HERE from adjust_lowmem_bounds (mmu.c) — W-32's boot died in the
-+	 * early_mm_init/early_paging_init window (setup.c:1174), the first
-+	 * big pv consumer, BEFORE the block ever ran (bc[10] never took the
-+	 * retry count, no PB-ADJ print). This is the C world's earliest
-+	 * point, before setup_arch consumes pv anywhere. Literal PA delta
-+	 * (PA = VA - 0x20000000: PHYS_OFFSET 0xa0000000, PAGE_OFFSET
-+	 * 0xc0000000 — no pv dependency), volatile re-reads, up to 8
-+	 * retries. bc[10] = retry count, marker 142 = the block ran. */
++	/* PlayBook W-32b/c (2026-09-05): the pv fixup runs MMU-off (head.S
++	 * inline, SO stores bypass the L2) and reaches DRAM, but the C
++	 * world's cached reads can hit the decompressor-era stale L2 line
++	 * (per-run eviction luck: W-21/27/31/32a/33 stale, W-24/25/26
++	 * fresh). Stale __pv_offset breaks EVERY C-world __va/__pa inline
++	 * (the deterministic early-C walls). W-32's invalidate+flush+verify
++	 * FAILED 8/8 (W-33): SMC 0x101 is CLEAN+inv — its clean step wrote
++	 * the stale L2 line back to DRAM, poisoning the only good copy.
++	 * W-32c: OVERWRITE the variables with the build-time constants
++	 * (PHYS_OFFSET 0xa0000000 / PAGE_OFFSET 0xc0000000 → offset
++	 * 0xffffffffe0000000, pfn 0xa0000 — no pv dependency, same value
++	 * the fixup computes, bc[6]-verified), then DCCIMVAC the lines —
++	 * the clean carries the CORRECT value through the L2C, overwriting
++	 * the stale L2 line. No invalidate-only-by-PA service exists on
++	 * this monitor. bc[19] (0x9000004C) = retry count (bc[10] is
++	 * overwritten later by the parse-era markers). */
 +	{
-+		extern noinline void pb_smc_flush(unsigned long pa,
-+						  unsigned long size);
++		extern noinline void pb_bc_put(unsigned int addr,
++					       unsigned int v);
 +		extern u64 __pv_offset;
 +		extern unsigned long __pv_phys_pfn_offset;
 +		unsigned long va0 = (unsigned long)&__pv_phys_pfn_offset;
 +		unsigned long va1 = (unsigned long)&__pv_offset;
-+		const long long pa_delta = -0x20000000LL;
 +		const u64 want = 0xffffffffe0000000ULL;
 +		volatile u64 *pv_off = (volatile u64 *)&__pv_offset;
 +		volatile unsigned long *pv_pfn =
@@ -1449,6 +1455,9 @@
 +		int tries;
 +
 +		for (tries = 0; tries < 8; tries++) {
++			*pv_off = want;
++			*pv_pfn = 0xa0000ul;
++			dsb(ish);
 +			asm volatile("mcr p15, 0, %0, c7, c14, 1"
 +				     :: "r" (va0 & ~0x1f));
 +			asm volatile("mcr p15, 0, %0, c7, c14, 1"
@@ -1456,14 +1465,11 @@
 +			asm volatile("mcr p15, 0, %0, c7, c14, 1"
 +				     :: "r" ((va1 & ~0x1f) + 32));
 +			dsb(ish);
-+			pb_smc_flush((va0 & ~0x3f) + pa_delta, 128);
-+			pb_smc_flush((va1 & ~0x3f) + pa_delta, 128);
-+			dsb(ish);
 +			if (*pv_off == want && *pv_pfn == 0xa0000ul)
 +				break;
 +		}
-+		pb_bc_put(0xD0000004, 163);	/* block ran; bc[10] = tries */
-+		pb_bc_put(0xD0000028, (unsigned int)tries);
++		pb_bc_put(0xD0000004, 163);	/* block ran; bc[19] = tries */
++		pb_bc_put(0xD000004C, (unsigned int)tries);
 +	}
  	setup_arch(&command_line);
 +	/* PlayBook kexec diagnostic: bc + LED on (FAN5702 EN high).
@@ -1477,7 +1483,7 @@
  	/* Static keys and static calls are needed by LSMs */
  	jump_label_init();
  	static_call_init();
-@@ -1032,6 +1227,7 @@
+@@ -1032,6 +1233,7 @@
  	 * this. But we do want output early, in case something goes wrong.
  	 */
  	console_init();
@@ -1485,7 +1491,7 @@
  	if (panic_later)
  		panic("Too many boot %s vars at `%s'", panic_later,
  		      panic_param);
-@@ -1088,12 +1284,18 @@
+@@ -1088,12 +1290,18 @@
  	pidfs_init();
  	cpuset_init();
  	cgroup_init();
@@ -1504,7 +1510,7 @@
  
  	/* Do the rest non-__init'ed, we're now alive */
  	rest_init();
-@@ -1315,8 +1517,21 @@
+@@ -1315,8 +1523,21 @@
  		   NULL, ignore_unknown_bootoption);
  
  	trace_initcall_level(initcall_level_names[level]);
@@ -1527,7 +1533,7 @@
  }
  
  static void __init do_initcalls(void)
-@@ -1476,6 +1691,8 @@
+@@ -1476,6 +1697,8 @@
  	numa_default_policy();
  
  	rcu_end_inkernel_boot();
@@ -1536,7 +1542,7 @@
  
  	do_sysctl_args();
  
-@@ -1539,6 +1756,7 @@
+@@ -1539,6 +1762,7 @@
  {
  	/* Now the scheduler is fully set up and can do blocking allocations */
  	gfp_allowed_mask = __GFP_BITS_MASK;
@@ -1544,7 +1550,7 @@
  
  	/*
  	 * init can allocate pages on any node
-@@ -1565,6 +1783,7 @@
+@@ -1565,6 +1789,7 @@
  	page_alloc_init_late();
  
  	do_basic_setup();
