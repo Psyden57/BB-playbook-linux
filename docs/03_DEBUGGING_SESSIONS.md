@@ -930,3 +930,55 @@ Updated session-8 candidate list:
 3. Order-swap fixup_pv/fixup_smp (W-8 candidate 2).
 4. Add an IMMEDIATE 0xa0088884-region dump to jump.sh's readback burst
    (race the trample like W-7 did).
+
+### Run W-10 (2026-09-04): L2-off A/B — the L2 variable is EXONERATED;
+### bc[2]=0x3E7 is probe+zImage-correlated; chain closed exactly again
+
+Build: kernel #88 unchanged from W-9. Run: PAYLOAD_MODE=--t3 ./jump.sh
+zImage (the 0x102 mon_call disable path — the untested era-matrix cell:
+CACHEABLE kernel + L2 OFF). User hard-reset (power-hold) pre-run for clean
+residue. Run signature: >3 min to reboot (vs ~1 min in W-6/8/9 — LED
+timings pending from video). jump.sh's cycle exceeded the caller's 300 s
+timeout (killed during wait-for-reboot; readbacks done manually — jump.sh
+line 66 redeploys memdump3 post-reboot, which the killed process skipped).
+
+Readbacks (nonce 0xcbaa76d5 fresh vs W-9's 0xcb9a6f11):
+- bc[1] = 130 (post-__fixup_smp) — 131 absent. **THE FIXUP STILL NEVER
+  ENTERS WITH L2 OFF.** The L2-on variable is EXONERATED as the cause of
+  the pre-fixup death; the W-9 era-matrix inference ("L2-on-correlated")
+  is WRONG. Runs 23-32 passed the fixup for a different reason — their
+  UNCACHED (C/B/S-stripped) kernel build is the leading remaining delta.
+- **bc[2] = 0x00000000 — NOT 0x3E7.** First zImage run without it.
+  Correlation update: runs 23-32 (probe + zImage + L2 OFF) showed 0x3E7;
+  W-6/7/8/9 (probe + zImage + L2 ON) showed 0x3E7; W-10 (--t3: NO probe)
+  shows 0. **bc[2]=0x3E7 is PROBE+zImage-correlated** (L2-independent);
+  the writer remains unidentified but now sits in the probe→kernel window.
+- bc[3]=0xa1300000 (buffer base); bc[4]=0x111 (payload's PL310 latency
+  readback — qnx2linux.c:1082-1087, no probe this run); bc[5]=0x4c424b44
+  (BC_MAGIC2 — no probe, no zImage-word echo); **bc[6]=0** (no probe to
+  write the magic; the fixup's r8 store absent — again); bc[7]=0x410000c4
+  (residue — NOTE: survived the user's power-hold reset, see below);
+  bc[8]=1/bc[9]=0x08a08111 (payload PL310 readbacks); ring = not captured
+  by the killed jump.sh (expected smoke-only; not re-read this run).
+- **bc[12] = 0xa1957028 — closes EXACTLY for this run**: buffer
+  0xa1300000 → kern_off 0x100000 → load 0xa1408000 + padded 0x54f028
+  (packed 0x54f021 + 7) = 0xa1957028. The cont's r7 chain held. (W-9's
+  0xa1557028 closes identically with buffer 0xa1000000 — kern_off 0.)
+- bc[10]=1 / bc[11]=0xC0DE0010: **W-4-era residue SURVIVED the power-hold
+  hard reset** → the power-hold is a WARM reset (DRAM survives), NOT a
+  residue cleaner. Only the TWL6030 full power-off (127 s PMIC watchdog)
+  loses DRAM. (Corrects the W-9 record's "useful pre-run for clean
+  residue" note.)
+- Fixup region 0xa0088884: zeroed again (trample won; SSH returned ~3 min
+  post-reset).
+
+**Standing picture after W-10**: the pre-fixup death survives BOTH L2
+states on the CACHEABLE #88 kernel. The variable that separates the
+passing runs (23-32) from the dying ones (W-6..W-10) is now the KERNEL
+BUILD itself — the session-6 UNCACHED (C/B/S-stripped) build vs the
+current cacheable build — plus everything the prelude gained since (the
+UART smoke test, ring maps, pbmark machinery, instrumentation). Next
+discriminators: (a) inline-test — copy the fixup's first stores into
+head.S directly after pbmark 130 (pins whether even head.S-adjacent
+stores die, isolating the bl/call); (b) resurrect the C/B/S strip on
+kernel #88 (if the fixup passes, bisect the strip vs the prelude growth).

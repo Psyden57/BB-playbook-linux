@@ -23,14 +23,21 @@ jumped from QNX. The boot currently:
    "dies inside the fixup" reading is superseded. See docs/03 run W-9.
    **The era-matrix sharpening**: runs 23-32 (zImage, UNCACHED, L2 OFF)
    passed the fixup 8+ times; W-6/7/8/9 (zImage, CACHEABLE, L2 ON) died
-   there 4/4. The untested isolation cell — CACHEABLE + L2 OFF — is the
-   next run: `PAYLOAD_MODE=--t3 ./jump.sh zImage` (the proven 0x102
-   disable; no code changes). Also closed this session: the dtb-phys
+   there 4/4. **W-10 (2026-09-04, `--t3`, kernel #88, L2 OFF via 0x102):
+   the fixup STILL never enters — the L2 variable is EXONERATED**; the
+   remaining discriminator is the KERNEL BUILD (session-6 UNCACHED/
+   C/B/S-stripped builds passed; the current cacheable build dies 5/5).
+   Also closed this session: the dtb-phys
    arithmetic (params block exonerated — bc[3] is the BUFFER base,
-   qnx2linux.c:935; both W-6 and W-8 close exactly), the bc[10]/bc[11]
+   qnx2linux.c:935; W-6, W-8 and W-10 all close exactly), the bc[10]/bc[11]
    writers (parse_early_param + bss-bounds dumps — W-9's values are
-   W-4-era residue), and the ring2 wild-index theory for bc[2]=0x3E7
-   (index sane; bc[2]'s writer still unidentified, 4/4 zImage runs).
+   W-4-era residue, which SURVIVES the power-hold "hard reset" — it is a
+   warm reset, DRAM persists), the ring2 wild-index theory for bc[2]=0x3E7
+   (index sane), and bc[2]'s correlation: **0x3E7 needs the PROBE**
+   (probe+zImage runs show it with either L2 state; --t3 shows 0).
+   Next runs: (a) inline-test — the fixup's first stores copied into
+   head.S right after pbmark 130; (b) resurrect the C/B/S strip on
+   kernel #88.
 
 ## What was fixed in session 7 (the bc=127 wall)
 
@@ -98,9 +105,10 @@ memcmp-verified copy. The Image-path binary remains the deepest boot
 (bc=171); the zImage path now needs its own diagnosis before it can deliver
 the DTB+full-memory test the era matrix wants.
 
-**Next run** (W-10): `PAYLOAD_MODE=--t3 ./jump.sh zImage` — the CACHEABLE
-kernel with the L2 disabled via the proven 0x102 path (the untested
-era-matrix cell; see "Where the boot stands" #3).
+**Next run** (W-11): inline-test — copy the fixup's first stores into
+head.S directly after pbmark 130 (pins the death inside the pre-entry
+window; isolates the bl/call from the stores), OR resurrect the C/B/S
+strip on kernel #88 (tests the session-6 UNCACHED-build variable).
 
 ## The secure monitor — RE closed (session 7)
 
