@@ -16,9 +16,11 @@ original conversation history.
    bricked this way). The kexec work stays in QNX userland + DRAM and must
    never go near either. Also §1.10 (watchdog), and the README safety model.
 5. [DEVELOPMENT.md](DEVELOPMENT.md) — the daily loop + rules.
-6. The latest `session-notes/session-NN.md` — freshest knowledge.
-7. [contradictions/](contradictions/) — what is genuinely unresolved.
-8. Deep details on demand: `docs/00-08`, `docs/03` (run log), root *.md.
+6. [COMMANDS.md](COMMANDS.md) — the complete command reference (device,
+   debug loop, capstone RE, patch snapshot, git).
+7. The latest `session-notes/session-NN.md` — freshest knowledge.
+8. [contradictions/](contradictions/) — what is genuinely unresolved.
+9. Deep details on demand: `docs/00-08`, `docs/03` (run log), root *.md.
 
 ## What each session must do
 

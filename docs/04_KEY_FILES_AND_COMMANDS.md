@@ -1,3 +1,5 @@
+> **STATUS (2026-09-04):** the LIVE command reference is newdocs/COMMANDS.md — this file remains the deep file-inventory/memory-map tables.
+
 # Key Files Reference
 
 ## kexec/ (Userspace Payload & Tools)
