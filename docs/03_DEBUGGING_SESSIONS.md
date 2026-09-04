@@ -1634,3 +1634,77 @@ the L2-transaction-loss class are now the prime suspects. The
 stack-protector catch (W-26) proves real memory corruption happens; the
 bc/ring channels are evidently just as vulnerable (readbacks could
 themselves be victims — interpret with care).
+
+### Run W-28 (2026-09-05): --dmaquiet v1 — direct MMC2 register access is DEAD
+### (SIGBUS fltno=5 on the first SYSCONFIG read); no jump; the box then FROZE
+
+Build: kernel #103 unchanged; payload + `--dmaquiet` mode v1: softreset MMC2
+(0x480B4000, SYSCONFIG bit1, per omap_hsmmc.c) before bc 53.
+
+Run: PAYLOAD_MODE=--dmaquiet ./jump.sh zImage. The payload died BEFORE the
+jump: "Process qnx2linux terminated SIGBUS code=3 fltno=5 ip=0804a330
+ref=28002010". ip decodes (objdump, shipped binary) to the FIRST MMC2
+register read: `ldr r3, [r0, #16]` = SYSCONFIG @ 0x480B4010 — **the eMMC
+MMCHS registers are NOT NS-accessible from the payload (external-abort /
+secure-filter class, like the PL310 latency write and PRCM writes)**.
+bc[1]=50 (re-verify OK — last marker before the quiesce). No jump; QNX
+alive at first, wdtkick daemon still kicking (no WDT2 reboot — correct).
+
+AFTERMATH (new operational fact): the box then froze COMPLETELY (SSH dead,
+display would not wake) — unlike run 31's PRCM SIGSEGV which left QNX
+healthy. The user power-held it back to life. An external abort on a
+device read can wedge the interconnect even from a "cheap" user-mode
+crash — treat MMCHS-class SIGBUS as device-wedging, not cheap.
+
+### Run W-29 (2026-09-05): --dmaquiet v2 (devb slay) — the jump happened;
+### NEW DEATH POINT: bc[1]=121 (enable_mmu entered, 122 never) with ZERO
+### console output
+
+Build: kernel #103 unchanged; payload --dmaquiet v2: the MMC2 register
+block removed, replaced by a QNX-native `system("slay -f
+devb-mmcsd-winchester")` AFTER the last file read (bc 55; rc → bc[14] =
+0xD1EB0100 = child exit status 1), plus DISPC kill readbacks (bc[7]/
+bc[14] at bc-34 era — NOTE: the probe then overwrote bc[7] with its cache
+id 0x410000c4; the DISPC CONTROL readback is LOST — a slot-collision
+mistake; bc[14] also overwritten by the slay rc. No DISPC data this run.)
+A 64KB stdout buffer prevents post-slay printf from ever reaching the
+eMMC-backed /tmp/jump.log. setvbuf + slay + readbacks all objdump-verified
+in the shipped binary (rule 16).
+
+User-side corroboration: `ls -la /tmp/` and `cat /tmp/jump.log` behaved
+oddly DURING the run — consistent with devb actually dead (eMMC I/O
+gone). The user also notes most/all runs have the BACKLIGHT timed out —
+but backlight-off ≠ scanout-off (docs rule 6): DISPC kept fetching frames
+through every previous run (~150 MB/s DMA reads); its kill is now in
+place every run but UNVERIFIED (the readback was clobbered).
+
+Readbacks (nonce 0xcbbae32f fresh vs pre-jump 0x6a9ae2e9):
+- bc[1] = 121 = **enable_mmu entered (head.S:863 pbmark3 121); 122
+  (turn_mmu_on) never landed.** The boot passed cpt (119), the fixup
+  (143/144/0xe0000000 fresh), and died AT/INSIDE MMU-ENABLE — a point
+  W-25/26/27 all passed to reach the C world. FIRST 121-era death on the
+  zImage path. (121's marker = pbmark3 = the pair channel — bc[2] should
+  be 121|0x100=0x179; it reads 0x3E7 — the mystery wild-write value,
+  probe+zImage-correlated as always — so bc[2] is NOT the pbmark pair
+  this run; either the pair's second store was eaten or the wild writer
+  hit bc[2] after.)
+- ring1 count = 0 — ZERO console chars (W-26: 1473, W-27: 1047):
+  consistent — the death is pre-C-world, before the first banner byte.
+- bc[12] = 0xa17583d0 = dtb_phys, closes EXACTLY (buffer 0xa1200000 is
+  2MB-aligned → kern_off=0 → load 0xa1208000 + padded 0x5503d0) — the
+  cont's r7 chain held. bc[3]=0xa1200000 (buffer). bc[8]=1/bc[9]=0x111
+  (--l2on probe ✓). bc[11] = 0xc8de0810 GARBAGE (parse_early_param's
+  0xC0DE0010 never landed — consistent with the pre-C-world death).
+- mirror0 = 0x46 (70) = normal pre-SMC-pair residue (no PB_MMU_BC triple
+  ever fires pre-C-world).
+- ssh gone t=55s; the jump happened ~t=50s+ (the slay adds ~1-2 s).
+
+**Interpretation: the death MOVED EARLIER on the same kernel binary —
+W-25 (svm alloc, C world), W-26 (FDT walk, C world), W-27 (pte-table
+alloc, C world), W-29 (MMU-enable, PRE-C-WORLD).** The per-run
+nondeterminism now spans the whole late-head.S region. Two readings:
+(a) the machine's random corruption/stall class continues unchecked (the
+devb slay did not cure it — the corruption source is elsewhere: DISPC
+scanout is the remaining un-quiesced DMA master, its kill still
+unverified), or (b) the devb slay itself perturbed the environment
+(eMMC mid-transaction state). One sample — needs distribution runs.

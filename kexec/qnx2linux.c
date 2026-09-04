@@ -588,6 +588,7 @@ static int buf_placement_bad(uint8_t *b, off64_t p, size_t size)
 }
 
 static int g_l2on;      /* --l2on: keep the PL310 enabled through the jump */
+static int g_dmaquiet;  /* --dmaquiet: softreset MMC2 (eMMC DMA master) pre-jump */
 
 static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
 {
@@ -678,6 +679,12 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         dispc[0x4A0 / 4] = 0;       /* DISPC_GFX_ATTRIBUTES */
         dispc[0x4C0 / 4] = 0;       /* DISPC_VID1_ATTRIBUTES */
         dispc[0x500 / 4] = 0;       /* DISPC_VID2_ATTRIBUTES */
+        /* W-29 forensics: the docs say the kill "does not blank the
+         * screen" — verify the registers actually read back cleared
+         * (backlight-off != scanout-off; DISPC keeps fetching frames
+         * with the backlight timed out — a ~150 MB/s DMA read master). */
+        bc[7] = dispc[0x440 / 4];   /* CONTROL readback (expect 0) */
+        bc[14] = dispc[0x4A0 / 4];  /* GFX_ATTRIBUTES readback */
     }
     bc_write(34);
     /* PL310 config registers (control/aux/latency) are SECURE-FILTERED from
@@ -710,6 +717,23 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
     if (probepath)
         probe = readfile2(probepath, &plen, 0x800);
     bc_write(43);   /* heartbeat: probe read */
+
+    /* --dmaquiet (W-28/29 revision): direct MMC2 register access took a
+     * SIGBUS (fltno=5) on the first SYSCONFIG read — the eMMC MMCHS is
+     * NOT NS-accessible from the payload (secure-filtered/clock-domain
+     * class, like the PL310 latency write). The QNX-native equivalent:
+     * SLAY devb — no driver = no commands = no DMA, no register access
+     * needed. Placed AFTER the last file read (all further payload I/O is
+     * RAM-only; console output sits in the 64KB stdout buffer and never
+     * reaches the eMMC-backed jump.log). devb's 10MB block-cache periodic
+     * flush is the suspected periodic DMA source (W-25/26/27 per-run
+     * randomness). QNX survives the slay (rootfs I/O dies, procnto and
+     * SSH/RNDIS live; the device reboots fresh post-run anyway). */
+    if (g_dmaquiet) {
+        int rc = system("slay -f devb-mmcsd-winchester >/dev/null 2>&1");
+        bc[14] = 0xD1EB0000u | (unsigned)(rc & 0xFFFFu);   /* slay rc */
+        bc_write(55);
+    }
 
     /* contiguous buffer (2026-09-03 v3): the DTB memory bank is PATCHED at
      * runtime to match the chosen placement, so placement flexibility is
@@ -1009,6 +1033,12 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
      * FILTERED from NS: the first CLKSTCTRL write took a data abort
      * (SIGSEGV, run 31 — QNX survived, bc frozen at 50). The auto-idle
      * theory needs the monitor's PPA clock-domain service instead. */
+
+    /* --dmaquiet W-28: the direct MMC2 softreset took a SIGBUS (fltno=5,
+     * first SYSCONFIG read) — the MMCHS registers are NOT NS-accessible
+     * from the payload. REMOVED; replaced by the QNX-native devb slay
+     * after the file reads (see bc 55). */
+
     bc_write(53);
 
     /* NO I/O past this point (console dies at the CPU1 hold — rule #2).
@@ -1411,6 +1441,10 @@ static int do_ppa(void)
 
 int main(int argc, char **argv)
 {
+    /* --dmaquiet insurance: after devb is slain, a stdout flush to the
+     * eMMC-backed jump.log would block forever. A 64KB buffer holds the
+     * whole run's output in RAM. */
+    setvbuf(stdout, NULL, _IOFBF, 65536);
     if (argc > 1 && !strcmp(argv[1], "--ppa")) {
         return do_ppa();
     }
@@ -1422,6 +1456,13 @@ int main(int argc, char **argv)
     }
     if (argc > 1 && !strcmp(argv[1], "--l2on")) {
         g_l2on = 1;
+        return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
+                     argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
+                     argc > 4 ? argv[4] : "/tmp/probe.bin");
+    }
+    if (argc > 1 && !strcmp(argv[1], "--dmaquiet")) {
+        g_l2on = 1;
+        g_dmaquiet = 1;
         return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
                      argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
                      argc > 4 ? argv[4] : "/tmp/probe.bin");
