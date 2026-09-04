@@ -115,13 +115,15 @@ memcmp-verified copy. The Image-path binary remains the deepest boot
 (bc=171); the zImage path now needs its own diagnosis before it can deliver
 the DTB+full-memory test the era matrix wants.
 
-**Next run** (W-18): `PAYLOAD_MODE=--l2on ./jump.sh zImage` — the SAME
-inline-fixup kernel with the L2 left ON (the proper boot mode, D4). The
-W-17 death at bc=127 (inside/just past dma_contiguous_remap, after a
-correct PB-CMA print) is suspected to be L2-off-specific (pb_bc_put's
-CIPA on a disabled PL310, or L2-off traffic in the remap path); with L2
-on, expect the boot to proceed past 127 toward the deeper ladder
-(130-136, paging_init, the 171 region).
+**Next run** (W-21): `PAYLOAD_MODE=--l2on ./jump.sh zImage` with the DTS
+bank fixed to **0xa0000000 + 0x20000000** (commit 414ad30) — the zImage
+path's kernel decompresses at 0xa0008000 (AUTO_ZRELADDR bucket) and the
+old baked bank (0xa4000000+448MB) left it OUTSIDE its own memory: the
+real root cause of the 127 wedge (W-17/18/19 died inside
+dma_contiguous_remap; W-20's 60-byte layout shift moved the death into
+map_kernel — layout-dependent, corruption excluded by a verified
+post-mortem). With the bank matching PHYS_OFFSET, expect 127/126 and
+the deeper ladder to fall, and the boot to approach the old 171 region.
 
 ## The secure monitor — RE closed (session 7)
 
