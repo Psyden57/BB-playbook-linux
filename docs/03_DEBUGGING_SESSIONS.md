@@ -1462,3 +1462,31 @@ invalidate moves INTO the C world** — DCCIMVAC by VA (the L1) + the
 monitor's SMC 0x101 L2 clean+inv by PA via pb_smc_flush (the
 pb_bc_put-proven primitive) for both variables, immediately before the
 first pv consumer (the PB-ADJ print site, map_lowmem, mmu.c).
+
+### Run W-24 (2026-09-04): ★ THE PV VIEW IS FIXED — the C-world
+### dual-level invalidate works; new front = iotable_init (147)
+
+Build: kernel #101 (W-24, commit c0d5a92): the C-world dual-level
+invalidate (L1 DCCIMVAC by VA + the monitor SMC 0x101 L2 clean+inv by
+PA via pb_smc_flush) for __pv_offset/__pv_phys_pfn_offset, placed in
+map_lowmem before the PB-ADJ print (mmu.c, the first pv consumer).
+Run: --l2on. Death ~01:30 user-clock (the standard wedge profile).
+
+Readbacks (nonce 0xc8dabe85 fresh): bc[4]=143 ✓, bc[5]=144 ✓, bc[6]=
+0xe0000000 ✓; **bc[1] = 146**; **ring count = 0x491 = 1169 — EXACTLY
+W-17's clean-run count** (W-21/22/23 = 1222 with the BUG).
+
+The decoded console tail: **"PB-ADJ: vmalloc_limit=d0000000
+lowmem_limit=c0000000" (CORRECT — was 30000000/0), PB-MEM m[0]=
+a0000000+20000000 ✓, "cma: Reserved 16 MiB at 0xbe800000" ✓, PB-ADJ #2
+lowmem_limit=bfe00000 ✓, "PB-CMA: ... va=de800000
+pv_off=ffffffffe0000000 pfn=a0000" — ALL CORRECT, NO BUG LINE.** The
+W-24 dual-level invalidate fixed the C world's pv view.
+
+The death = still at 146 (inside iotable_init, 147 absent) — a NEW,
+pv-independent wall. iotable_init → create_mapping (early mapping of
+the CMA region: memblock allocs, pmd/pte writes). Everything upstream
+is now verified correct. Session 9 starts here: bisect inside
+iotable_init/create_mapping (the W-4 Image-path run PASSED this exact
+code — the decompressor-handoff delta remains the only structural
+suspect class).
