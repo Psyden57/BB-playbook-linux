@@ -2057,3 +2057,49 @@ Next probe: dump the ACTUAL pmd entry for VA 0xdfdfffd4 (bc[19] =
 pmd_val — a valid section descriptor vs zero/invalid) before the
 stores, then single stores p[0]→167, p[1]→168 to bisect the first-four
 window.
+
+### Run W-37 (2026-09-05): build #108 — THE WILD WRITE CAUGHT IN THE ACT:
+### the pmd for the svm VA is a bogus TABLE pointer into never-written DRAM
+
+Build: kernel #108. Run: PAYLOAD_MODE=--dmaquiet ./jump.sh zImage,
+hands-off. Jump ~t=25s; reboot at 2 min 10 s (user).
+
+Readbacks (nonce 0xcb8b21c2 fresh): **bc[19] = 0xbfc1141e = the pmd for
+VA 0xdfdfffd4.** Decoded: bits[1:0] = 2 = present; as a SECTION the PA
+would be 0xbfc00000 (NOT 1MB-aligned — invalid); as a TABLE descriptor
+the pte-table PA = 0xbfc11400 (1KB-aligned, domain 0 — the exact
+__pmd_populate encoding). **But 0xbfc11400 is FREE DRAM: memblock
+top-down allocations only reached 0xbfdff000 (the CMA remap's pte
+table) and 0xbfdfffd4 (the svm) — 0xbfc11400 was never allocated and
+never written this boot.** map_lowmem should have written a SECTION
+descriptor (~0xbfd00XXe) for the last linear-map section [0xbfd00000,
+0xbfe00000) → VA 0xdfd00000-0xdfe00000.
+
+**THE MECHANISM: the svm store's page-table walk reads the bogus
+descriptor → walks into untouched DRAM → garbage pte → the walk/abort
+wedges the machine silently (no abort flag, no panic — the machine's
+signature silent wedge). The wild-write/stale-content class CORRUPTED
+THE PAGE DIRECTORY — caught red-handed with a named victim (pgd[0x6FE]
+upper half, PA 0xa00077F4-ish, inside swapper_pg_dir).** Corroborating
+artifact: bc[1] = 0xd0000004 — the marker call's own address argument
+landed as bc[1]'s VALUE; the marker-167 store never completed (the
+death is between the pmd dump and it — the readback itself came through
+the bc machinery BEFORE the wedging access, so bc[19] survived).
+
+The swapper_pg_dir lines = PA 0xa0004000-0xa0008000 (the 16 KB below
+zreladdr): head.S writes them via MMU-off SO stores; QNX-era DRAM
+content (QNX's own page tables lived in free DRAM — 0xbfc1141e is a
+perfectly plausible QNX-era table entry) is the natural stale source.
+
+### Build #109 (W-38): the pmd-corruption-pattern dump
+
+The svm stores are SKIPPED this run (their PTW wedges). Before marker
+167 the block dumps 6 pmds via the pgd itself (all safe reads):
+bc[19] = VA 0xdfd (ours), bc[20] = VA 0xdfc (pair-mate), bc[21] = VA
+0xdfe (beyond arm_lowmem_limit — should be 0), bc[22] = VA 0xdf8
+(CMA-adjacent), bc[23] = VA 0xdf4 (inside the CMA VA range),
+bc[24] = VA 0xdf0. The pattern (one bogus slot vs a whole stale region)
+decides: localized wild write vs the QNX-era stale-pgd-line class vs a
+map_lowmem gap. Packed 5,569,585 B; shipped vmlinux verified (160/161 →
+dumps → 167 → 151, stores compiled out). kernel-patches regenerated,
+apply-check clean.

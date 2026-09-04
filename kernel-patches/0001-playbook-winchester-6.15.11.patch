@@ -991,7 +991,7 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-04 19:49:47.460388201 +0000
++++ b/arch/arm/mm/mmu.c	2026-09-04 20:08:00.708387612 +0000
 @@ -758,18 +758,27 @@
  	return arm_pte_alloc(pmd, addr, prot, early_alloc);
  }
@@ -1029,7 +1029,7 @@
  }
  
  /*
-@@ -1022,10 +1032,53 @@
+@@ -1022,10 +1032,80 @@
  	if (!nr)
  		return;
  
@@ -1064,6 +1064,31 @@
 +			 * then single stores with markers. */
 +			pb_bc_put(0xD000004C,
 +				  pmd_val(*pmd_off_k((unsigned long)svm)));
++			/* PlayBook W-38: W-37 found the pmd = a TABLE
++			 * descriptor (0xbfc1141e) pointing at FREE
++			 * never-allocated DRAM (0xbfc11400) — expected: a
++			 * SECTION desc (~0xbfd00XXe) from map_lowmem. The
++			 * svm store's PTW then walks into garbage. Map the
++			 * corruption pattern across the top-of-map pmds
++			 * (all read via the pgd itself — safe): bc[19] =
++			 * VA 0xdfd (ours), bc[20] = VA 0xdfc (pair-mate),
++			 * bc[21] = VA 0xdfe (beyond arm_lowmem_limit),
++			 * bc[22] = VA 0xdf8 (CMA-adjacent), bc[23] = VA
++			 * 0xdf4 (inside the CMA VA range), bc[24] = VA
++			 * 0xdf0. NO store to the svm this run (its PTW
++			 * wedges); the diagnostics land first. */
++			pb_bc_put(0xD0000050,
++				  pmd_val(*pmd_off_k(0xdfc00000)));
++			pb_bc_put(0xD0000054,
++				  pmd_val(*pmd_off_k(0xdfe00000)));
++			pb_bc_put(0xD0000058,
++				  pmd_val(*pmd_off_k(0xdf800000)));
++			pb_bc_put(0xD000005C,
++				  pmd_val(*pmd_off_k(0xdf400000)));
++			pb_bc_put(0xD0000060,
++				  pmd_val(*pmd_off_k(0xdf000000)));
++			pb_bc_put(0xD0000004, 167);	/* dumps done */
++#if 0				/* W-38: the store's PTW wedges — skipped */
 +			p[0] = 0;
 +			pb_bc_put(0xD0000004, 167);	/* store 1 done */
 +			p[1] = 0; p[2] = 0; p[3] = 0;
@@ -1073,6 +1098,8 @@
 +			p[8] = 0; p[9] = 0; p[10] = 0;
 +			pb_bc_put(0xD0000004, 166);	/* 44B */
 +			pb_bc_put(0xD000004C, p[0]);	/* bc[19] readback */
++#endif
++			(void)p;
 +		}
 +		pb_bc_put(0xD0000004, 151);	/* memset done */
 +	}
@@ -1084,7 +1111,7 @@
  
  		vm = &svm->vm;
  		vm->addr = (void *)(md->virtual & PAGE_MASK);
-@@ -1035,6 +1088,7 @@
+@@ -1035,6 +1115,7 @@
  		vm->flags |= VM_ARM_MTYPE(md->type);
  		vm->caller = iotable_init;
  		add_static_vm_early(svm++);
@@ -1092,7 +1119,7 @@
  	}
  }
  
-@@ -1147,6 +1201,21 @@
+@@ -1147,6 +1228,21 @@
  	map.length = PAGE_SIZE;
  	map.type = MT_DEVICE;
  	iotable_init(&map, 1);
@@ -1114,7 +1141,7 @@
  }
  #endif
  
-@@ -1250,6 +1319,27 @@
+@@ -1250,6 +1346,27 @@
  
  	arm_lowmem_limit = lowmem_limit;
  
@@ -1142,7 +1169,7 @@
  	high_memory = __va(arm_lowmem_limit - 1) + 1;
  
  	if (!memblock_limit)
-@@ -1363,6 +1453,19 @@
+@@ -1363,6 +1480,19 @@
   * Any other function or debugging method which may touch any device _will_
   * crash the kernel.
   */
@@ -1162,7 +1189,7 @@
  static void __init devicemaps_init(const struct machine_desc *mdesc)
  {
  	struct map_desc map;
-@@ -1375,12 +1478,20 @@
+@@ -1375,12 +1505,20 @@
  	vectors = early_alloc(PAGE_SIZE * 2);
  
  	early_trap_init(vectors);
@@ -1184,7 +1211,7 @@
  
  	if (__atags_pointer) {
  		/* create a read-only mapping of the device tree */
-@@ -1445,10 +1556,16 @@
+@@ -1445,10 +1583,16 @@
  		mdesc->map_io();
  	else
  		debug_ll_io_init();
@@ -1201,7 +1228,7 @@
  
  	/*
  	 * Finally flush the caches and tlb to ensure that we're in a
-@@ -1457,10 +1574,13 @@
+@@ -1457,10 +1601,13 @@
  	 * back.  After this point, we can start to touch devices again.
  	 */
  	local_flush_tlb_all();
@@ -1216,7 +1243,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1885,9 @@
+@@ -1765,7 +1912,9 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1226,7 +1253,7 @@
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +1895,13 @@
+@@ -1773,9 +1922,13 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1240,7 +1267,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +1911,7 @@
+@@ -1785,6 +1938,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
