@@ -1,3 +1,6 @@
+> **STATUS: HISTORICAL snapshot (session 6). The live overview lives in newdocs/PROJECT_OVERVIEW.md; the live state in newdocs/PROJECT_STATE.md.**
+> This file is kept for its rationale/narrative value; do not update it going forward.
+
 # BlackBerry PlayBook Mainline Linux Boot Project
 
 ## Goal

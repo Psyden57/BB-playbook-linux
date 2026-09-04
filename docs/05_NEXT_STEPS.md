@@ -1,3 +1,6 @@
+> **STATUS: HISTORICAL task list. The live roadmap lives in newdocs/ROADMAP.md; the live state in newdocs/PROJECT_STATE.md.**
+> This file is kept for its rationale/narrative value; do not update it going forward.
+
 # Next Steps & Continuation Guide
 
 ## UPDATE 2026-09-03 (session 7) — the "root cause" section below is UNDER REVISION
