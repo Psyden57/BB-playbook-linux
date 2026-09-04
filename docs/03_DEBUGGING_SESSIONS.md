@@ -1293,6 +1293,38 @@ code with the SAME kernel — no decompressor involved; the zImage path's
 decompressor footprint (dirty lines, its clean/ICIALLU, the state it
 hands over) is the last unexplored delta.
 
+### Run W-20 (2026-09-04): the death MOVED with a 60-byte layout shift —
+### and the root cause was hiding in the console all along
+
+Build: kernel #97 (W-20, commit 5376f76): markers 145/146/147 inside
+dma_contiguous_remap (pmd_clear / tlb-flush / iotable_init). Run: --l2on.
+
+Readbacks (nonce 0xc81ab098 fresh): **bc[1] = 133 (= "map_lowmem done",
+mmu.c:1824, with the pb_bc pair 0x185) — the death MOVED EARLIER: inside
+map_kernel, BEFORE dma_contiguous_remap starts** (no 127, no PB-CMA
+print — ring count = 0x319 = 793 chars, shorter, consistent). The ONLY
+change = the 3 markers (~60 bytes) in dma-mapping.c — and the death
+moved with the layout. NO decompression hole: the post-mortem race was
+won again and **all 1024 bytes at 0xa0008400-0xa0008800 match vmlinux
+exactly** (python-compared, VA→PA offset-corrected).
+
+With corruption excluded and the wedge layout-dependent, the console's
+own numbers finally told the story: **PB-MEM m[0]=a4000000+1c000000 —
+the baked DTS bank starts at 0xa4000000, but the zImage path's kernel
+decompresses at 0xa0008000 (AUTO_ZRELADDR: (relocated decompressor PC &
+0xF8000000) + 0x8000 = 0xa0008000 for EVERY buffer placement we use) —
+THE KERNEL SITS 4 MB OUTSIDE ITS OWN DECLARED MEMORY.** The session-7
+127-wall fix (fdt_patch_memory) patches the SEPARATE DTB file — the
+zImage path uses the APPENDED DTB, which kept the baked 0xa4000000
+bank. The old 127 wall, alive on the zImage path with a different
+mechanism than believed. (The W-20 death at map_kernel vs the W-17-19
+death inside dma_contiguous_remap = both bank-mismatch effects, moving
+with the layout.)
+
+**W-21: the DTS bank → 0xa0000000 + 0x20000000** (matches the zImage
+path's PHYS_OFFSET for all our placements; the Image path uses the
+payload-patched DTB copy and is unaffected).
+
 **The correlation re-scan (perfect, 20+ runs):**
 | Kernel era | Smoke test (UART3, MMU-off) | Pre-fixup CIPA | Result |
 | W-4/W-5 (session-6) | absent | absent | PASSED (126/171) |
