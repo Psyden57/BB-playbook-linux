@@ -148,8 +148,8 @@
  #endif
 
 --- a/arch/arm/kernel/head.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head.S	2026-09-02 21:01:15.174105054 +0000
-@@ -98,6 +98,90 @@
++++ b/arch/arm/kernel/head.S	2026-09-04 01:05:40.776424399 +0000
+@@ -98,6 +98,125 @@
   THUMB(	.thumb			)	@ switch to Thumb now.
   THUMB(1:			)
  
@@ -163,10 +163,32 @@
 +	@ old DCCMVAC+CIPA+sync machinery wedged the L2-on boot (bc[1]=120
 +	@ with the identical 125 macro right behind never landing). The bc
 +	@ page is not cached by anything: no maintenance is ever needed.
++	@ PlayBook 2026-09-04 (W-6/W-7): the "reaches DRAM directly" claim is
++	@ WRONG for persistence — the SO store only dirties the PL310 line, and
++	@ dirty lines are DISCARDED when QNX's boot re-inits the L2 after the
++	@ warm reset (W-6/W-7 lost bc[6]/bc[2] evidence; __pv_offset read back
++	@ 0 post-reboot with the fixup's code bytes intact). Markers that
++	@ survive do so by L2-eviction luck. So: clean+invalidate BOTH bc lines
++	@ by PA (0x768 CIPA + 0x730 sync — the NS-safe ops) after the store.
++	@ Cost ~6 device ops per marker, ~60 markers per boot = well inside the
++	@ device-op cliff (~4-5k). Clobbers r0+ip only (r0 dead after store).
 +	ldr	ip, =0x90000004
 +	mov	r0, #\val
 +	str	r0, [ip]
 +	dsb
++	ldr	ip, =0x48242768		@ PL310 CLEAN_INV_LINE_PA
++	ldr	r1, =0x90000000		@ bc line 0 (bc[0..7])
++	str	r1, [ip]
++	ldr	r1, =0x90000020		@ bc line 1 (bc[8..15])
++	str	r1, [ip]
++	ldr	ip, =0x48242730		@ PL310 SYNC
++	mov	r0, #0x100000		@ bounded poll (pbmarkv pattern)
++951:	ldr	r1, [ip]
++	tst	r1, #1
++	beq	952f
++	subs	r0, r0, #1
++	bne	951b
++952:	dsb
 +	@ WDT2 kick: TGR = any write reloads (progress = life)
 +	ldr	ip, =0x4A314030
 +	mov	r0, #1
@@ -213,8 +235,21 @@
 +	.macro	pbmark3, val
 +	@ PlayBook 2026-09-02: ritual-free (see pbmark). Clobbers r3+ip only;
 +	@ r0/r1/r2/r4/r9/r10/r13 preserved. MMU-off PA store + WDT2 kick.
++	@ PlayBook 2026-09-04 (W-6/W-7): the PL310 CIPA flush of both bc lines,
++	@ same rationale as pbmark — but NO sync poll: this macro may only
++	@ clobber r3+ip (no third register for read+countdown at the
++	@ __enable_mmu/__turn_mmu_on sites), and an unbounded poll is banned
++	@ (session-6 rule). Fire-and-forget + dsb; the next full pbmark's sync
++	@ covers completion. Residual risk: the 2 pbmark3 markers themselves
++	@ can be L2-dirty-lost if the boot dies right there.
 +	ldr	ip, =0x90000004
 +	mov	r3, #\val
++	str	r3, [ip]
++	dsb
++	ldr	ip, =0x48242768		@ PL310 CLEAN_INV_LINE_PA
++	ldr	r3, =0x90000000		@ bc line 0
++	str	r3, [ip]
++	ldr	r3, =0x90000020		@ bc line 1
 +	str	r3, [ip]
 +	dsb
 +	ldr	ip, =0x4A314030
@@ -240,7 +275,7 @@
  #ifdef CONFIG_ARM_VIRT_EXT
  	bl	__hyp_stub_install
  #endif
-@@ -105,6 +189,32 @@
+@@ -105,6 +224,32 @@
  	safe_svcmode_maskall r9
  
  	mrc	p15, 0, r9, c0, c0		@ get processor id
@@ -273,7 +308,7 @@
  	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid
  	movs	r10, r5				@ invalid processor (r5=0)?
   THUMB( it	eq )		@ force fixup-able long branch encoding
-@@ -124,19 +234,24 @@
+@@ -124,19 +269,27 @@
  #else
  	ldr	r8, =PLAT_PHYS_OFFSET		@ always constant in this case
  #endif
@@ -288,17 +323,20 @@
  #ifdef CONFIG_SMP_ON_UP
  	bl	__fixup_smp
  #endif
-+	pbmark	107
++	pbmark	130			@ post-__fixup_smp (was 107 — that value
++				@ is duplicated at the addruart-done site,
++				@ which cost W-6 its diagnosis; unique now)
  #ifdef CONFIG_ARM_PATCH_PHYS_VIRT
  	bl	__fixup_pv_table
  #endif
-+	pbmark	108
++	pbmark	131			@ post-__fixup_pv_table (was 108 — same
++				@ duplicate-marker problem, now unique)
  	bl	__create_page_tables
 +	pbmark	119			@ cpt returned; next = proc-init + MMU-on
  
  	/*
  	 * The following calls CPU specific code in a position independent
-@@ -229,6 +344,12 @@
+@@ -229,6 +382,12 @@
  #endif
  
  	ldr	r7, [r10, #PROCINFO_MM_MMUFLAGS] @ mm_mmuflags
@@ -311,7 +349,7 @@
  
  	/*
  	 * Create identity mapping to cater for __enable_mmu.
-@@ -343,6 +464,99 @@
+@@ -343,6 +502,99 @@
  	str	r3, [r0], #4
  #endif
  
@@ -411,7 +449,7 @@
  #else /* CONFIG_DEBUG_ICEDCC || CONFIG_DEBUG_SEMIHOSTING */
  	/* we don't need any serial debugging mappings */
  	ldr	r7, [r10, #PROCINFO_IO_MMUFLAGS] @ io_mmuflags
-@@ -373,6 +587,7 @@
+@@ -373,6 +625,7 @@
  #ifdef CONFIG_ARM_LPAE
  	sub	r4, r4, #0x1000		@ point to the PGD table
  #endif
@@ -419,7 +457,7 @@
  	ret	lr
  ENDPROC(__create_page_tables)
  	.ltorg
-@@ -465,6 +680,13 @@
+@@ -465,6 +718,13 @@
   *  r13 = *virtual* address to jump to upon completion
   */
  __enable_mmu:
@@ -433,7 +471,7 @@
  #if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
  	orr	r0, r0, #CR_A
  #else
-@@ -482,6 +704,13 @@
+@@ -482,6 +742,13 @@
  #ifdef CONFIG_ARM_LPAE
  	mcrr	p15, 0, r4, r5, c2		@ load TTBR0
  #else
@@ -447,7 +485,7 @@
  	mov	r5, #DACR_INIT
  	mcr	p15, 0, r5, c3, c0, 0		@ load domain access register
  	mcr	p15, 0, r4, c2, c0, 0		@ load page table pointer
-@@ -506,12 +735,28 @@
+@@ -506,12 +773,28 @@
  	.align	5
  	.pushsection	.idmap.text, "ax"
  ENTRY(__turn_mmu_on)
@@ -565,6 +603,52 @@
  	request_standard_resources(mdesc);
  
  	if (mdesc->restart) {
+
+--- a/arch/arm/kernel/phys2virt.S	2025-08-20 16:36:36.000000000 +0000
++++ b/arch/arm/kernel/phys2virt.S	2026-09-04 00:48:33.272425010 +0000
+@@ -29,6 +29,25 @@
+  */
+ 	__HEAD
+ ENTRY(__fixup_pv_table)
++	@ PlayBook W-7 instrumentation: the zImage path died inside this
++	@ function (run W-6: bc=107 post-fixup_smp, ring = smoke only).
++	@ Record entry + the raw PHYS_OFFSET input, then let the function run.
++	@ bc[6] = r8 (PHYS_OFFSET), bc[1] = 140. Clobbers r0+ip (both scratch
++	@ here — r0 is overwritten by the first real instruction). WDT2 kick:
++	@ progress is life. NOTE: no movw/movt (pre-v7 GAS baseline in this
++	@ file — session-4 lesson) and no literal pools — mov/orr chains only.
++	mov	ip, #0x09000000		@ ip = 0x90000000 (bc page)
++	orr	ip, ip, #0x18
++	str	r8, [ip]		@ bc[6] = r8 (PHYS_OFFSET)
++	mov	r0, #140		@ marker 140 = fixup_pv entered
++	str	r0, [ip, #-0x14]	@ bc[1] @ 0x90000004
++	dsb
++	mov	ip, #0x4A000000		@ ip = 0x4A314030 (WDT2 TGR)
++	orr	ip, ip, #0x314000
++	orr	ip, ip, #0x30
++	mov	r0, #1
++	str	r0, [ip]		@ kick
++
+ 	mov	r0, r8, lsr #PAGE_SHIFT	@ convert to PFN
+ 	str_l	r0, __pv_phys_pfn_offset, r3
+ 
+@@ -42,6 +61,16 @@
+ 	teq	r3, r0, lsl #21 	@ must be 2 MiB aligned
+ 	bne	0f
+ 
++	@ PlayBook W-7: the 2 MiB-alignment check PASSED — marker 141. If a run
++	@ shows 140 without 141, the death is in the __pv_offset stores above
++	@ (DRAM writes into the decompressed kernel's .data); 141 without the
++	@ caller's post-fixup marker (131) = death in __fixup_a_pv_table (the
++	@ .text patch loop).
++	mov	ip, #0x09000000		@ ip = 0x90000000
++	mov	r0, #141		@ marker 141 = alignment check passed
++	str	r0, [ip, #4]		@ bc[1] @ 0x90000004
++	dsb
++
+ 	adr_l	r4, __pv_table_begin
+ 	adr_l	r5, __pv_table_end
+ 	b	__fixup_a_pv_table
 
 --- a/arch/arm/mach-omap2/omap4-common.c	2025-08-20 16:36:36.000000000 +0000
 +++ b/arch/arm/mach-omap2/omap4-common.c	2026-09-02 22:15:18.102630801 +0000
