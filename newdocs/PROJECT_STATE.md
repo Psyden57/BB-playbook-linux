@@ -115,25 +115,27 @@ memcmp-verified copy. The Image-path binary remains the deepest boot
 (bc=171); the zImage path now needs its own diagnosis before it can deliver
 the DTB+full-memory test the era matrix wants.
 
-**Next run** (W-38): build #109 — the pmd-corruption-pattern dump. W-37
-caught the wild write red-handed: the pmd for VA 0xdfdfffd4 (the svm
-memset target) = 0xbfc1141e = a TABLE descriptor pointing at
-0xbfc11400 — FREE, never-allocated, never-written DRAM (memblock's top
-only reached 0xbfdff000). map_lowmem should have written a SECTION desc
-(~0xbfd00XXe). The svm store's PTW walks into untouched DRAM → garbage
-pte → the machine's signature silent wedge. Even bc[1] showed the
-corruption (0xd0000004 = the marker call's own address argument as the
-value; marker 167 never landed). Prime stale source: QNX-era page-table
-content in the swapper_pg_dir lines (PA 0xa0004000-0xa0008000, written
-MMU-off by head.S, PTW reads through the L2). Build #109 dumps 6 pmds
-via the pgd (safe reads, stores skipped this run): bc[19] = VA 0xdfd,
-bc[20] = VA 0xdfc (pair-mate), bc[21] = VA 0xdfe (beyond limit, expect
-0), bc[22] = VA 0xdf8, bc[23] = VA 0xdf4 (inside the CMA VA range),
-bc[24] = VA 0xdf0. Pattern decides: localized wild write vs the
-stale-pgd-line class vs a map_lowmem gap. Marker-number audit: setup.c's
-pb_bc(130-136) pairs COLLIDE with mmu.c's PB_MMU_BC numbers —
-discriminate via the mirror channel. See docs/03 W-25..W-37 and
-SESSION-HANDOFF/BOOTSTRAP_SESSION_9.md.
+**Next run** (W-39): build #110 — the 2MB allocator shave. W-38's pmd
+pattern: the pair [0xdfc/0xdfd] = IDENTICAL bogus table pointers
+(0xbfc1141e, both halves = the __pmd_populate signature), DETERMINISTIC
+across runs AND placements; [0xdf8] = a CORRECT section desc (0xbf81141e
+— map_lowmem's mapping of the range is healthy, only the LAST pair is
+stale); [0xdfe+]=0 ✓; [0xdf0/0xdf4]=0 (CMA-cleared ✓). Verdict: the
+last pair of the linear map holds STALE QNX-era page-table content
+(0xbfc11400 = a QNX-era pte table for that DRAM region) — the
+write-back-loss class, same as the pv variables — NOT a random wild
+write. Build #110: arm_lowmem_limit -= 2MB after map_kernel (nothing
+allocated in the poisoned top; the svm lands at ~0xbfbfffd4, pair
+[0xdfa/0xdfb] — the previously-untested middle pair), stores re-enabled
+with markers 167 (dumps) / 0x567 (store 1) / 151 (memset done), bc[19]
+= readback, bc[25] = VA 0xdfa pmd. Expectations: if the middle pair is
+healthy → the memset completes → the boot advances (toward the 171
+wall, KNOWN_ISSUES #3 l2x0 hazards ahead); if the middle pair is ALSO
+stale → the stale region is wider → extend the shave or self-heal the
+pgd (the W-32c store+clean pattern applied to the pmd). Marker-number
+audit: setup.c's pb_bc(130-136) pairs COLLIDE with mmu.c's PB_MMU_BC
+numbers — discriminate via the mirror channel. See docs/03 W-25..W-38
+and SESSION-HANDOFF/BOOTSTRAP_SESSION_9.md.
 
 ## The secure monitor — RE closed (session 7)
 
