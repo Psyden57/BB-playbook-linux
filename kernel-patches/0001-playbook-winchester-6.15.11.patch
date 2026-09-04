@@ -148,7 +148,7 @@
  #endif
 
 --- a/arch/arm/kernel/head.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head.S	2026-09-04 11:12:39.012387539 +0000
++++ b/arch/arm/kernel/head.S	2026-09-04 12:17:11.308386364 +0000
 @@ -98,6 +98,125 @@
   THUMB(	.thumb			)	@ switch to Thumb now.
   THUMB(1:			)
@@ -314,7 +314,7 @@
  	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid
  	movs	r10, r5				@ invalid processor (r5=0)?
   THUMB( it	eq )		@ force fixup-able long branch encoding
-@@ -124,19 +275,123 @@
+@@ -124,19 +275,132 @@
  #else
  	ldr	r8, =PLAT_PHYS_OFFSET		@ always constant in this case
  #endif
@@ -382,8 +382,13 @@
 +	@ the originals; preserves r1/r2/r8/r9/r10.
  #ifdef CONFIG_ARM_PATCH_PHYS_VIRT
 -	bl	__fixup_pv_table
++	@ PlayBook W-22: the fixup's markers moved to SURVIVING bc slots —
++	@ 143/144 wrote bc[1], which the C-world ladder overwrites (W-21's
++	@ readback couldn't tell whether the inline fixup ran). Now: bc[4]
++	@ = 143 (entered), bc[5] = 144 (aligned), bc[6] = the computed
++	@ delta — all post-probe-unused slots.
 +	mov	r0, #143		@ W-17: inline pv fixup entered
-+	ldr	ip, =0x90000004
++	ldr	ip, =0x90000010		@ bc[4]
 +	str	r0, [ip]
 +	dsb
 +
@@ -396,12 +401,16 @@
 +	strcc	ip, [r0, #4]		@ save to __pv_offset high bits (LE)
 +	str	r3, [r0]		@ save to __pv_offset low bits (LE)
 +
++	ldr	ip, =0x90000018		@ bc[6]
++	str	r3, [ip]		@ the computed delta (0xe0000000)
++	dsb
++
 +	mov	r0, r3, lsr #21		@ constant for add/sub instructions
 +	teq	r3, r0, lsl #21		@ must be 2 MiB aligned
 +	bne	973f
 +
 +	mov	r0, #144		@ W-17: alignment check passed
-+	ldr	ip, =0x90000004
++	ldr	ip, =0x90000014		@ bc[5]
 +	str	r0, [ip]
 +	dsb
 +
@@ -439,7 +448,7 @@
  
  	/*
  	 * The following calls CPU specific code in a position independent
-@@ -229,6 +484,12 @@
+@@ -229,6 +493,12 @@
  #endif
  
  	ldr	r7, [r10, #PROCINFO_MM_MMUFLAGS] @ mm_mmuflags
@@ -452,7 +461,7 @@
  
  	/*
  	 * Create identity mapping to cater for __enable_mmu.
-@@ -343,6 +604,99 @@
+@@ -343,6 +613,99 @@
  	str	r3, [r0], #4
  #endif
  
@@ -552,7 +561,7 @@
  #else /* CONFIG_DEBUG_ICEDCC || CONFIG_DEBUG_SEMIHOSTING */
  	/* we don't need any serial debugging mappings */
  	ldr	r7, [r10, #PROCINFO_IO_MMUFLAGS] @ io_mmuflags
-@@ -373,6 +727,7 @@
+@@ -373,6 +736,7 @@
  #ifdef CONFIG_ARM_LPAE
  	sub	r4, r4, #0x1000		@ point to the PGD table
  #endif
@@ -560,7 +569,7 @@
  	ret	lr
  ENDPROC(__create_page_tables)
  	.ltorg
-@@ -465,6 +820,13 @@
+@@ -465,6 +829,13 @@
   *  r13 = *virtual* address to jump to upon completion
   */
  __enable_mmu:
@@ -574,7 +583,7 @@
  #if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
  	orr	r0, r0, #CR_A
  #else
-@@ -482,6 +844,13 @@
+@@ -482,6 +853,13 @@
  #ifdef CONFIG_ARM_LPAE
  	mcrr	p15, 0, r4, r5, c2		@ load TTBR0
  #else
@@ -588,7 +597,7 @@
  	mov	r5, #DACR_INIT
  	mcr	p15, 0, r5, c3, c0, 0		@ load domain access register
  	mcr	p15, 0, r4, c2, c0, 0		@ load page table pointer
-@@ -506,12 +875,28 @@
+@@ -506,12 +884,28 @@
  	.align	5
  	.pushsection	.idmap.text, "ax"
  ENTRY(__turn_mmu_on)
