@@ -516,6 +516,111 @@
  	ret	r3
  __turn_mmu_on_end:
 
+--- a/arch/arm/kernel/phys2virt.S	2025-08-20 16:36:36.000000000 +0000
++++ b/arch/arm/kernel/phys2virt.S	2026-09-04 06:59:00.240387867 +0000
+@@ -29,6 +29,50 @@
+  */
+ 	__HEAD
+ ENTRY(__fixup_pv_table)
++	@ PlayBook W-7 instrumentation: the zImage path died inside this
++	@ function (run W-6: bc=107 post-fixup_smp, ring = smoke only).
++	@ Record entry + the raw PHYS_OFFSET input, then let the function run.
++	@ bc[6] = r8 (PHYS_OFFSET), bc[1] = 140. Clobbers r0+ip (both scratch
++	@ here — r0 is overwritten by the first real instruction). WDT2 kick:
++	@ progress is life. NOTE: no movw/movt (pre-v7 GAS baseline in this
++	@ file — session-4 lesson) and no literal pools — mov/orr chains only.
++	mov	ip, #0x09000000		@ ip = 0x90000000 (bc page)
++	orr	ip, ip, #0x18
++	str	r8, [ip]		@ bc[6] = r8 (PHYS_OFFSET)
++	mov	r0, #140		@ marker 140 = fixup_pv entered
++	str	r0, [ip, #-0x14]	@ bc[1] @ 0x90000004
++	dsb
++	@ PlayBook W-8 lesson (2026-09-04): the SO store only dirties the
++	@ PL310 line; QNX's post-reset L2 re-init DISCARDS dirty lines
++	@ (W-6/W-7 lost exactly this evidence). CIPA the bc lines by PA
++	@ (0x768 + 0x730 sync, the NS-safe ops). Scratch r0/r3/ip only
++	@ (r3 dead on entry; r1/r2/r8/r9/r10 preserved — the caller's
++	@ contract). mov/orr chains only: no literal pools in this file.
++	mov	r0, #0x48000000		@ r0 = 0x48242768 (CLEAN_INV_LINE_PA)
++	orr	r0, r0, #0x240000
++	orr	r0, r0, #0x700
++	orr	r0, r0, #0x68
++	mov	ip, #0x09000000		@ bc line 0 (bc[0..15])
++	str	ip, [r0]
++	orr	ip, ip, #0x40		@ bc line 1 (bc[16..23])
++	str	ip, [r0]
++	mov	ip, #0x48000000		@ ip = 0x48242730 (SYNC)
++	orr	ip, ip, #0x240000
++	orr	ip, ip, #0x700
++	orr	ip, ip, #0x30
++	mov	r0, #0x100000		@ bounded poll (zero unbounded polls)
++965:	ldr	r3, [ip]
++	tst	r3, #1
++	beq	966f
++	subs	r0, r0, #1
++	bne	965b
++966:	dsb
++	mov	ip, #0x4A000000		@ ip = 0x4A314030 (WDT2 TGR)
++	orr	ip, ip, #0x314000
++	orr	ip, ip, #0x30
++	mov	r0, #1
++	str	r0, [ip]		@ kick
++
+ 	mov	r0, r8, lsr #PAGE_SHIFT	@ convert to PFN
+ 	str_l	r0, __pv_phys_pfn_offset, r3
+ 
+@@ -42,6 +86,50 @@
+ 	teq	r3, r0, lsl #21 	@ must be 2 MiB aligned
+ 	bne	0f
+ 
++	@ PlayBook W-7: the 2 MiB-alignment check PASSED — marker 141. If a run
++	@ shows 140 without 141, the death is in the __pv_offset stores above
++	@ (DRAM writes into the decompressed kernel's .data); 141 without the
++	@ caller's post-fixup marker (131) = death in __fixup_a_pv_table (the
++	@ .text patch loop). W-8 session: store the computed delta (r3) to
++	@ bc[7] — a wrong r8 shows up directly. Then CIPA-flush the bc lines
++	@ AND the __pv_offset .data line(s) so the post-mortem dump is
++	@ conclusive (same dirty-line-discard rationale as the entry flush).
++	@ Scratch r0/r3/ip (r3 = the delta, dead after the bne above).
++	mov	ip, #0x09000000		@ ip = 0x90000000
++	str	r3, [ip, #0x1c]		@ bc[7] = the computed delta
++	mov	r0, #141		@ marker 141 = alignment check passed
++	str	r0, [ip, #4]		@ bc[1] @ 0x90000004
++	dsb
++	mov	r0, #0x48000000		@ r0 = 0x48242768 (CLEAN_INV_LINE_PA)
++	orr	r0, r0, #0x240000
++	orr	r0, r0, #0x700
++	orr	r0, r0, #0x68
++	mov	ip, #0x09000000		@ bc line 0 (bc[0..15] incl. bc[7])
++	str	ip, [r0]
++	orr	ip, ip, #0x40		@ bc line 1
++	str	ip, [r0]
++	adr_l	r3, __pv_offset		@ flush the .data line(s) holding it
++	bic	r3, r3, #0x3f
++	str	r3, [r0]
++	add	r3, r3, #0x40		@ next line (covers a line straddle)
++	str	r3, [r0]
++	mov	ip, #0x48000000		@ ip = 0x48242730 (SYNC)
++	orr	ip, ip, #0x240000
++	orr	ip, ip, #0x700
++	orr	ip, ip, #0x30
++	mov	r0, #0x100000		@ bounded poll
++967:	ldr	r3, [ip]
++	tst	r3, #1
++	beq	968f
++	subs	r0, r0, #1
++	bne	967b
++968:	dsb
++	mov	ip, #0x4A000000		@ WDT2 kick (progress = life)
++	orr	ip, ip, #0x314000
++	orr	ip, ip, #0x30
++	mov	r0, #1
++	str	r0, [ip]
++
+ 	adr_l	r4, __pv_table_begin
+ 	adr_l	r5, __pv_table_end
+ 	b	__fixup_a_pv_table
+
 --- a/arch/arm/kernel/setup.c	2025-08-20 16:36:36.000000000 +0000
 +++ b/arch/arm/kernel/setup.c	2026-09-02 21:52:57.434630873 +0000
 @@ -1101,7 +1101,37 @@
@@ -603,52 +708,6 @@
  	request_standard_resources(mdesc);
  
  	if (mdesc->restart) {
-
---- a/arch/arm/kernel/phys2virt.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/phys2virt.S	2026-09-04 00:48:33.272425010 +0000
-@@ -29,6 +29,25 @@
-  */
- 	__HEAD
- ENTRY(__fixup_pv_table)
-+	@ PlayBook W-7 instrumentation: the zImage path died inside this
-+	@ function (run W-6: bc=107 post-fixup_smp, ring = smoke only).
-+	@ Record entry + the raw PHYS_OFFSET input, then let the function run.
-+	@ bc[6] = r8 (PHYS_OFFSET), bc[1] = 140. Clobbers r0+ip (both scratch
-+	@ here — r0 is overwritten by the first real instruction). WDT2 kick:
-+	@ progress is life. NOTE: no movw/movt (pre-v7 GAS baseline in this
-+	@ file — session-4 lesson) and no literal pools — mov/orr chains only.
-+	mov	ip, #0x09000000		@ ip = 0x90000000 (bc page)
-+	orr	ip, ip, #0x18
-+	str	r8, [ip]		@ bc[6] = r8 (PHYS_OFFSET)
-+	mov	r0, #140		@ marker 140 = fixup_pv entered
-+	str	r0, [ip, #-0x14]	@ bc[1] @ 0x90000004
-+	dsb
-+	mov	ip, #0x4A000000		@ ip = 0x4A314030 (WDT2 TGR)
-+	orr	ip, ip, #0x314000
-+	orr	ip, ip, #0x30
-+	mov	r0, #1
-+	str	r0, [ip]		@ kick
-+
- 	mov	r0, r8, lsr #PAGE_SHIFT	@ convert to PFN
- 	str_l	r0, __pv_phys_pfn_offset, r3
- 
-@@ -42,6 +61,16 @@
- 	teq	r3, r0, lsl #21 	@ must be 2 MiB aligned
- 	bne	0f
- 
-+	@ PlayBook W-7: the 2 MiB-alignment check PASSED — marker 141. If a run
-+	@ shows 140 without 141, the death is in the __pv_offset stores above
-+	@ (DRAM writes into the decompressed kernel's .data); 141 without the
-+	@ caller's post-fixup marker (131) = death in __fixup_a_pv_table (the
-+	@ .text patch loop).
-+	mov	ip, #0x09000000		@ ip = 0x90000000
-+	mov	r0, #141		@ marker 141 = alignment check passed
-+	str	r0, [ip, #4]		@ bc[1] @ 0x90000004
-+	dsb
-+
- 	adr_l	r4, __pv_table_begin
- 	adr_l	r5, __pv_table_end
- 	b	__fixup_a_pv_table
 
 --- a/arch/arm/mach-omap2/omap4-common.c	2025-08-20 16:36:36.000000000 +0000
 +++ b/arch/arm/mach-omap2/omap4-common.c	2026-09-02 22:15:18.102630801 +0000
