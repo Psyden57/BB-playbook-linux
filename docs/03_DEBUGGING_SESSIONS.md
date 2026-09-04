@@ -1756,3 +1756,14 @@ placements (bc[18]) and/or force a verified-empty placement.**
 W-29-vs-W-30 payload delta was ONLY the bc[16]/[17] slot move — the
 early QNX death is therefore NOT caused by the readback; it is the
 placement/trample class (or a nondeterministic slay interaction).
+
+W-30 LED/SSH timeline (user video, run-local t):
+00:00 jump.sh starts; 00:05 blue ON (payload up, QNX alive); 00:08 swipe
+no-wake; 00:10 power-button no-wake (QNX still ALIVE at this point — SSH
+only froze at 00:17); 00:17 SSH already frozen → **QNX froze between
+00:10 and 00:17, i.e. ~10-15 s into the payload = the sweep/memtest
+phase, exactly matching bc[1]=31 as the last write**; 01:03 connection
+reset; 01:05 red LED = WDT2 reset (58.6 s window). Nuance on the DISPC
+corroboration: jump.sh already slays the display stack, so no-wake could
+partly reflect "no driver to revive the LCD" — the register readback
+(bc[16]/bc[17], this run) is the definitive check.
