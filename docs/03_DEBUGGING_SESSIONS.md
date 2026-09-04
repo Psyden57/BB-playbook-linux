@@ -1405,3 +1405,60 @@ __pv_offset/__pv_phys_pfn_offset .data lines by PA** (the proven
 pbmark pattern — 4 CIPA ops + sync + bounded poll). Expected: the C
 world reads the CORRECT pv values, the BUG vanishes, and the boot
 proceeds past iotable_init → 126/125/129/128 → the deeper ladder.
+
+### Run W-23 (2026-09-04): the .data CIPA flush did NOT cure pv_off=0 —
+### but the post-mortem proves DRAM holds the CORRECT values
+
+Build: kernel #100 (W-23, commit 47a9e32): the .data CIPA flush added
+after the inline fixup's stores (the __pv_offset/__pv_phys_pfn_offset
+lines by PA, head.S, pre-C-world). Run: --l2on.
+
+Readbacks (nonce 0xcbcaba22 fresh): bc[4]=143 ✓, bc[5]=144 ✓, bc[6]=
+0xe0000000 ✓ (the fixup executed again); **bc[1] = 146, ring count =
+0x4C6 = 1222 — BYTE-IDENTICAL to W-21** — pv_off=0 again, the BUG
+again.
+
+**THE POST-MORTEM (the race won, the decisive artifact): System.map
+__pv_phys_pfn_offset @ c100a8d0 / __pv_offset @ c100a8d4 → PA
+a100a8d0/a100a8d4 — DRAM holds: pfn = 0xa0000 ✓, __pv_offset =
+{0xe0000000, 0xffffffff} = 0xffffffffe0000000 ✓ — THE FIXUP'S STORES
+REACHED DRAM PERFECTLY.** The C world's cached reads still see 0.
+
+So: the fixup executes, computes correctly, its stores are in DRAM —
+and the C world's cached D-reads serve the decompressor-era stale view.
+The head.S L2-side CIPA (pre-C-world) did not cure it → the stale view
+survives in a cache the L2-only flush misses (the L1-D, populated by
+the C world's own early reads from a still-stale source). **W-24: the
+invalidate moves INTO the C world** — DCCIMVAC by VA (the L1) + the
+PL310 CIPA by PA (the L2) for both variables, immediately before the
+first pv consumer — the exact op pattern pb_bc_put already proves works
+from the C world.
+
+### Run W-23 (2026-09-04): the .data CIPA flush did NOT cure pv_off=0 —
+### but the post-mortem proves DRAM holds the CORRECT values
+
+Build: kernel #100 (W-23, commit 47a9e32): the .data CIPA flush added
+after the inline fixup's stores (the __pv_offset/__pv_phys_pfn_offset
+lines by PA, head.S, pre-C-world). Run: --l2on. Death time ~01:30
+(the user's clock; the standard wedge profile).
+
+Readbacks (nonce 0x6a9aba14 pre-jump / 0xcba... post: bc[4]=143 ✓,
+bc[5]=144 ✓, bc[6]=0xe0000000 ✓ (the fixup executed again); **bc[1] =
+146, ring count = 0x4C6 = 1222 — BYTE-IDENTICAL to W-21** — pv_off=0
+again, the BUG again.
+
+**THE POST-MORTEM (the race won, the decisive artifact): System.map
+__pv_phys_pfn_offset @ c100a8d0 / __pv_offset @ c100a8d4 → PA
+a100a8d0/a100a8d4 — DRAM holds: pfn = 0xa0000 ✓, __pv_offset =
+{0xe0000000, 0xffffffff} = 0xffffffffe0000000 ✓ — THE FIXUP'S STORES
+REACHED DRAM PERFECTLY.** The C world's cached reads still see 0.
+
+So: the fixup executes, computes correctly, its stores are in DRAM —
+and the C world's cached D-reads serve the decompressor-era stale view.
+The head.S L2-side CIPA (pre-C-world) did not cure it → the stale view
+survives in a cache the L2-only flush misses (the L1-D, populated by
+the C world's own early reads from a still-stale source). **W-24: the
+invalidate moves INTO the C world** — DCCIMVAC by VA (the L1) + the
+monitor's SMC 0x101 L2 clean+inv by PA via pb_smc_flush (the
+pb_bc_put-proven primitive) for both variables, immediately before the
+first pv consumer (the PB-ADJ print site, map_lowmem, mmu.c).
