@@ -1947,3 +1947,37 @@ line. No SMC, no poisoning possible. 8 retries retained; marker 163;
 tries → bc[19] (0x9000004C, read via memdump3 90000040 0x20). Packed
 5,571,801 B; shipped vmlinux verified (DCCIMVAC triple + cmpeq + 163 in
 start_kernel). kernel-patches regenerated, apply-check clean.
+
+### Run W-34 (2026-09-05): build #106 — THE PV FIX WORKS (tries=0, correct
+### values end-to-end) — and the svm wall survives it: the memset dies with
+### CORRECT pv
+
+Build: kernel #106 (W-32c direct store). Run: PAYLOAD_MODE=--dmaquiet
+./jump.sh zImage, hands-off. Jump ~t=25s; reboot at 1 min 50 s (user;
+W-33 timeline for the record: 00:05 blue ON, 00:41 blue OFF = jump,
+01:58-ish red = WDT2).
+
+Readbacks (nonce 0xc8ab1a30 fresh): **bc[19] = 0 — the W-32c block ran
+and the store took on the FIRST try** (the W-33-era residue was
+0xabaae2eb — fresh value). bc[18] = 0xa2300000 (placement), DISPC 0/0.
+Ring 1170 (= the clean 1169 + 1): **"PB-ADJ: vmalloc_limit=d0000000
+lowmem_limit=c0000000" / "lowmem_limit=bfe00000" / "PB-CMA ...
+pv_off=ffffffffe0000000 pfn=a0000" — pv CORRECT THROUGHOUT, and the
+pv-stale BUG line is GONE.** The stale-pv regime is structurally dead:
+the direct store + DCCIMVAC cure is deterministic (tries=0).
+
+**BUT bc[1] = 161 — the boot STILL died at the svm memset (161→151),
+now with CORRECT pv.** The wall reclassifies: it was never only pv.
+Four svm-touching deaths (W-25 alloc / W-31 / W-32a / W-34 memset), the
+last with verified-correct pv. The dying object: a 44-byte zeroing of
+PA 0xbfdfffd4 (top-of-lowmem free DRAM, ends exactly at
+arm_lowmem_limit; VA 0xdfdfffd4, mapped, inside the linear map).
+
+### Build #107 (W-35): chunk markers inside the memset
+
+The 44-byte memset split into 16B chunks with markers 164/165/166 and a
+store-stick readback (word 0 → bc[19]); 151 after. Distinguishes: death
+before 164 = the first 16B store wedges; 166-landed + bc[19]≠0 = the
+store didn't stick (L2/DRAM weirdness); 151 = past the whole memset.
+Packed 5,569,561 B; shipped vmlinux verified (164/165/166/151 in
+iotable_init). kernel-patches regenerated, apply-check clean.

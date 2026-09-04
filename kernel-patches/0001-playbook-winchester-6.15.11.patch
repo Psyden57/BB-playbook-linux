@@ -991,7 +991,7 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-04 19:05:09.444387827 +0000
++++ b/arch/arm/mm/mmu.c	2026-09-04 19:28:06.496388417 +0000
 @@ -758,18 +758,27 @@
  	return arm_pte_alloc(pmd, addr, prot, early_alloc);
  }
@@ -1029,7 +1029,7 @@
  }
  
  /*
-@@ -1022,10 +1032,29 @@
+@@ -1022,10 +1032,44 @@
  	if (!nr)
  		return;
  
@@ -1049,7 +1049,22 @@
 +		if (!svm)
 +			panic("PB iotable_init: svm alloc failed");
 +		pb_bc_put(0xD0000004, 161);	/* __va done */
-+		memset(svm, 0, sizeof(*svm) * nr);
++		/* PlayBook W-35: the memset dies even with CORRECT pv
++		 * (W-34: pv_off=ffffffffe0000000 all the way, still dead at
++		 * 161→151). Split the 44-byte memset into 16-byte chunks
++		 * with markers; bc[19] = readback of word 0 (store-stick
++		 * check). */
++		{
++			volatile unsigned int *p =
++				(volatile unsigned int *)svm;
++			p[0] = 0; p[1] = 0; p[2] = 0; p[3] = 0;
++			pb_bc_put(0xD0000004, 164);	/* chunk 1 (16B) */
++			p[4] = 0; p[5] = 0; p[6] = 0; p[7] = 0;
++			pb_bc_put(0xD0000004, 165);	/* chunk 2 (32B) */
++			p[8] = 0; p[9] = 0; p[10] = 0;
++			pb_bc_put(0xD0000004, 166);	/* chunk 3 (44B) */
++			pb_bc_put(0xD000004C, p[0]);	/* bc[19] readback */
++		}
 +		pb_bc_put(0xD0000004, 151);	/* memset done */
 +	}
  
@@ -1060,7 +1075,7 @@
  
  		vm = &svm->vm;
  		vm->addr = (void *)(md->virtual & PAGE_MASK);
-@@ -1035,6 +1064,7 @@
+@@ -1035,6 +1079,7 @@
  		vm->flags |= VM_ARM_MTYPE(md->type);
  		vm->caller = iotable_init;
  		add_static_vm_early(svm++);
@@ -1068,7 +1083,7 @@
  	}
  }
  
-@@ -1147,6 +1177,21 @@
+@@ -1147,6 +1192,21 @@
  	map.length = PAGE_SIZE;
  	map.type = MT_DEVICE;
  	iotable_init(&map, 1);
@@ -1090,7 +1105,7 @@
  }
  #endif
  
-@@ -1250,6 +1295,27 @@
+@@ -1250,6 +1310,27 @@
  
  	arm_lowmem_limit = lowmem_limit;
  
@@ -1118,7 +1133,7 @@
  	high_memory = __va(arm_lowmem_limit - 1) + 1;
  
  	if (!memblock_limit)
-@@ -1363,6 +1429,19 @@
+@@ -1363,6 +1444,19 @@
   * Any other function or debugging method which may touch any device _will_
   * crash the kernel.
   */
@@ -1138,7 +1153,7 @@
  static void __init devicemaps_init(const struct machine_desc *mdesc)
  {
  	struct map_desc map;
-@@ -1375,12 +1454,20 @@
+@@ -1375,12 +1469,20 @@
  	vectors = early_alloc(PAGE_SIZE * 2);
  
  	early_trap_init(vectors);
@@ -1160,7 +1175,7 @@
  
  	if (__atags_pointer) {
  		/* create a read-only mapping of the device tree */
-@@ -1445,10 +1532,16 @@
+@@ -1445,10 +1547,16 @@
  		mdesc->map_io();
  	else
  		debug_ll_io_init();
@@ -1177,7 +1192,7 @@
  
  	/*
  	 * Finally flush the caches and tlb to ensure that we're in a
-@@ -1457,10 +1550,13 @@
+@@ -1457,10 +1565,13 @@
  	 * back.  After this point, we can start to touch devices again.
  	 */
  	local_flush_tlb_all();
@@ -1192,7 +1207,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1861,9 @@
+@@ -1765,7 +1876,9 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1202,7 +1217,7 @@
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +1871,13 @@
+@@ -1773,9 +1886,13 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1216,7 +1231,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +1887,7 @@
+@@ -1785,6 +1902,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
