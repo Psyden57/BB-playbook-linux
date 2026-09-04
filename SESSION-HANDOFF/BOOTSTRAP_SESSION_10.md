@@ -9,6 +9,9 @@ work. The device is in a normal post-reboot QNX state; the next run
 
 ## MANDATORY READ ORDER
 
+0. `newdocs/HANDOFF.md` (the standing protocol: what every session must
+   do) + `newdocs/DEVELOPMENT.md` (the daily loop) + `newdocs/SETUP.md`
+   (host paths) — the standing rules layer
 1. `newdocs/session-notes/session-09.md` — the session-9 run map,
    confirmed facts, mechanisms, bequest (THE core context)
 2. `newdocs/PROJECT_STATE.md` — the live state (through W-39 next)
