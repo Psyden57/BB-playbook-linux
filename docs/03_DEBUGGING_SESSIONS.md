@@ -1372,3 +1372,36 @@ fixup executes in the current build.** Working hypothesis space: an
 intermittent, layout-linked execution gap in the streamed region
 (mechanism unknown — every machine-config variable exonerated in
 W-9..W-19).
+
+### Run W-22 (2026-09-04): THE FIXUP EXECUTES — 143/144/the delta all
+### land; pv_off=0 in the C world = the D-side stale-line mechanism
+
+Build: kernel #99 (W-22, commit b27d812): the inline fixup's markers
+relocated to surviving slots (bc[4]=143 entered, bc[5]=144 aligned,
+bc[6]=the computed delta). Run: --l2on.
+
+Readbacks (nonce 0xcbfab81e fresh): **bc[4] = 143 ✓, bc[5] = 144 ✓,
+bc[6] = 0xe0000000 ✓ (the delta, exactly correct) — THE INLINE FIXUP
+EXECUTES AND COMPUTES CORRECTLY.** bc[1] = 146 (the same iotable_init
+death as W-21); ring count = 0x470 = 1136.
+
+The decoded console tail: **"PB-ADJ: vmalloc_limit=30000000
+lowmem_limit=0" (twice), "BUG: not creating mapping for 0x00000000 at
+0x20000000 in user region", "PB-CMA: ... va=de800000 pv_off=0 pfn=0"** —
+pv STILL reads 0 in the C world WITH the fixup proven executed.
+
+**THE MECHANISM (forced by the asymmetry): the fixup's .text patches
+WORK (va=de800000 = a patched stub's output — the I-side is fresh:
+ICIALLU wiped the I-cache before the kernel ran, and the patched sites
+fetch fresh) but its .data stores DON'T (the C world's CACHED D-reads
+hit the DECOMPRESSOR-era valid lines for those addresses — the
+decompressor wrote .data cached; its flush cleaned L1→L2 leaving valid
+lines with the image's zeros; the fixup's MMU-off SO stores don't
+update what the C world's cached reads hit). I-side fresh, D-side
+stale.**
+
+**W-23: after the inline fixup's stores, CIPA-flush the
+__pv_offset/__pv_phys_pfn_offset .data lines by PA** (the proven
+pbmark pattern — 4 CIPA ops + sync + bounded poll). Expected: the C
+world reads the CORRECT pv values, the BUG vanishes, and the boot
+proceeds past iotable_init → 126/125/129/128 → the deeper ladder.
