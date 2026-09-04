@@ -1134,6 +1134,34 @@ bc[12]=0xa13570f0 — **closure anomaly: computed dtb_phys = 0xa12f70f0
 was unreachable this run; bc[12]'s chain value needs the payload's
 kern_off print to resolve**. Ring smoke-only; mirror0 normal.
 
+### Run W-15 (2026-09-04): smoke test disabled — exonerated; bc[6]=0
+### stands; only the CIPA machinery remains before every failing blx
+
+Build: kernel #93 (W-15, commit 333704c): the DEBUG_LL smoke test
+disabled (#if 0 — markers 106-109 gone with it; the ladder is now
+101/102/103/130/142). Run: --t3 L2-off. Run signature: ≤90 s to red LED.
+
+Readbacks (nonce 0xcb4a96e8 fresh): bc[1]=142, **bc[6]=0 — delivery
+STILL fails without the smoke test**; bc[7]=residue; bc[13]=0xa0008658
+(target tracked the shorter build ✓); bc[12]=0xa2357528 closes exactly
+(buffer 0xa1d00000 → kern_off 0x100000 → load 0xa1e08000 + padded
+0x54f528 — an apparent -0x20 delta was the analyst's hex slip, corrected
+by recomputation); **ring1 count = 0 — empty, as expected** (the smoke
+test was the only writer; the sanitize cleared it). mirror0 normal.
+
+The smoke test is EXONERATED. Updated invariant list: not the L2 state,
+not the I-bit, not the probe, not the smoke test, not bl-vs-blx, not the
+marker content. **The remaining suspect: the CIPA batch itself** (writes
+to CLEAN_INV_LINE_PA/SYNC — with the L2 DISABLED these are writes to a
+disabled controller, and they are the LAST ops before every failing
+call) — and, folded into it, the buried question of whether the W-6/W-7
+"SO stores dirty-discard" reinterpretation (which MOTIVATED all the
+CIPA flushing) was correct at all: the ORIGINAL stub-proven claim was
+"MMU-off SO stores reach DRAM directly in both L2 states". **W-16:
+strip ALL CIPA from the pre-fixup path** (SO-only 130 + inline block
+without CIPA/poll) — if the blx then delivers, the CIPA was the wedge
+and the original claim was right.
+
 **The correlation re-scan (perfect, 20+ runs):**
 | Kernel era | Smoke test (UART3, MMU-off) | Pre-fixup CIPA | Result |
 | W-4/W-5 (session-6) | absent | absent | PASSED (126/171) |
