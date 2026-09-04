@@ -869,8 +869,17 @@
  #endif
 
 --- a/arch/arm/mm/dma-mapping.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/dma-mapping.c	2026-09-03 02:50:21.958629509 +0000
-@@ -283,6 +283,17 @@
++++ b/arch/arm/mm/dma-mapping.c	2026-09-04 11:38:06.056387220 +0000
+@@ -270,6 +270,8 @@
+ void __init dma_contiguous_remap(void)
+ {
+ 	int i;
++	noinline void pb_bc_put(unsigned int addr, unsigned int v);	/* PlayBook W-20 */
++
+ 	for (i = 0; i < dma_mmu_remap_num; i++) {
+ 		phys_addr_t start = dma_mmu_remap[i].base;
+ 		phys_addr_t end = start + dma_mmu_remap[i].size;
+@@ -283,6 +285,17 @@
  
  		map.pfn = __phys_to_pfn(start);
  		map.virtual = __phys_to_virt(start);
@@ -888,6 +897,21 @@
  		map.length = end - start;
  		map.type = MT_MEMORY_DMA_READY;
  
+@@ -298,11 +311,14 @@
+ 		for (addr = __phys_to_virt(start); addr < __phys_to_virt(end);
+ 		     addr += PMD_SIZE)
+ 			pmd_clear(pmd_off_k(addr));
++		pb_bc_put(0xD0000004, 145);	/* PlayBook W-20: pmd_clear done */
+ 
+ 		flush_tlb_kernel_range(__phys_to_virt(start),
+ 				       __phys_to_virt(end));
++		pb_bc_put(0xD0000004, 146);	/* PlayBook W-20: tlb flush done */
+ 
+ 		iotable_init(&map, 1);
++		pb_bc_put(0xD0000004, 147);	/* PlayBook W-20: iotable_init done */
+ 	}
+ }
+ #endif
 
 --- a/arch/arm/mm/init.c	2025-08-20 16:36:36.000000000 +0000
 +++ b/arch/arm/mm/init.c	2026-09-02 20:49:32.046630869 +0000
