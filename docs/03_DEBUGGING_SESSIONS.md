@@ -1767,3 +1767,53 @@ reset; 01:05 red LED = WDT2 reset (58.6 s window). Nuance on the DISPC
 corroboration: jump.sh already slays the display stack, so no-wake could
 partly reflect "no driver to revive the LCD" — the register readback
 (bc[16]/bc[17], this run) is the definitive check.
+
+### Run W-31 (2026-09-05): placement captured (0xa1c00000); DISPC kill
+### register-confirmed (0/0); new death: the svm memset (161→151), pv-stale
+### regime again
+
+Build: kernel #103 unchanged; payload: bc[18] = buffer PA written BEFORE
+the memtest (shipped-verified).
+
+Run: PAYLOAD_MODE=--dmaquiet ./jump.sh zImage. Jump ~t=20s (SSH gone
+t=25s); reboot at 1 min 43 s (user).
+
+Readbacks (nonce 0xcb5b09d4 fresh):
+- **bc[16]/bc[17] = 0/0 — DISPC_CONTROL and GFX_ATTRIBUTES both read
+  back cleared: THE DISPC KILL IS CONFIRMED AT THE REGISTER LEVEL.**
+  Combined with the W-30 screen-tap observation (no wake with QNX
+  alive): DISPC scanout DMA is dead from the kill onward. The display
+  is no longer a DMA suspect.
+- bc[18] = 0xa1c00000 — this run's placement (kern inside
+  0xa1c00000-0xa3400000).
+- bc[1] = 161 (the split svm alloc: find+reserve ✓ at PA 0xbfdfffd4 →
+  bc[13], __va done 161) — **death before 151 = inside/before the 44-byte
+  svm memset.** The svm sits at the TOP of lowmem (ends exactly at
+  arm_lowmem_limit 0xbfe00000; the 6 MB hole between CMA-end 0xbf800000
+  and the limit; arm32 memblock is top-down — the alloc is legitimate).
+  VA 0xdfdfffd4 is inside the linear map (ends 0xdfe00000) — the memset
+  target is MAPPED. A second svm-touching death (W-25 = the alloc call
+  itself, W-31 = the memset) at the same top-of-lowmem object, with
+  DIFFERENT placements (W-31's kernel window 0xa1c00000 does NOT contain
+  0xbfdfffd4) — **weakens the placement-overlap theory for kernel-era
+  deaths** (it still stands for W-30's payload-era QNX kill, which was
+  inside the window).
+- **The pv-STALE regime returned** (console: "PB-ADJ vmalloc_limit=
+  30000000 lowmem_limit=0" twice, "PB-CMA ... pv_off=0 pfn=0") — the
+  stubs are patched (va=de800000 correct) but the __pv_offset VARIABLE
+  reads stale — the W-21/22/23/27 signature. The W-24 dual-level
+  invalidate is per-run unreliable (worked W-24/25/26; stale W-27/31).
+- Console count 1137; ends at the PB-CMA line (no BUG line this run).
+- bc[10]=0xc0de0002/bc[11]=0xc0de0010/bc[12]=0xc0de0020 fresh
+  (parse_early_param ✓); bc[2]=0 this run (no 0x3E7).
+
+Session-9 death map (all --l2on, devb slain + DISPC killed since W-29):
+W-25 svm alloc call · W-26 FDT-walk stack smash · W-27 map_lowmem pte
+alloc · W-29 MMU-enable (pre-C) · W-31 svm memset. The deaths span
+head.S late region AND the C world's first mm phases; the corrupted
+objects are wherever the boot is working — NOT confined to the payload
+window. Remaining suspect classes: (a) the machine's L2/transaction-loss
+under QNX's 1/1/1 PL310 config, (b) an unidentified DMA master (SGX/PVR
+pool is invisible to pidin and unquiesced), (c) decompressor-era stale
+D/I lines (per-run — explains the pv-stale regime; the W-24 fix covers
+only the 2 pv variables, NOT the whole image).
