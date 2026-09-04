@@ -1046,3 +1046,33 @@ DRAM bytes (for the W-7 build). The surviving discriminator: the bl
 MECHANISM (encoding/prediction at runtime) vs the target region's
 fetchability. W-12 replaces the bl with a computed absolute call
 (blx r4; the computed target stored to bc[13] for readback verification).
+
+### Run W-12 (2026-09-04): computed absolute call — correct target,
+### still no delivery
+
+Build: kernel #90 (W-12, commit cd278c7): `bl __fixup_pv_table` replaced
+by a computed call — r4 = __fixup_pv_table(link VA) − 0xC0000000 + r8;
+the computed target stored to bc[13]; `blx r4`. Run: --t3 L2-off. Run
+signature: <2 min to reboot (user timeline pending).
+
+Readbacks (nonce 0xc8fa86f6 fresh):
+- bc[1] = 142 (inline marker) — **no 140/141/131: the computed call also
+  fails to deliver.**
+- **bc[13] = 0xa00088d4 — the computed target, and it is CORRECT**: r8
+  (PC-relative ground truth) = 0xa0000000, so the fixup's true runtime
+  PA = a0008000 + (link offset 0x8d4) = 0xa00088d4. COROLLARY: the
+  decompressor places _text at **0xa0008000** (zreladdr = load&0xF8000000
+  + TEXT_OFFSET, 128 MB granularity) — W-6's "zreladdr 0xa0080000" note
+  was wrong.
+- bc[6]=r8=0xa0000000 ✓; bc[12]=0xa2b56970 closes exactly (buffer
+  0xa2600000 → kern_off 0 → load 0xa2608000 + padded 0x54e970); bc[2]=0;
+  ring smoke-only; mirror0 normal.
+
+**Standing paradox after W-12**: two correct delivery mechanisms, a
+verified-correct target, intact entry bytes (objdump + W-7's DRAM
+post-mortem), the same 32-byte I-line shared with __vet_atags's tail
+WHICH EXECUTED (marker 103) — and no fixup execution effect. The fixup's
+first store (bc[6]=r8) is invisible (same value as the inline block's).
+W-13 adds a distinctive sentinel (bc[7]=0xFFFFFFFF, flushed BEFORE the
+140 marker) to discriminate "fixup ran, died later" from "fixup never
+stored anything".
