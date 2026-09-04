@@ -1076,3 +1076,43 @@ first store (bc[6]=r8) is invisible (same value as the inline block's).
 W-13 adds a distinctive sentinel (bc[7]=0xFFFFFFFF, flushed BEFORE the
 140 marker) to discriminate "fixup ran, died later" from "fixup never
 stored anything".
+
+### Run W-13 (2026-09-04): the sentinel never lands — the fixup truly
+### never stores anything; the fixup bytes verified CORRECT in DRAM
+### (trample race won); the second-line-fetch pattern identified
+
+Build: kernel #91 (W-13, commit 7051eee): the fixup entry stores a
+distinctive sentinel (bc[7] = 0xFFFFFFFF via mvn r0,#0) and CIPA-flushes
+it BEFORE the 140 marker. Run: --t3 L2-off (user recorded timings,
+similar to W-10b; details with the user).
+
+Readbacks (nonce 0xcb2a8a4a fresh):
+- **bc[7] = 0x410000c4 — RESIDUE, NOT the sentinel.** The fixup's very
+  first stores never execute. bc[1]=142 (inline), bc[2]=0, bc[13]=
+  0xa00088d4 (target, verified correct), bc[6]=0xa0000000 (the INLINE
+  block's write — not discriminative in this build), bc[12]=0xa2157420
+  (closes exactly: buffer 0xa1b00000 → kern_off 0x100000 → load
+  0xa1c08000 + padded 0x54f420), ring smoke-only, mirror0 normal.
+- **THE TRAMPLE RACE WAS WON** (manual dump right after SSH returned):
+  the decompressed image at 0xa00088c0-0xa000891f = **BYTE-CORRECT** —
+  the five words before the fixup are __vet_atags's literal pool
+  (matching vmlinux exactly: OF_DT magic 0xedfe0dd0 @c00088b0, vet
+  constants), and the fixup's instructions from 0xa00088d4 (mov ip/
+  orr/str r8/mvn sentinel/str/dsb/CIPA/poll...) match the shipped
+  vmlinux instruction-for-instruction. Everything above ~0xa00088c0
+  survived QNX's trample this time; the fixup's region is proven
+  correct IN DRAM for THIS run.
+- Pattern identified across ALL zImage runs: the fixup's first three
+  instructions (the invisible bc[6] store) sit in the SAME 32-byte
+  I-cache line as __vet_atags's executed tail (vet ends ~0xc00088d0;
+  the fixup starts 0xc00088d4), while instruction 4 onward (the W-13
+  sentinel, the 140 store, and in the pre-W-13 builds the 140 store
+  itself) sits in the NEXT line — the first never-before-fetched line.
+  Every zImage death is consistent with "execution cannot proceed into
+  a never-fetched I-line at 0xa00088e0-class addresses", and runs 23-32
+  (uncached builds, plausibly I=0 fetches) passed the fixup 8+ times.
+- **W-14: clear SCTLR.I before the call** (uncached I-fetches) — if the
+  fixup then runs, the I-fetch mechanism is the culprit; bc[6] is now
+  written ONLY by the fixup (removed from the inline block), so it
+  discriminates delivery (bc[6]=0xa0000000 = the fixup executed
+  instruction 3).
