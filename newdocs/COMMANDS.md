@@ -60,34 +60,42 @@ immediately after the reboot, before drawing conclusions:
    allocation zone — regions at 0x88/0x90/0x94/0x9FE (the mirrors) are the
    reliable survivors.
 
-## Disassembly (capstone — there is NO ARM objdump on the host)
+## Disassembly
 
-The host objdump is x86-only, and QNX/ARM ELFs read as "architecture
-UNKNOWN" to binutils. Everything RE-side uses capstone + pyelftools:
+**Objdumps exist — use them first** (a session-7 correction: the earlier
+"no ARM objdump on the host" claim only checked `PATH`):
+
+```bash
+# OUR kernel (buildroot toolchain — full symbols on vmlinux):
+~/toolchains/armv7-eabihf/bin/arm-linux-objdump -d ~/kernel/linux/vmlinux
+# QNX binaries (the SDP's objdump knows the QNX ELF flavor that reads as
+# "architecture UNKNOWN" to the host x86-only objdump):
+~/qnx660-master/host/linux/x86/usr/bin/arm-unknown-nto-qnx6.6.0eabi-objdump \
+  -d device-binaries/trustzone-omap4
+```
+
+Capstone + pyelftools remain useful for **raw memdump3 dumps** (no ELF, just
+a PA + word-reversed bytes) and scripted cross-binary sweeps:
 
 ```bash
 pip3 install --user --break-system-packages capstone pyelftools
-# disassemble a symbol from an ELF (works for QNX .bin/.so):
 python3 - <<'EOF'
-from elftools.elf.elffile import ELFFile
+import re, struct
 from capstone import Cs, CS_ARCH_ARM, CS_MODE_ARM
-elf = ELFFile(open('device-binaries/trustzone-omap4','rb'))
-sym = elf.get_section_by_name('.symtab')
-for s in sym.iter_symbols():
-    if s.name == 'SOME_SYMBOL':
-        addr, size = s['st_value'], s['st_size']
-for seg in elf.iter_segments():
-    if seg['p_type']=='PT_LOAD' and seg['p_vaddr'] <= addr < seg['p_vaddr']+seg['p_filesz']:
-        data = seg.data()[addr-seg['p_vaddr']:][:size or 0x80]
-for i in Cs(CS_ARCH_ARM, CS_MODE_ARM).disasm(data, addr):
-    print(f"{i.address:08x}: {i.bytes.hex():<10} {i.mnemonic} {i.op_str}")
+words = {}
+for line in open('dump.txt'):                 # memdump3 output
+    m = re.match(r'\s*([0-9a-f]+):\s+([0-9a-f]+)', line)
+    if m: words[int(m.group(1),16)] = int(m.group(2),16)
+addrs = sorted(words)
+data = b''.join(struct.pack('<I', words[a]) for a in addrs)
+for i in Cs(CS_ARCH_ARM, CS_MODE_ARM).disasm(data, addrs[0]):
+    print(f"{i.address:08x}: {i.bytes.hex()} {i.mnemonic} {i.op_str}")
 EOF
-# Thumb code: CS_MODE_THUMB. For raw dumps (memdump3 output), rebuild the
-# byte stream as above (struct '<I' per word) and disasm from the base addr.
-# GAS gotchas that produced this workflow: pre-v7 baseline in head.S-era
-# files (no movw/movt/dsb mnemonics in some files — see session-04 note #8);
-# verify fixes in the SHIPPED binary, never the build log.
 ```
+
+GAS gotchas that produced this tooling: pre-v7 baseline in some kernel
+files (no `movw/movt`; `dsb` availability varies — session-04 note #8);
+verify fixes in the SHIPPED binary, never the build log.
 
 ## Kernel patch snapshot (kernel-patches/)
 
@@ -156,7 +164,8 @@ git add -A && git commit -m "..." && git push   # remote origin = private repo
 - Boot to SSH: 2-3 min after reset — don't conclude "hang" early.
 - `/tmp` is wiped per reboot: deploy everything, every cycle (jump.sh does).
 - `on -C 0` pins to CPU0; `dd` needs numeric bs + `sync` after.
-- Device clock is frozen (~2021): never use time() as an identifier; the
-  payload mixes the staging phys into the nonce instead.
+- Device clock: was frozen (~2021) — the user NTP-synced it over WiFi once
+  (2026-09-04); do NOT rely on the clock yet (one observation). The payload
+  nonce mixes the staging phys — keep that design regardless.
 - Failed payload runs leak their 24 MB buffer by design — expect a reboot
   every ~10-12 failed placements.
