@@ -1581,3 +1581,56 @@ CORRECTIONS:
 Session-9 state: the front is no longer "iotable_init" — the boot's real
 enemy is a wild write hitting the boot stack (and per W-25, the svm alloc
 region), layout/timing-sensitive, first evidenced by the stack-protector.
+
+### Run W-27 (2026-09-05): identical #103 re-run — THE DEATH MOVED ON THE SAME
+### BINARY: per-run nondeterminism CONFIRMED; pv-stale regime returned; died in
+### map_lowmem's pte-path pte-table memblock alloc
+
+Build: kernel #103 UNCHANGED from W-26 (the determinism test). Run:
+PAYLOAD_MODE=--l2on ./jump.sh zImage. SSH gone t=30s; jump-to-red-LED ≈
+1 min 30 s (user timing).
+
+Readbacks (nonce 0xc8aad963 fresh vs pre-jump 0x6a9ad952):
+- bc[1] = 156, bc[2] = 0x186, mirror0 = 0x286. The 134 triple
+  (prepare_page_table done) is the last PB_MMU_BC triple; bc[1]=156 is a
+  single-channel write past it = **alloc_init_pte ENTRY** (the W-25
+  marker). 157 (pte table allocated) absent → **the death is inside
+  arm_pte_alloc → early_alloc(4096) → memblock_alloc — the pte-table
+  allocation.**
+- The caller path: devicemaps_init/early_trap_init are ruled out (they
+  run after 127; no later triple fired). 156 fired between 134 and 133 →
+  **inside map_lowmem, whose create_mapping took the PTE path** —
+  plausible trigger: this run's DTB reservation (PB-RES r[0]=a2942eb0,
+  NOT section-aligned) splits the for_each_mem_range free ranges at an
+  unaligned boundary → map_lowmem's sub-ranges are unaligned → the pte
+  path (section mapping impossible). kern_phys/DTB placement varies per
+  run — explains why W-21..W-25's map_lowmem never took the pte path.
+- **pv-STALE REGIME RETURNED on the same binary that read pv CORRECT in
+  W-26**: the console shows "PB-ADJ: vmalloc_limit=30000000
+  lowmem_limit=0" TWICE (the W-21/22/23 signature; W-24's dual-level
+  invalidate made these d0000000/c0000000 in W-24/25/26). The W-24 fix is
+  NOT deterministic — per-run luck. (Note: in the pv-variable-stale
+  regime the boots still continue — the pv STUBS are patched and the
+  translations are correct; only the __pv_offset VARIABLE reads stale.
+  The W-21/22/23 boots reached 146 with the same broken prints.)
+- Console (ring count 1047): normal through PB-RES, "cma: Reserved
+  16 MiB", PB-ADJ#2 (broken values) — ends there. NO panic text this
+  run — a silent wedge/corruption inside the memblock alloc, NOT a
+  stack-protector catch.
+- bc[4]=143/bc[5]=144/bc[6]=0xe0000000 fresh (the inline fixup executed);
+  bc[10]/bc[13] residue (expected — my writes are past the death);
+  abort flag 0x9FE000A0 = 0 (no abort — silent).
+
+**THE DETERMINISM VERDICT (the reason W-27 was run): identical binary,
+different death** — W-26: stack-protector panic in the FDT walk
+(arm_memblock_init); W-27: passed the FDT walk, died 2 phases later in
+map_lowmem's pte-table memblock_alloc. W-25 (build #102): passed the FDT
+walk AND map_lowmem, died in the svm memblock_alloc. **The corruption
+landing point is PER-RUN RANDOM, not layout-fixed.** Combined with the
+W-24-pv-fix flipping effective/ineffective per run (3/4), the machine
+loses/corrupts transactions at a per-run rate — the rogue-DMA-master
+class (eMMC ADMA / WiFi SDIO idle-but-enabled; DISPC scanout live) and
+the L2-transaction-loss class are now the prime suspects. The
+stack-protector catch (W-26) proves real memory corruption happens; the
+bc/ring channels are evidently just as vulnerable (readbacks could
+themselves be victims — interpret with care).

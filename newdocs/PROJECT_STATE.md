@@ -115,19 +115,22 @@ memcmp-verified copy. The Image-path binary remains the deepest boot
 (bc=171); the zImage path now needs its own diagnosis before it can deliver
 the DTB+full-memory test the era matrix wants.
 
-**Next run** (W-27): RE-RUN the identical #103 build unchanged — the W-26
-death (stack-protector panic: wild write smashed
-fdt_get_property_namelen's frame during arm_memblock_init's
-early_init_fdt_scan_reserved_mem) must first be tested for determinism:
-same-build re-run decides layout-dependent vs timing/nondeterministic
-(rogue DMA class). W-25 (#102) died inside the svm memblock_alloc at
-iotable_init entry (150/151) — the same boot had PASSED the FDT walk.
-Session-9 state: the front is a WILD WRITE (stack + memblock metadata
-candidates), first caught by CONFIG_STACKPROTECTOR_STRONG + PB-PANIC.
-Marker-number audit: setup.c's pb_bc(130-136) pairs COLLIDE with mmu.c's
-PB_MMU_BC ladder numbers — always discriminate via the mirror channel
-(PB_MMU_BC writes 0xD4000004, setup.c's pb_bc does not). See docs/03
-W-25/W-26 and SESSION-HANDOFF/BOOTSTRAP_SESSION_9.md.
+**Next run** (W-28): the front moved — the determinism test (W-27,
+identical #103) PROVED per-run nondeterminism: W-26 died in the FDT walk
+(stack-protector stack smash), W-27 passed it and died inside
+map_lowmem's pte-table memblock_alloc (the DTB reservation at an
+unaligned PA makes map_lowmem take the pte path), W-25 died in the svm
+alloc. The W-24 pv fix is also per-run-luck (3/4). Prime suspects: rogue
+DMA masters (eMMC ADMA / WiFi SDIO idle-but-enabled post-jump, DISPC
+scanout live) or L2 transaction loss. Next options: (a) payload-side
+DMA-quiesce test (stop/softreset eMMC + SDIO controllers pre-jump —
+SDMMC MMCHS registers are NS-writable, unlike PRCM), (b) more
+instrumentation (canary patterns over the boot stack + memblock arrays),
+(c) distribution re-runs. Marker-number audit: setup.c's pb_bc(130-136)
+pairs COLLIDE with mmu.c's PB_MMU_BC ladder numbers — always
+discriminate via the mirror channel (PB_MMU_BC writes 0xD4000004,
+setup.c's pb_bc does not). See docs/03 W-25/W-26/W-27 and
+SESSION-HANDOFF/BOOTSTRAP_SESSION_9.md.
 
 ## The secure monitor — RE closed (session 7)
 
