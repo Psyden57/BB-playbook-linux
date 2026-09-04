@@ -35,7 +35,9 @@ jumped from QNX. The boot currently:
    C/B/S-stripped builds passed; the current cacheable build dies 5/5).
    Also closed this session: the dtb-phys
    arithmetic (params block exonerated — bc[3] is the BUFFER base,
-   qnx2linux.c:935; W-6, W-8 and W-10 all close exactly), the bc[10]/bc[11]
+   qnx2linux.c:935; W-8 and W-10 close exactly against their shipped
+   artifacts; W-6 closes with the inferred #85 packed size — consistent,
+   not artifact-verified), the bc[10]/bc[11]
    writers (parse_early_param + bss-bounds dumps — W-9's values are
    W-4-era residue, which SURVIVES the power-hold "hard reset" — it is a
    warm reset, DRAM persists), the ring2 wild-index theory for bc[2]=0x3E7
