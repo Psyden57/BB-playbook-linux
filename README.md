@@ -133,7 +133,7 @@ key, build artifacts) — how to recreate them is in
 
 - tmlind's droid4-kexecboot and maemo-leste — the kexecboot model on the same SoC
 - postmarketOS `linux-postmarketos-omap` — near-mainline OMAP4 kernel baseline
-- The QNX/BB10 reverse-engineering community (bb10tools by a fellow researcher)
+- The QNX/BB10 reverse-engineering community (bb10tools and bb10mt by Oleksandr https://bb10.root.sx)
 - TI SWPU231AP OMAP4430 TRM
 
 ## Legal / ethical note
