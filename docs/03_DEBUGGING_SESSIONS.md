@@ -1718,3 +1718,41 @@ the slay); 01:16 SSH session freezes + blue OFF = the jump; 01:35-01:38
 connection reset; 01:48-02:11 reconnect timeouts (QNX booting);
 02:24 red LED ON = warm reset — jump+68 s = **WDT2 expiry from the
 bc[1]=121 hang** (58.6 s window + kick drift). Fully consistent.
+
+### Run W-30 (2026-09-05): NO JUMP — the payload's own 24MB writes killed QNX
+### mid-setup (memtest/copy phase); DISPC kill CONFIRMED working by screen tap
+
+Build: kernel #103 unchanged; payload: DISPC readbacks moved to bc[16]/
+bc[17] (surviving slots), everything else as W-29.
+
+Run: PAYLOAD_MODE=--dmaquiet ./jump.sh zImage. SSH died at t=20s
+(W-29: t=55s, jump at ~71s); reboot ~1 min from start (jump.sh); the
+first t=5s bc poll never printed. User corroboration: **tapping the
+screen after blue-ON did NOT wake the display — the DISPC kill WORKS**
+(LCD off = no wake; also proves DISPC scanout was live in every
+pre-kill run).
+
+Readbacks (nonce 0x6a9b0306 = the payload ARM-TIME shape; bc[4]/bc[5] = 0
+= sanitized but NEVER written — the kernel fixup never ran): **the jump
+never happened.** bc[1] = 31 = the payload's sweep-completed marker — so
+the payload passed the slay (55), the sweep (31), and died before bc 39
+(where bc[3] = buffer phys and the nonce would land; bc[3]=0, nonce is
+arm-time) — **the death window is the memtest / 24MB kernel-copy phase,
+whose writes cover the entire sweep-granted 24MB physical window.**
+Working theory: this run's granted window overlapped LIVE QNX-owned
+memory (driver allocations / DMA buffers inside QNX's "free" pool) — the
+payload's writes trampled it and QNX froze; WDT2 then reset the box at
+~1 min. The placement varies per run (W-28: 0xa1300000, W-29:
+0xa1200000, W-30: unknown — the reason bc[18] now records it pre-phase).
+
+**UNIFYING HYPOTHESIS (session 9): the per-run kernel corruption
+(W-25 svm alloc / W-26 FDT stack smash / W-27 pte alloc / W-29
+MMU-enable) = the kernel boots INSIDE a 24MB window that QNX may still
+partially own/DMA-to; the overlap is per-run random (the sweep result
+varies), so the corruption lands anywhere. The devb slay removed only
+devb's DMA; io-usb/RNDIS and others remain. Test: correlate deaths with
+placements (bc[18]) and/or force a verified-empty placement.**
+
+W-29-vs-W-30 payload delta was ONLY the bc[16]/[17] slot move — the
+early QNX death is therefore NOT caused by the readback; it is the
+placement/trample class (or a nondeterministic slay interaction).

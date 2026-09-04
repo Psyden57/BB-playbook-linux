@@ -682,9 +682,12 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         /* W-29 forensics: the docs say the kill "does not blank the
          * screen" — verify the registers actually read back cleared
          * (backlight-off != scanout-off; DISPC keeps fetching frames
-         * with the backlight timed out — a ~150 MB/s DMA read master). */
-        bc[7] = dispc[0x440 / 4];   /* CONTROL readback (expect 0) */
-        bc[14] = dispc[0x4A0 / 4];  /* GFX_ATTRIBUTES readback */
+         * with the backlight timed out — a ~150 MB/s DMA read master).
+         * W-30: slots moved to bc[16]/bc[17] (0x90000040/44) — the probe
+         * post-jump clobbered bc[7]/bc[14] in W-29; these survive it.
+         * Read manually: memdump3 90000040 8. */
+        bc[16] = dispc[0x440 / 4];  /* CONTROL readback (expect 0) */
+        bc[17] = dispc[0x4A0 / 4];  /* GFX_ATTRIBUTES readback */
     }
     bc_write(34);
     /* PL310 config registers (control/aux/latency) are SECURE-FILTERED from
@@ -815,6 +818,11 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
     }
     printf("jump buffer v=%p phys=0x%llx size=%u contig=%llu\n", (void *)buf,
            (unsigned long long)phys, T3_BUF_SIZE, (unsigned long long)contig);
+    /* W-31: record the chosen placement BEFORE the memtest/copies — W-30
+     * died between bc 31 and bc 39 (memtest/copy phase, box frozen) with
+     * the placement unrecoverable (bc[3] is only written at bc 39). If a
+     * future run dies here, bc[18] names the suspect window. */
+    bc[18] = (uint32_t)phys;
     bc_write(31);
 
     /* Kernel placement INSIDE the buffer (2026-09-03, from W-3): QNX's free
