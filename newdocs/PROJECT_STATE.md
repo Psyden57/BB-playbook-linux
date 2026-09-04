@@ -115,24 +115,20 @@ memcmp-verified copy. The Image-path binary remains the deepest boot
 (bc=171); the zImage path now needs its own diagnosis before it can deliver
 the DTB+full-memory test the era matrix wants.
 
-**Next run** (W-34): build #106 (W-32c) — the pv variables are now
-DIRECTLY OVERWRITTEN in start_kernel (pre-setup_arch) with the
-build-time constants (0xffffffffe0000000 / 0xa0000), then DCCIMVAC'd —
-the clean carries the correct value through the L2C, overwriting the
-stale L2 line; no SMC 0x101 (its clean step poisoned DRAM with the
-stale L2 content — W-33's 8/8 failure). Marker 163; tries → bc[19]
-(0x9000004C via memdump3 90000040 0x20). W-33 confirmed the
-stale-pv-regime chain: decompressor-era stale L2 line + fixup SO stores
-bypassing L2 + per-run eviction luck ⇒ C-world __va/__pa broken ⇒
-deterministic early-C walls. Expectations: PB-ADJ prints CORRECT values
-on every run (the regime should be structurally impossible now); the
-boot advances past the svm wall → the 171 wall / l2x0 hazards
-(KNOWN_ISSUES #3). If a stale read STILL appears, the L2-clean-through
-assumption is wrong and the next step is an NS 0x772 (invalidate-by-PA)
-experiment via smctest. bc[16]/bc[17] = DISPC readbacks (0/0 confirmed),
-bc[18] = placement. Hands-off baseline protocol. Marker-number audit:
-setup.c's pb_bc(130-136) pairs COLLIDE with mmu.c's PB_MMU_BC numbers —
-discriminate via the mirror channel. See docs/03 W-25..W-33 and
+**Next run** (W-35): build #107. The pv stale regime is DEAD (W-34:
+direct store + DCCIMVAC, tries=0, pv correct throughout, BUG line gone)
+— but the svm wall survives it: the boot still died at 161→151 (the
+44-byte memset of PA 0xbfdfffd4, top-of-lowmem free DRAM) with
+VERIFIED-CORRECT pv. Build #107 splits the memset into 16B chunks
+(markers 164/165/166) + a store-stick readback (word 0 → bc[19]) to
+distinguish: first-16B wedge vs store-not-sticking vs past-memset.
+Historical note: every zImage run has died in/around iotable_init's svm
+allocation; the W-4 Image-path run passed it. bc[16]/bc[17] = DISPC
+readbacks (0/0 confirmed), bc[18] = placement, bc[19] = memset
+chunk-state (W-35+), all read via `memdump3 90000040 0x20`. Hands-off
+baseline protocol. Marker-number audit: setup.c's pb_bc(130-136) pairs
+COLLIDE with mmu.c's PB_MMU_BC numbers — discriminate via the mirror
+channel. See docs/03 W-25..W-34 and
 SESSION-HANDOFF/BOOTSTRAP_SESSION_9.md.
 
 ## The secure monitor — RE closed (session 7)
