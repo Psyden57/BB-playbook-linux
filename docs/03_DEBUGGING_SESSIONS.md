@@ -2024,3 +2024,36 @@ consistent.)
 ring2 headers (0/0) + ASCII residue — no diagnostic value (the region
 is sanitized each run; the wild writer remains unidentified, now seen
 in head.S-era deaths W-29/W-35).
+
+### Run W-36 (2026-09-05): build #107 + placement guard — guard works
+### (0xa1600000, no overlap), head.S passed, pv correct — and the death is
+### the FIRST 16-byte store of the memset (164/165/166 never fired)
+
+Run: PAYLOAD_MODE=--dmaquiet ./jump.sh zImage, hands-off. Jump ~t=30s;
+reboot ~2 min (user).
+
+Readbacks (nonce 0xcbfb1f58 fresh): bc[1] = 161, bc[13] = 0xbfdfffd4,
+ring 1170 (the pv-correct clean count), bc[18] = 0xa1600000 (the guard
+rejected the low placements ✓), bc[19] = 0 (W-32c tries=0 ✓), DISPC 0/0.
+The chunk markers 164/165/166 NEVER fired → **the death is inside the
+first 4 volatile stores (p[0..3]) to VA 0xdfdfffd4** — volatile stores
+are strictly ordered across the opaque pb_bc_put calls, so this is
+instruction-precise: the very first write to that page wedges the
+machine. No abort flag, no panic, no console output (console ended at
+PB-CMA in the pv-correct 1170-count).
+
+Placement context: the svm (44 B at PA 0xbfdfffd4) sits directly below
+the CMA remap's own pte table (memblock top-down: the 4 KB pte table at
+[0xbfdff000, 0xbfe00000), then the svm at [0xbfdfffd4, 0xbfe00000)).
+PA 0xbfdfffd4 is inside the bank, inside arm_lowmem_limit, inside a
+section map_lowmem mapped ([0xbf800000, 0xbfe00000) → VA
+0xdf800000-0xdfe00000). The mystery: a 4-word cached store to a mapped,
+free, never-touched-this-boot DRAM page wedges — deterministically
+(4 svm-touching deaths: W-25/31/32a/34; now 5 with W-36).
+
+### Build #108 (W-37): pmd dump + single-store ladder
+
+Next probe: dump the ACTUAL pmd entry for VA 0xdfdfffd4 (bc[19] =
+pmd_val — a valid section descriptor vs zero/invalid) before the
+stores, then single stores p[0]→167, p[1]→168 to bisect the first-four
+window.
