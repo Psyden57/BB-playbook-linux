@@ -115,23 +115,21 @@ memcmp-verified copy. The Image-path binary remains the deepest boot
 (bc=171); the zImage path now needs its own diagnosis before it can deliver
 the DTB+full-memory test the era matrix wants.
 
-**Next run** (W-30): distribution re-runs of the --dmaquiet config. State:
-W-28 (direct MMC2 register access) SIGBUS'd on the first MMCHS read —
-device registers are NOT NS-accessible, and that abort class then FROZE
-the box (power-hold needed). W-29 (devb slay, the QNX-native quiesce)
-jumped and died at bc[1]=121 (enable_mmu entered, 122 never) — a
-never-before-seen pre-C-world death on the zImage path, in a region
-W-25/26/27 all passed. The death now spans the whole late-head.S region
-(svm alloc / FDT walk / pte alloc / MMU-enable across 4 runs). The devb
-slay worked (user-observed eMMC I/O oddity during the run) but did not
-cure the randomness — one sample. Remaining un-quiesced DMA master:
-DISPC scanout (~150 MB/s, runs even with the backlight timed out; its
-kill readback was slot-clobbered by the probe — re-verify with
-surviving-slot markers). Also open: bc[2]=0x3E7 co-occurred with the 121
-death (probe+zImage-correlated as always). Marker-number audit: setup.c's
-pb_bc(130-136) pairs COLLIDE with mmu.c's PB_MMU_BC numbers —
-discriminate via the mirror channel. See docs/03 W-25..W-29 and
-SESSION-HANDOFF/BOOTSTRAP_SESSION_9.md.
+**Next run** (W-31): the unifying hypothesis is on the table — the
+per-run kernel corruption (W-25 svm alloc / W-26 FDT stack smash / W-27
+pte alloc / W-29 MMU-enable) may be the kernel booting INSIDE a 24MB
+window QNX still partially owns/DMA-to (the sweep's "free" slot varies
+per run). W-30 proved the class: the payload's OWN memtest/copy writes
+killed QNX mid-setup (died between bc 31 and bc 39, box frozen, WDT2
+reset ~1 min, no jump). W-31: re-run with bc[18]=placement recorded
+BEFORE the memtest (payload edit, shipped-verified) — correlate deaths
+with placements; the DISPC kill is CONFIRMED working (screen-tap test:
+no wake after blue-ON). The devb slay stays (only removes devb's DMA).
+Also open: bc[2]=0x3E7; the probe still clobbers bc[7] (readbacks live
+in bc[16]/bc[17] now, read via memdump3 90000040 0x20). Marker-number
+audit: setup.c's pb_bc(130-136) pairs COLLIDE with mmu.c's PB_MMU_BC
+numbers — discriminate via the mirror channel. See docs/03 W-25..W-30
+and SESSION-HANDOFF/BOOTSTRAP_SESSION_9.md.
 
 ## The secure monitor — RE closed (session 7)
 
