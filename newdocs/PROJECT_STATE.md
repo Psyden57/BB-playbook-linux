@@ -115,20 +115,21 @@ memcmp-verified copy. The Image-path binary remains the deepest boot
 (bc=171); the zImage path now needs its own diagnosis before it can deliver
 the DTB+full-memory test the era matrix wants.
 
-**Next run** (W-35): build #107. The pv stale regime is DEAD (W-34:
-direct store + DCCIMVAC, tries=0, pv correct throughout, BUG line gone)
-— but the svm wall survives it: the boot still died at 161→151 (the
-44-byte memset of PA 0xbfdfffd4, top-of-lowmem free DRAM) with
-VERIFIED-CORRECT pv. Build #107 splits the memset into 16B chunks
-(markers 164/165/166) + a store-stick readback (word 0 → bc[19]) to
-distinguish: first-16B wedge vs store-not-sticking vs past-memset.
-Historical note: every zImage run has died in/around iotable_init's svm
-allocation; the W-4 Image-path run passed it. bc[16]/bc[17] = DISPC
-readbacks (0/0 confirmed), bc[18] = placement, bc[19] = memset
-chunk-state (W-35+), all read via `memdump3 90000040 0x20`. Hands-off
-baseline protocol. Marker-number audit: setup.c's pb_bc(130-136) pairs
-COLLIDE with mmu.c's PB_MMU_BC numbers — discriminate via the mirror
-channel. See docs/03 W-25..W-34 and
+**Next run** (W-36): build #107 + payload placement guard. W-35 pinned
+the mechanism: the sweep granted 0xa0e00000 — the FIRST window ever
+overlapping the zreladdr inflation region [0xa0008000, ~0xa0f80000) —
+the decompressor relocated itself into the payload window and the boot
+died in head.S's tail (bc[1]=142, ring 0, bc[2]=0x3E7). The sweep now
+reserves [0xa0000000, 0xa1000000) (buf_placement_bad). The pv regime is
+cured (W-34: direct store + DCCIMVAC, tries=0, bc[19]); DISPC dead
+(0/0); devb slain. Expectation for W-36: placement ≥ 0xa1200000, the
+boot passes head.S, and the front returns to the svm memset region
+(161→151, W-34's correct-pv wall — the chunk markers 164/165/166 +
+bc[19] readback will localize it). If the svm memset completes, the
+boot advances into devicemaps/bootmem and toward the 171 wall
+(KNOWN_ISSUES #3 l2x0 hazards ahead). Marker-number audit: setup.c's
+pb_bc(130-136) pairs COLLIDE with mmu.c's PB_MMU_BC numbers —
+discriminate via the mirror channel. See docs/03 W-25..W-35 and
 SESSION-HANDOFF/BOOTSTRAP_SESSION_9.md.
 
 ## The secure monitor — RE closed (session 7)
