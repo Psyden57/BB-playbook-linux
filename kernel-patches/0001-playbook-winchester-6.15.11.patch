@@ -546,8 +546,8 @@
  __turn_mmu_on_end:
 
 --- a/arch/arm/kernel/phys2virt.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/phys2virt.S	2026-09-04 06:59:00.240387867 +0000
-@@ -29,6 +29,50 @@
++++ b/arch/arm/kernel/phys2virt.S	2026-09-04 09:03:58.220388005 +0000
+@@ -29,6 +29,79 @@
   */
  	__HEAD
  ENTRY(__fixup_pv_table)
@@ -561,6 +561,35 @@
 +	mov	ip, #0x09000000		@ ip = 0x90000000 (bc page)
 +	orr	ip, ip, #0x18
 +	str	r8, [ip]		@ bc[6] = r8 (PHYS_OFFSET)
++	@ PlayBook W-13 sentinel (2026-09-04): W-11/W-12 proved correct
++	@ bytes + correct PC delivery (bl AND blx, target verified via
++	@ bc[13]) yet no fixup execution effect — bc[6]=r8 is invisible
++	@ (the inline block writes the same value). Store a DISTINCTIVE
++	@ sentinel to bc[7] and flush it NOW, before the 140 marker: if
++	@ bc[7] reads 0xFFFFFFFF post-run, the fixup's stores execute and
++	@ the death is later; residue means the fixup truly never stored
++	@ anything. r0 scratch (dead here), r3 scratch at the poll.
++	mvn	r0, #0			@ r0 = 0xFFFFFFFF — the entry sentinel
++	str	r0, [ip, #0x1c]		@ bc[7] = sentinel (bc line 0)
++	dsb
++	mov	r0, #0x48000000		@ r0 = 0x48242768 (CLEAN_INV_LINE_PA)
++	orr	r0, r0, #0x240000
++	orr	r0, r0, #0x700
++	orr	r0, r0, #0x68
++	mov	ip, #0x09000000		@ bc line 0 (bc[0..15] incl. sentinel)
++	str	ip, [r0]
++	mov	ip, #0x48000000		@ ip = 0x48242730 (SYNC)
++	orr	ip, ip, #0x240000
++	orr	ip, ip, #0x700
++	orr	ip, ip, #0x30
++	mov	r0, #0x100000		@ bounded poll (zero unbounded polls)
++963:	ldr	r3, [ip]
++	tst	r3, #1
++	beq	964f
++	subs	r0, r0, #1
++	bne	963b
++964:	dsb
++	mov	ip, #0x09000000		@ restore the bc base for the next store
 +	mov	r0, #140		@ marker 140 = fixup_pv entered
 +	str	r0, [ip, #-0x14]	@ bc[1] @ 0x90000004
 +	dsb
@@ -598,7 +627,7 @@
  	mov	r0, r8, lsr #PAGE_SHIFT	@ convert to PFN
  	str_l	r0, __pv_phys_pfn_offset, r3
  
-@@ -42,6 +86,50 @@
+@@ -42,6 +115,50 @@
  	teq	r3, r0, lsl #21 	@ must be 2 MiB aligned
  	bne	0f
  
