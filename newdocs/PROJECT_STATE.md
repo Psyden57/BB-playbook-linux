@@ -20,19 +20,20 @@ jumped from QNX. The boot currently:
    root-caused and fixed on 2026-09-03** (see below). Boot reached
    **bc=171** in run W-4 — still the deepest boot, and the only one that
    entered the C world.
-3. **bc=171 = the old wall, but the CURRENT front moved earlier**: the
-   zImage path (the pivot that delivers DTB + full memory) dies BEFORE
-   `__fixup_pv_table` can run. W-9 (2026-09-04, kernel #88, flushed
-   fixup instrumentation) proved the fixup's entry stores never land:
-   **death between the post-__fixup_smp marker's flush and the fixup's
-   own CIPA** (~25 proven-op-class instructions + the bl). W-6/W-8's
-   "dies inside the fixup" reading is superseded. See docs/03 run W-9.
-   **The era-matrix sharpening**: runs 23-32 (zImage, UNCACHED, L2 OFF)
-   passed the fixup 8+ times; W-6/7/8/9 (zImage, CACHEABLE, L2 ON) died
-   there 4/4. **W-10 (2026-09-04, `--t3`, kernel #88, L2 OFF via 0x102):
-   the fixup STILL never enters — the L2 variable is EXONERATED**; the
-   remaining discriminator is the KERNEL BUILD (session-6 UNCACHED/
-   C/B/S-stripped builds passed; the current cacheable build dies 5/5).
+3. **★ THE FIXUP WALL IS BROKEN (W-17, 2026-09-04) ★**: the pv fixup,
+   INLINED into head.S's streamed region (W-17, commit c79de6f), EXECUTES
+   and the zImage boot reaches the **C WORLD with a live console**:
+   bc[1]=127 (the dma_contiguous_remap/PB-CMA point), parse_early_param
+   completed (bc[11]/bc[12] = 0xC0DE0010/0xC0DE0020), **1169 chars of
+   console** including "OF: fdt: Machine model: BlackBerry PlayBook
+   (winchester)", "cma: Reserved 16 MiB at 0xbe800000", and the PB-CMA
+   print with ALL-correct values (va=de800000, pv_off=ffffffffe0000000,
+   pfn=a0000). The pv machinery is proven end-to-end. The death is now
+   AT 127 (inside/just past dma_contiguous_remap) — with L2 OFF (--t3);
+   the discriminating next run = **--l2on** (the proper boot mode).
+   History: W-9..W-16 (flushed instrumentation, computed blx, I-clear,
+   smoke-test removal, CIPA removal) each exonerated one suspect; the
+   never-executed-via-any-delivery paradox resolved only by inlining.
    Also closed this session: the dtb-phys
    arithmetic (params block exonerated — bc[3] is the BUFFER base,
    qnx2linux.c:935; W-8 and W-10 close exactly against their shipped
@@ -43,9 +44,6 @@ jumped from QNX. The boot currently:
    warm reset, DRAM persists), the ring2 wild-index theory for bc[2]=0x3E7
    (index sane), and bc[2]'s correlation: **0x3E7 needs the PROBE**
    (probe+zImage runs show it with either L2 state; --t3 shows 0).
-   Next runs: (a) inline-test — the fixup's first stores copied into
-   head.S right after pbmark 130; (b) resurrect the C/B/S strip on
-   kernel #88.
 
 ## What was fixed in session 7 (the bc=127 wall)
 
@@ -117,10 +115,13 @@ memcmp-verified copy. The Image-path binary remains the deepest boot
 (bc=171); the zImage path now needs its own diagnosis before it can deliver
 the DTB+full-memory test the era matrix wants.
 
-**Next run** (W-11): inline-test — copy the fixup's first stores into
-head.S directly after pbmark 130 (pins the death inside the pre-entry
-window; isolates the bl/call from the stores), OR resurrect the C/B/S
-strip on kernel #88 (tests the session-6 UNCACHED-build variable).
+**Next run** (W-18): `PAYLOAD_MODE=--l2on ./jump.sh zImage` — the SAME
+inline-fixup kernel with the L2 left ON (the proper boot mode, D4). The
+W-17 death at bc=127 (inside/just past dma_contiguous_remap, after a
+correct PB-CMA print) is suspected to be L2-off-specific (pb_bc_put's
+CIPA on a disabled PL310, or L2-off traffic in the remap path); with L2
+on, expect the boot to proceed past 127 toward the deeper ladder
+(130-136, paging_init, the 171 region).
 
 ## The secure monitor — RE closed (session 7)
 

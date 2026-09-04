@@ -1198,6 +1198,47 @@ __adldst_l, grepped not recalled). **W-17: the pv fixup INLINED into
 head.S's streamed region** (markers 143/144; falls through to 131; the
 called functions remain for the Image path).
 
+### Run W-17 (2026-09-04): ★★★ THE WALL IS BROKEN — the inline pv fixup
+### works; the zImage boot reaches the C WORLD with a live console ★★★
+
+Build: kernel #95 (W-17, commit c79de6f): the pv fixup transcribed INLINE
+into head.S after the inline block (markers 143/144, SO stores; falls
+through to 131; the blx removed). Run: --t3 L2-off (the same mode as
+W-9..W-16 for comparability).
+
+Readbacks (nonce 0xc89a9de3 fresh): **bc[1] = 127** — the boot is PAST
+the fixup, past cpt, past MMU-on, IN THE C WORLD, at the
+dma_contiguous_remap/PB-CMA point. bc[2] = 0x17F = 127|0x100 (the C
+world's pb_bc second channel — its first fire ever on the zImage path).
+**bc[11] = 0xC0DE0010 (parse_early_param entered), bc[12] = 0xC0DE0020
+(parse_early_param COMPLETED — main.c:780/799).** bc[3] = 0x41, bc[14] =
+0x66, mirror0 = 0x27F — new, unexplained (secondary). **ring1 count =
+0x491 = 1169 chars — the console is ALIVE.**
+
+The full decoded console log (python-decoded, rule 13):
+- "Booting Linux on physical CPU 0x0" / the full 6.15.11 banner (#94)
+- "CPU: ARMv7 Processor [411fc092] ... cr=10c5387d"
+- **"OF: fdt: Machine model: BlackBerry PlayBook (winchester)"** — the
+  DTB is delivered and parsed on the zImage path for the first time
+- earlycon enabled, keep_bootcon/ignore_loglevel honored
+- PB-ADJ (vmalloc d0000000, lowmem c0000000), PB-MEM (bank
+  a4000000+1c000000), PB-RES (the DTB reservation a2541998+15519)
+- **"cma: Reserved 16 MiB at 0xbe800000"** — the session-7 fix works
+- PB-ADJ again (lowmem now bfe00000 — adjusted by the CMA)
+- **"PB-CMA: cma[0] base=0xbe800000 size=0x01000000 va=de800000
+  pv_off=ffffffffe0000000 pfn=a0000"** — ALL VALUES CORRECT (pv_off =
+  −512 MB ✓, va = __va(cma) ✓, pfn = 0xa0000000>>12 ✓). The ring ends
+  here; bc[1]=127 — the death is inside/just past dma_contiguous_remap
+  after the PB-CMA print.
+
+The pv machinery is PROVEN correct end-to-end on the zImage path. The
+inline copy's patch loop ran (the pv stubs are patched — the C world's
+__pa/__va all produce correct values). The 127 death: with L2 OFF, the
+prime suspect is pb_bc_put's CIPA-on-disabled-PL310 or the next
+operation in dma_contiguous_remap; the discriminating run = W-18 with
+**--l2on** (the proper boot mode per D4 — CIPA ops legal, and the mode
+the Image path used when it reached 171).
+
 **The correlation re-scan (perfect, 20+ runs):**
 | Kernel era | Smoke test (UART3, MMU-off) | Pre-fixup CIPA | Result |
 | W-4/W-5 (session-6) | absent | absent | PASSED (126/171) |
