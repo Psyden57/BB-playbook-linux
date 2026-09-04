@@ -115,28 +115,23 @@ memcmp-verified copy. The Image-path binary remains the deepest boot
 (bc=171); the zImage path now needs its own diagnosis before it can deliver
 the DTB+full-memory test the era matrix wants.
 
-**Next run** (W-32): the leading noise-reduction step — extend the W-24
-C-world dual-level invalidate from the 2 pv variables to the WHOLE
-kernel image (L1 DCCISW-all + SMC 0x101 by-PA clean+inv over
-[kern_phys, _end], C world's first act): kills the decompressor-era
-stale-D/I-line class (the pv-stale regime returned in W-27/W-31 — the
-2-variable fix is per-run unreliable) and shrinks the randomness before
-re-bisecting. Session-9 death map (all with devb slain + DISPC
-register-confirmed dead): W-25 svm alloc call / W-26 FDT stack smash /
-W-27 map_lowmem pte alloc / W-29 MMU-enable pre-C / W-31 svm memset —
-objects are wherever the boot works, NOT confined to the payload window
-(W-31's dying svm at 0xbfdfffd4 vs placement 0xa1c00000). W-30 remains
-explained (payload memtest trampled live QNX memory inside the window —
-bc[18]=placement now captured pre-phase). Disconfirmed this session:
-DISPC scanout (kill confirmed 0/0 + no-wake), eMMC devb (slain; MMCHS
-regs NOT NS-accessible — W-28 SIGBUS + box freeze). Remaining suspect
-classes: L2 transaction-loss under QNX's 1/1/1 latencies, the SGX/PVR
-pool (invisible to pidin, unquiesced), decompressor stale lines.
-bc[16]/bc[17] = DISPC readbacks, bc[18] = placement — read via
-`memdump3 90000040 0x20`. Marker-number audit: setup.c's pb_bc(130-136)
-pairs COLLIDE with mmu.c's PB_MMU_BC numbers — discriminate via the
-mirror channel. See docs/03 W-25..W-31 and
-SESSION-HANDOFF/BOOTSTRAP_SESSION_9.md.
+**Next run** (W-33): build #105 — the self-healing pv invalidate moved to
+main.c start_kernel right after pb_bc(141), the C world's earliest point
+BEFORE setup_arch (W-32's boot died at early_paging_init, the first big
+pv consumer, before the block in adjust_lowmem_bounds ever ran). Block:
+literal PA delta (PA = VA - 0x20000000), volatile re-reads, 8 retries,
+marker 163 + bc[10] = retry count. W-32a established the root cause
+chain: stale __pv_offset ⇒ broken C-world __va/__pa inlines ⇒
+deterministic wedge at the first pv-consuming allocation; the old W-24
+fix's own __pa consumed the stale pv it repaired. Expectations: bc[10]
+= retries used; PB-ADJ prints correct values; if cured, the boot
+advances past the svm wall toward the 171 wall / l2x0 hazards
+(KNOWN_ISSUES #3). bc[16]/bc[17] = DISPC readbacks (0/0 confirmed),
+bc[18] = placement, read via `memdump3 90000040 0x20`. Hands-off
+baseline protocol for user interactions (W-32a exonerated swipe/tap).
+Marker-number audit: setup.c's pb_bc(130-136) pairs COLLIDE with mmu.c's
+PB_MMU_BC numbers — discriminate via the mirror channel. See docs/03
+W-25..W-32 and SESSION-HANDOFF/BOOTSTRAP_SESSION_9.md.
 
 ## The secure monitor — RE closed (session 7)
 
