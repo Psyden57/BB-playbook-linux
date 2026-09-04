@@ -1335,3 +1335,40 @@ MMU off) in the streamed region — is the ONLY invariant separating
 passing from dying runs (the CIPA correlation is imperfect: W-6, kernel
 #85, had no CIPA and still died). **W-15: smoke test disabled** (markers
 kept; one variable).
+
+### Run W-21 (2026-09-04): the bank fix WORKS — the boot advances to 146
+### — but pv_off=0 in the C world: the inline fixup's execution is
+### build-nondeterministic
+
+Build: kernel #98 (W-21, commit 414ad30): the DTS bank → 0xa0000000 +
+0x20000000 (the kernel code unchanged from #97; only the appended DTB's
+bytes differ). Run: --l2on.
+
+Readbacks (nonce 0xcb5ab44c fresh): **bc[1] = 146** — the "tlb flush
+done" marker INSIDE dma_contiguous_remap (W-20's marker set!). The boot
+climbed: 127 (map_kernel, the full PB_MMU_BC(127) triple fired —
+mirror0 = 0x27F ✓), the remap's pmd_clear (145), the tlb flush (146) —
+**the death is INSIDE iotable_init (147 absent)**. **ring1 count =
+0x4C6 = 1222 chars — 53 MORE than W-17/18/19** — new prints!
+
+The decoded new console tail (python, rule 13):
+- "PB-MEM m[0]=a0000000+20000000" — the new bank ✓
+- **"PB-ADJ: vmalloc_limit=30000000 lowmem_limit=0"** — TWICE — the pv-
+  derived values are DEAD (correct: d0000000 / c0000000)
+- **"BUG: not creating mapping for 0x00000000 at 0x20000000 in user
+  region"** — the session-7 BUG, back with phys=0 / va=0x20000000
+- **"PB-CMA: ... va=de800000 pv_off=0 pfn=0"** — **pv_off = ZERO** —
+  the inline fixup's __pv_offset/__pv_phys_pfn_offset stores absent.
+
+**THE PARADOX DEEPENS: the inline fixup is byte-identical and at the
+same address in #96 (pv CORRECT — W-19's ring count matched W-17's
+exactly) and #97/#98 (pv = 0).** The only deltas: dma-mapping.c's +60
+bytes (C-world layout) and the DTB bytes. The fixup did not deadloop
+(the boot reached the C world) — it was SKIPPED ENTIRELY, again, now
+for code INLINED in the streamed path. **W-22: the fixup's markers
+relocated to SURVIVING slots (bc[4]=143 entered, bc[5]=144 aligned,
+bc[6]=the computed delta) — the direct readout of whether the inline
+fixup executes in the current build.** Working hypothesis space: an
+intermittent, layout-linked execution gap in the streamed region
+(mechanism unknown — every machine-config variable exonerated in
+W-9..W-19).
