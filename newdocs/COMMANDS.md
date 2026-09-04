@@ -18,8 +18,11 @@ $SSH "on -C 0 /tmp/memdump3 90000000 0x40"   # read the bc page
 
 `jump.sh` (in `kexec/`) wraps deploy + run + readback and defines the same
 options in `SSHARGS`. Payload mode is chosen by env: `PAYLOAD_MODE=--l2on`/
-`--t3`/`--probe`/`--ppa`/`--l2lat`; kernel image = argv[1]
+`--dmaquiet`/`--t3`/`--probe`/`--ppa`/`--l2lat`; kernel image = argv[1]
 (`./jump.sh zImage` — **zImage is the preferred path**).
+`--dmaquiet` (= --l2on + `slay devb-mmcsd-winchester` after the last file
+read + the DISPC-kill readbacks) is the session-9 default for runs:
+**PAYLOAD_MODE=--dmaquiet ./jump.sh zImage**.
 
 ## The debug loop
 
@@ -27,6 +30,8 @@ options in `SSHARGS`. Payload mode is chosen by env: `PAYLOAD_MODE=--l2on`/
 # 1. read the bc ladder + mirrors after the WDT2 reboot (jump.sh does this;
 #    manual form):
 $SSH "on -C 0 /tmp/memdump3 90000000 0x40"
+# 1b. session-9 extended slots (DISPC readbacks, placement, pmd pattern):
+$SSH "on -C 0 /tmp/memdump3 90000040 0x30"
 # 2. read the console ring (count @0x88000080, chars @0x88000100; window 3840):
 $SSH "on -C 0 /tmp/memdump3 88000080 0x4e0" > /tmp/ring.txt
 # 3. decode memdump3 output: it prints words BIG-ENDIAN — pack each word

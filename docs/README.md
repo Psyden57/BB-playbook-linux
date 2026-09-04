@@ -75,6 +75,16 @@ corrected them — the corrections are never silent (see
     new instructions in place, size delta sane) before running; a
     rebuild has silently produced a stale packed image before
     (session 3, run 8).
+17. **Discriminate pb_bc pairs via the mirror channel** (session 9) —
+    setup.c's pb_bc(130-136) pair-writers COLLIDE with mmu.c's
+    PB_MMU_BC ladder numbers: PB_MMU_BC also writes the mirror
+    (0xD4000004 = v|0x200), setup.c's pb_bc does not. A mirror value of
+    0x46 (70, payload-era) with bc[1]=133 means setup.c's marker, not
+    map_lowmem's. W-20's "133 = map_lowmem done" reading was probably
+    the setup.c marker. Also: shared bc slots get overwritten by later
+    phases (bc[10] by parse-era markers) — put retry/forensic values in
+    surviving slots (bc[19]-bc[25], read via
+    `memdump3 90000040 0x30`).
 
 ## Key Addresses Cheatsheet
 
@@ -89,41 +99,43 @@ corrected them — the corrections are never silent (see
 | 0x40309000 / 0x40309800 | probe.bin / params block (kernel entry, DTB phys) |
 | 0x4A314030 | WDT2 TGR (kick = any write; LDR=0x2C, CRR=0x28, SPR=0x48) |
 | 0x4A008700+ | CM2 CORE CLKSTCTRLs (SECURE-FILTERED — no NS writes!) |
-| 0xa0008000 | zImage decompress target = zreladdr (AUTO_ZRELADDR bucket 0xa0000000 + TEXT_OFFSET; PHYS_OFFSET = 0xa0000000 — the DTS bank must match, see the W-21 record) |
+| 0xa0008000 | zImage decompress target = zreladdr (AUTO_ZRELADDR bucket 0xa0000000 + TEXT_OFFSET; PHYS_OFFSET = 0xa0000000 — the DTS bank must match, see the W-21 record). **The placement sweep reserves [0xa0000000, 0xa1000000) for the inflation + relocated decompressor (session 9, W-35).** |
+| 0x90000040-0x64 | Extended bc slots (session 9): bc[16]/bc[17] = DISPC kill readbacks (expect 0/0), bc[18] = payload placement, bc[19] = pmd/readback, bc[20]-bc[25] = the pmd pattern (VAs 0xdfc/0xdfe/0xdf8/0xdf4/0xdf0/0xdfa) — read via `memdump3 90000040 0x30` |
 
 ## Decision Tree (After a Jump Run)
 
 ```
 bc[15] nonce fresh? ── no ──► stale readback; investigate before concluding
-bc[1] after jump? (the zImage ladder, W-9→W-24 era; 2026-09-04)
-├─ 130/142 (fixup region)           ──► the fixup delivery paradox era —
-│                                      SOLVED by inlining (W-17); do not
-│                                      call MMU-off helpers, INLINE them
-├─ 143/144/145/146 (remap markers)  ──► the dma_contiguous_remap bisect —
-│                                      145=pmd_clear, 146=tlb-flush,
-│                                      147=iotable_init (the CURRENT front
-│                                      as of session 8's end: dies AT 146,
-│                                      147 absent — see docs/03 W-24)
-├─ 127/126/125/129/128 (mmu.c)      ──► map_kernel/remap/fixmap/devicemaps/
-│                                      bootmem — passed as of W-24 (with the
-│                                      bank = 0xa0000000+512MB, W-21)
-├─ 133/134 (map_lowmem/prepare)     ──► passed (134 first, then 133)
-├─ pv_off=0 in the console          ──► the decompressor-era stale D-side
-│                                      lines — the W-24 dual-level invalidate
-│                                      (DCCIMVAC + SMC 0x101) in map_lowmem
-│                                      is the fix; keep it
-├─ "BUG: not creating mapping"      ──► the pv values are stale/broken in
-│                                      the C world (W-21/22/23 signature)
+bc[1] after jump? (the zImage ladder, W-9→W-38 era; 2026-09-05)
+├─ 142/143/144 (head.S fixup region) ──► head.S-tail death, pre-C world —
+│                                      W-35: a placement overlapping the
+│                                      zreladdr inflation region; check the
+│                                      guard (bc[18] ≥ 0xa1200000)
+├─ 121/122 (MMU-on pair)             ──► enable_mmu entered, turn_mmu_on
+│                                      never — W-29-era; pre-C-world death
+├─ 150-166 (iotable/svm region)      ──► the svm memset wall: bc[19] =
+│                                      pmd for the svm VA — a section desc
+│                                      = healthy mapping; a TABLE pointer
+│                                      (0xbfc1141e) = the stale pgd pair
+│                                      (KNOWN_ISSUES #4b, build #110 shaves
+│                                      the allocator limit by 2MB)
+├─ 133/135/134 (setup.c pairs)       ──► setup_arch/early_paging_init era —
+│                                      discriminate from mmu.c's 133/134
+│                                      via the mirror channel (rule 17)
+├─ pv_off=0 in the console           ──► should be IMPOSSIBLE now (the
+│                                      W-32c direct-store block, marker 163,
+│                                      tries in bc[19]) — if seen, the store
+│                                      fix failed: investigate immediately
 ├─ climbs past 171 → initcall breadcrumbs (bc[6]/bc[7])
-│                                   ──► progress! bc[7] = the hanging driver's
+│                                    ──► progress! bc[7] = the hanging driver's
 │                                      fn pointer (resolve via System.map)
-├─ l2x0_of_init wedge (init_IRQ)    ──► the by-way 0x7FC deadlock
+├─ l2x0_of_init wedge (init_IRQ)     ──► the by-way 0x7FC deadlock
 │                                      (newdocs/KNOWN_ISSUES #3)
-├─ 50 (payload era)                 ──► payload crash — SSH back in, read bc,
+├─ 50 (payload era)                  ──► payload crash — SSH back in, read bc,
 │                                      fix, re-run (no reboot cost)
-├─ payload markers < 50             ──► setup-phase problem (eMMC/sync stalls
+├─ payload markers < 50              ──► setup-phase problem (eMMC/sync stalls
 │                                      seen — retry once)
-├─ bc[1] = 0xAB                     ──► real post-M abort fired — read the ring
+├─ bc[1] = 0xAB                      ──► real post-M abort fired — read the ring
 └─ mirror0 = 70 (without 71)        ──► NORMAL (70 = "jump started"; the 71
                                        writer is gone — do NOT retry on this)
 ```

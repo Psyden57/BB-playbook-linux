@@ -68,8 +68,51 @@ mis-compared magic constant. Leans further toward the code-bug side.
 
 ## Current status
 
-UNRESOLVED but with a strong lean: code bugs explained every inspected
-symptom; one live anomaly (DTB loss) could go either way.
+CHARACTERIZED as of session 9 (see the 2026-09-05 addendum below): the
+corruption is real but stale-view, not random damage — QNX-era /
+decompressor-era L2 content served to the C world's cached reads or the
+PTW, per-run. One live anomaly (the W-26 stack-protector catch) still
+leans either way; one live victim (the stale pgd pair) is worked around
+but not cured.
+
+## ADDENDUM 2026-09-05 (session 9: the corruption class CHARACTERIZED —
+## both sides were right)
+
+Session 9 resolved the ledger's framing: the "corruption" is real but it
+is a **stale-view** class, not random damage — QNX-era/decompressor-era
+content surviving in the L2 for specific lines and being served to
+either the C world's cached reads or the page-table walker, per-run
+(eviction luck):
+
+1. **The pv variables** (the old #4 "unpatched pv stub"): the fixup's
+   MMU-off SO stores reach DRAM but not L2; a surviving stale L2 line
+   broke every C-world __va/__pa inline and produced the deterministic
+   early-C walls. CURED deterministically (the W-32c direct store +
+   DCCIMVAC, build #106, tries=0).
+2. **The swapper_pg_dir's last pair** (VA 0xdfc/0xdfd): reads as
+   identical bogus TABLE descriptors pointing at 0xbfc11400 — a
+   QNX-era pte table for that DRAM region (never allocated this boot;
+   deterministic across runs AND placements). map_lowmem's section
+   write for the last pair didn't survive in the PTW's view. Any
+   allocation there wedges on the walk (the svm deaths W-25/31/32a/
+   34/36/37). NOT yet cured (build #110 shaves the allocator limit by
+   2MB; untested at this note's date).
+3. **A true wild write was never needed to explain anything**: every
+   "corrupted" structure this session (the W-26 stack-protector catch,
+   the W-37 pgd slot) resolved to stale QNX-era content or a
+   deterministic code path. The W-26 stack smash is the one datum still
+   open — it fired INSIDE the FDT walk with a named victim; the stale-
+   view model would need the boot stack lines to be stale-era content
+   too (plausible: init_task's stack region is DRAM the decompressor
+   and QNX both touched).
+4. **The device-op cliff calibration survives** unchanged; the 11 GB
+   probe-loop stall remains the one corruption-era datum with no kernel
+   code involved.
+5. What WOULD still resolve it definitively: making the PTW's view
+   provably coherent — either a working invalidate-by-PA-without-clean
+   path (no monitor service exists; NS 0x772 is untested), or fixing
+   QNX's L2 latencies via a monitor service (the session-6 0x112/latency
+   lead).
 
 ## ADDENDUM 2026-09-03 (session-6 native context: one session-6 claim retracted, two measurements kept)
 
