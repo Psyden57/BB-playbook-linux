@@ -25,13 +25,66 @@ work. The device is in a normal post-reboot QNX state; the next run
 8. `PLAYBOOK-REFERENCE.md` §5 (NVRAM), §8 (recovery), §10 (ops lessons)
    — the safety model; NVRAM and RPMB remain untouchable
 
-## WHERE THINGS STAND
+## QUICK ACCESS (facts the old bootstraps carried)
 
-- Kernel: 6.15.11 non-LPAE omap2plus, zImage path, --l2on (QNX's PL310
-  kept enabled), CONFIG_CACHE_L2X0=n. Repo's kernel state =
-  `kernel-patches/` (regenerate after every kernel change; the tree at
-  /home/psyden/kernel/linux is machine-local; pristine 6.15.11 at
-  /home/psyden/kernel/pristine).
+- Device: QNX 6.6, SSH root@169.254.0.1, key `playbook-dev/rsa`; the
+  required option set is in newdocs/COMMANDS.md (old dropbear: ssh-rsa
+  + hmac-sha1). Boot to SSH after a reset = 2-3 min; /tmp wiped per
+  reboot (jump.sh redeploys everything).
+- The Git repo (private, github.com/Psyden57/BB-playbook-linux, HTTPS +
+  cached PAT) = the source of truth; the kernel tree itself is
+  machine-local.
+- Objdumps EXIST: `~/toolchains/armv7-eabihf/bin/arm-linux-objdump`
+  (our kernel, full symbols on vmlinux) and `~/qnx660-master/host/
+  linux/x86/usr/bin/arm-unknown-nto-qnx6.6.0eabi-objdump` (QNX ELFs).
+  Capstone for raw memdump3 dumps (word-reversed, big-endian print).
+- The device clock = GMT-3, the host (WSL) = UTC — convert when
+  comparing LED timelines to logs.
+- The user records every run on video and types exact LED timelines —
+  ask for them after every run (recordings are sometimes lost; offer
+  re-runs when timings matter).
+
+## WHERE THE CODE STANDS (per file — kernels #102 → #110)
+
+- **init/main.c**: the W-32c pv block in start_kernel right after
+  pb_bc(141) (first printk) — marker 163, retry count → bc[19]
+  (0xD000004C). This is THE pv cure: direct store of the build
+  constants + DCCIMVAC. The old pb_bc ladder (140/141/143/144/145/150/
+  151/111/118/171/172/176-180/186/187) intact.
+- **arch/arm/mm/mmu.c**: the bisect marker block inside iotable_init
+  (150/159/160/161, the W-38 pmd-pattern dumps → bc[19]-bc[25], store
+  markers 0x567/151 — armed in #110); the 2MB allocator shave after
+  map_kernel's 127 (arm_lowmem_limit -= 0x200000); alloc_init_pte
+  markers 156/157/158 + __create_mapping's 155; the pb_bc_put extern
+  declared before alloc_init_pte; the W-24-era invalidate block in
+  adjust_lowmem_bounds was REMOVED (moved to main.c as W-32c).
+- **arch/arm/mm/dma-mapping.c**: the remap markers 145/146/147.
+- **arch/arm/kernel/setup.c**: the pb_bc(130-136) pair ladder (COLLIDES
+  with mmu.c's numbers — rule 17); the LED-off diagnostic block after
+  paging_init.
+- **arch/arm/kernel/head.S**: unchanged this session (the inline fixup
+  + markers 143/144/delta-bc[6] + the streamed-region rules).
+- **kexec/qnx2linux.c**: the --dmaquiet mode (= --l2on + `system("slay
+  -f devb-mmcsd-winchester")` after the last file read, rc → bc[14] =
+  0xD1EBxxxx) + the DISPC kill with readbacks bc[16]/bc[17] + bc[18] =
+  the chosen placement written BEFORE the memtest + the 64KB stdout
+  buffer in main(). buf_placement_bad now reserves [0xa0000000,
+  0xa1000000) for the zreladdr inflation region.
+- **kernel-patches/**: regenerated through #110, apply-check clean.
+
+## THE CURRENT DEATH (the front)
+
+bc[1] = 161 — the svm memset (44 B of struct static_vm at PA
+0xbfdfffd4, VA 0xdfdfffd4) dies on its FIRST stores: the pmd for that
+VA reads as a bogus TABLE descriptor (0xbfc1141e → a QNX-era pte table
+at 0xbfc11400 — never allocated this boot) instead of map_lowmem's
+section desc. The PTW walks into garbage → the machine's silent wedge.
+Deterministic across runs AND placements (5 svm deaths). pv is CORRECT
+through the whole boot (the W-32c fix works — PB-ADJ prints
+d0000000/c0000000, PB-CMA pv_off=ffffffffe0000000, the BUG line gone).
+The W-38 pmd pattern: [0xdf8] = CORRECT section (0xbf81141e);
+[0xdfc]/[0xdfd] = the stale pair; [0xdfe+]=0; [0xdf0/0xdf4]=0
+(CMA-cleared); [0xdfa] = UNTESTED — that's W-39's probe.
 - **The pv-stale regime is CURED** (build #106, the "W-32c block" in
   start_kernel, marker 163): directly store the build constants
   (__pv_offset = 0xffffffffe0000000, pfn = 0xa0000) then DCCIMVAC —
@@ -87,6 +140,45 @@ Interpretation table:
   desc (0xbfa00XXe-shaped) vs a TABLE pointer tells which pair state
   immediately.
 - Anything else → re-run the decision tree (docs/README).
+
+## THE OPEN QUESTIONS (carried from sessions 8-9)
+
+1. **The stale-region width**: is only the LAST pgd pair poisoned, or
+   the whole top-of-map cache line / more? W-39's bc[25] (VA 0xdfa)
+   answers it.
+2. **The W-26 stack-protector catch's mechanism**: a wild write smashed
+   fdt_get_property_namelen's frame — the stale-view model needs the
+   boot-stack lines to be stale-era content too (unverified).
+3. **bc[2]=0x3E7's writer** — probe+zImage-correlated, back in the
+   head.S-era deaths (W-29's 121, W-35's 142); the bc[0x80-0x8F] dump
+   found no signal.
+4. **The MMU-off delivery paradox mechanism** (session 8) — unsolved;
+   the INLINE-don't-call rule stands.
+5. **W-29's head.S-era 121 death** — predates the placement guard and
+   the pv fix; probably the stale-era dice. Treat as covered unless it
+   recurs.
+6. **The 171 wall** (taskstats/kmem_cache) — the boot must first cross
+   the paging region; the era matrix (KNOWN_ISSUES #1 historical)
+   applies.
+7. **NS 0x772 (PL310 invalidate-by-PA, no clean)** — untested; if it
+   works from NS, it enables the REAL cure for every stale L2 line
+   (invalidate without poisoning DRAM).
+8. **W-20's "133 = map_lowmem done" reading** — doubtful (the setup.c
+   marker collision); unresolved (no kernel-tree git history).
+
+## DEAD ENDS (do NOT retry these)
+
+- Direct MMC2/MMCHS register access from NS: SIGBUS fltno=5 AND the box
+  then froze completely (power-hold to recover). Device registers
+  generally: DISPC = accessible; MMC2 = not; PRCM = secure-filtered.
+- SMC 0x101 (clean+inv) against a STALE L2 line: the clean poisons DRAM
+  (W-33's 8/8 verify failure). No invalidate-only monitor service
+  exists.
+- The W-24-style __pa()-based flush in a stale-pv regime: __pa consumes
+  the stale pv it's repairing — self-defeating.
+- Slain-devb runs: the eMMC rootfs execs fail ("cat: cannot execute") —
+  expected, not a fault.
+- The UART pad hunt: dead (superseded by the DRAM rings + PB-PANIC).
 
 ## SUBSEQUENT TASKS (in order)
 
