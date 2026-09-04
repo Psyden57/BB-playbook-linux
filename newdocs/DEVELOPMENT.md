@@ -6,7 +6,8 @@
  1. edit kexec/ sources (payload/stub/probe) or the kernel tree
  2. kexec: bash build.sh          | kernel: make ARCH=arm CROSS_COMPILE=... Image
     (see newdocs/SETUP.md)        |         + dtbs; then kexec/mkkernel.sh Image|zImage
- 3. PAYLOAD_MODE=--l2on ./jump.sh zImage        (from kexec/)
+ 3. PAYLOAD_MODE=--dmaquiet ./jump.sh zImage   (from kexec/; = --l2on +
+    slay devb + the DISPC kill — the session-9 default run mode)
  4. watch the LED: blue = payload/kernel start, off = kernel running, red = reset
  5. jump.sh automatically polls the bc ladder and dumps readbacks after reboot
  6. decode the console ring: ssh root@169.254.0.1 "on -C 0 /tmp/memdump3 88000080 0x4e0"

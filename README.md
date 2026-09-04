@@ -6,13 +6,14 @@ kexec-style transition implemented entirely from QNX userland**, on hardware
 whose boot ROM locks down everything below the OS (HS / High Security unit).
 
 Status: **the complete jump mechanism is proven working on real hardware**,
-and **mainline Linux 6.15.11 boots through `start_kernel` into initcalls**.
-The secure monitor is used to keep the L2 cache enabled across the jump, all
-kernel console output is captured into DRAM and survives the watchdog reset
-cycle, and the most recent wall (a page-table/memblock misconfiguration at
-breadcrumb 127) was root-caused and fixed. The current wall is at breadcrumb
-171 (`taskstats_init_early` → `kmem_cache_create`) — see
-[newdocs/PROJECT_STATE.md](newdocs/PROJECT_STATE.md).
+and **mainline Linux 6.15.11 boots through `start_kernel`**. The secure
+monitor is used to keep the L2 cache enabled across the jump, all kernel
+console output is captured into DRAM and survives the watchdog reset
+cycle. Session 9 (2026-09-05) root-caused the per-run early-C deaths (the
+stale-pv regime — cured by a direct-store fix) and characterized the
+"silent corruption" as a stale-view class; the current wall is the stale
+pgd pair at the top of the linear map (see
+[newdocs/PROJECT_STATE.md](newdocs/PROJECT_STATE.md)).
 
 ```
 QNX 6.6 (Tablet OS 2.0)                          bare metal

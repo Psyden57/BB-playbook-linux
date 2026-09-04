@@ -62,7 +62,7 @@ from `omap2plus_defconfig` + the deltas listed in `docs/08_KERNEL_DEBUGGING.md`.
 
 | Path | What | How to recreate |
 |------|------|-----------------|
-| `device-binaries/` | QNX/BlackBerry binaries dumped from the device + disassemblies | `scp` from `/base/usr/lib`, `/base/sbin` etc. of a rooted unit; disassemble with capstone/pyelftools (the box has no ARM objdump; the QNX ELFs are "architecture UNKNOWN" to binutils) |
+| `device-binaries/` | QNX/BlackBerry binaries dumped from the device + disassemblies | `scp` from `/base/usr/lib`, `/base/sbin` etc. of a rooted unit; disassemble with the SDP's objdump (`~/qnx660-master/host/linux/x86/usr/bin/arm-unknown-nto-qnx6.6.0eabi-objdump` — it reads the QNX ELF flavor that the host x86 binutils call "architecture UNKNOWN"; session-7 correction) or capstone/pyelftools |
 | `dumped4869ifs/` | the QNX IFS/rootfs dump | dumped from the running OS |
 | `optimized-docs/` | QNX 6.6 documentation set | QNX SDP docs |
 | `swpu231ap.pdf` (+`.txt`) | TI OMAP4430 TRM | TI / public mirrors |

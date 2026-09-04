@@ -43,6 +43,10 @@ original conversation history.
 
 ## Current handoff state
 
-- Latest session notes: [session-notes/session-07.md](session-notes/session-07.md)
-- Next action: `PAYLOAD_MODE=--l2on ./jump.sh zImage` (ROADMAP #1)
+- Latest session notes: [session-notes/session-09.md](session-notes/session-09.md)
+- Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_10.md` — read it
+  first (it has the read order, the per-file code state, the current
+  death, the first task = W-39, the open questions, and the dead-ends)
+- Next action: `PAYLOAD_MODE=--dmaquiet ./jump.sh zImage` (build #110,
+  the 2MB allocator shave + the middle-pair probe)
 - Local-only assets and why: [SETUP.md](SETUP.md) §6

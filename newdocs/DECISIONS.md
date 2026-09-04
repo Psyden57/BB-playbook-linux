@@ -44,8 +44,13 @@ QNX's free physical pool has no 2 MB-aligned 24 MB run (proven by the
 unaligned), but the kernel's pv fixup needs a 2 MB-aligned PHYS_OFFSET.
 Solution: accept any valid buffer, place the kernel at the first 2 MB-aligned
 offset inside it (`kern_off`), and patch the DTB /memory node's reg at
-runtime to match (`fdt_patch_memory`). The DTS-baked bank (0xa4000000 +
-448 MB) is the default that matches the common placement.
+runtime to match (`fdt_patch_memory`). **UPDATE 2026-09-04 (W-21): the
+DTS-baked bank must be 0xa0000000 + 512 MB** (zreladdr = 0xa0008000 ⇒
+PHYS_OFFSET = 0xa0000000 — the old "0xa4000000 + 448 MB" default put the
+kernel outside its own memory). **UPDATE 2026-09-05 (session 9): the
+sweep also REJECTS any window intersecting [0xa0000000, 0xa1000000) —
+the zreladdr inflation region (W-35: the decompressor relocates itself
+into an overlapping window and the boot died in head.S's tail).**
 
 ## D6: zImage over uncompressed Image for kernel boots
 
@@ -86,3 +91,25 @@ C-world invalidate). Rule going forward: any helper that must run
 MMU-off in the streamed region gets INLINED into head.S, never called
 via bl/blx. Mechanism of the paradox: open (session-08 notes hold the
 evidence).
+
+## D11: The pv cure = direct store in start_kernel, never SMC 0x101
+### against stale lines (session 9)
+
+The stale-pv regime (decompressor-era L2 lines + the fixup's SO stores
+bypassing L2, per-run eviction luck) broke every C-world __va/__pa
+inline. The W-24 fix was self-defeating (its __pa consumed the stale pv
+it repaired; SMC 0x101's CLEAN step writes the stale L2 line back to
+DRAM — W-33's 8/8 failure). The W-32c block (build #106, in
+start_kernel before setup_arch): directly STORE the build constants
+(__pv_offset = 0xffffffffe0000000, __pv_phys_pfn_offset = 0xa0000) and
+DCCIMVAC — the clean carries the CORRECT value through the L2C.
+Deterministic (tries=0). The same store+clean pattern is the template
+for the stale pgd pair (KNOWN_ISSUES #4b).
+
+## D12: Device-register NS access = tested before use (session 9)
+
+MMCHS (0x480B4000+) SIGBUS'd from NS (fltno=5) AND the abort class
+froze the box (W-28). DISPC = accessible (kill + readback verified).
+Never assume a device register is NS-touchable: verify from a prior
+run's evidence first; treat external aborts as device-wedging, not
+cheap crashes.

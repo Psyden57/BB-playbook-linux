@@ -117,10 +117,20 @@ sanity), then chains into the kernel with the ARM boot convention.
 - Tree: `/home/psyden/kernel/linux` (mainline 6.15.11, non-LPAE omap2plus).
 - Patches: `arch/arm/kernel/head.S` (PlayBook prelude: breadcrumb ladder,
   DEBUG_LL smoke test, r1/r2 save/restore, ring-map fixes incl. the M=1
-  fix), `arch/arm/include/debug/omap4bc.S` (DEBUG_LL → UART3 + DRAM rings),
-  `arch/arm/mach-omap2/omap4-common.c` (L2 write_sec routing), DTS
-  `omap4-winchester.dts` (memory bank, pl310 node, reserved-memory nodes),
-  `arch/arm/mm/dma-mapping.c` (PB-CMA print).
+  fix, the INLINED pv fixup with markers 142-144), `arch/arm/include/
+  debug/omap4bc.S` (DEBUG_LL → UART3 + DRAM rings), `arch/arm/mach-omap2/
+  omap4-common.c` (L2 write_sec routing), DTS `omap4-winchester.dts`
+  (memory bank 0xa0000000+512MB, pl310 node, reserved-memory nodes),
+  `arch/arm/mm/dma-mapping.c` (PB-CMA print + the remap markers),
+  `arch/arm/mm/mmu.c` (the PB_MMU_BC ladder + the iotable/svm bisect
+  markers + the 2MB allocator shave), `init/main.c` (the pb_bc ladder +
+  **the W-32c pv block in start_kernel — the pv cure, marker 163**),
+  `arch/arm/kernel/setup.c` (the pb_bc(130-136) pairs — COLLIDES with
+  mmu.c's numbers, rule 17), plus smaller markers in
+  `arch/arm/mm/init.c`, `kernel/cgroup/cgroup.c`, `kernel/taskstats.c`,
+  `mm/slab_common.c`, `arch/arm/kernel/head-common.S`,
+  `arch/arm/kernel/phys2virt.S`, `arch/arm/kernel/early_printk.c`,
+  `arch/arm/Kconfig.debug`. The authoritative diff = kernel-patches/.
 - Build: `mkkernel.sh` packs Image/zImage + DTB into `kexec/kernel/`.
 - Config: session-6 config; recoverable from any built Image via
   `scripts/extract-ikconfig` (CONFIG_IKCONFIG=y). Forced cmdline:

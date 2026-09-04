@@ -38,7 +38,7 @@
 ### Deployment
 | File | Purpose |
 |------|---------|
-| `jump.sh` | Deploy + detached payload launch + live bc polling + reboot wait + full readback (bc + mirrors + ring1). Usage: `./jump.sh zImage`; `PAYLOAD_MODE=--l2on ./jump.sh zImage` selects the payload mode (default `--probe`) |
+| `jump.sh` | Deploy + detached payload launch + live bc polling + reboot wait + full readback (bc + mirrors + ring1). Usage: `./jump.sh zImage`; `PAYLOAD_MODE=--dmaquiet ./jump.sh zImage` is the session-9 run default (modes: --l2on/--dmaquiet/--t3/--probe/--ppa/--l2lat; default `--probe`) |
 | `retry-jump.sh` | Retry harness — **STALE: it loops until mirror0 = 0x47, but the 0x47 (post-SMC) writer was removed; mirror0 = 0x46 (70) is now the normal final value.** Do not use it as-is |
 | `rsa`, `rsa.pub` | SSH key for root@169.254.0.1 |
 
@@ -72,10 +72,11 @@ tar xf /home/psyden/kernel/linux-6.15.11.tar.xz -C /home/psyden/kernel/pristine 
 ```
 
 **Diff the hand-written changes** (what our tree adds/changes vs upstream).
-PlayBook-modified files as of session 6: `arch/arm/kernel/{head.S,
-head-common.S,setup.c,early_printk.c,debug.S}`, `arch/arm/mm/{mmu.c,init.c}`,
-`arch/arm/mach-omap2/{omap4-common.c,io.c}`, `init/main.c`,
-`kernel/{cgroup/cgroup.c,taskstats.c}`, `mm/slab_common.c`,
+PlayBook-modified files (the canonical list = the regenerate recipe in
+newdocs/COMMANDS.md): `arch/arm/kernel/{head.S,
+head-common.S,phys2virt.S,setup.c,early_printk.c}`, `arch/arm/mm/{mmu.c,
+init.c,dma-mapping.c}`, `arch/arm/mach-omap2/{omap4-common.c,io.c}`,
+`init/main.c`, `kernel/{cgroup/cgroup.c,taskstats.c}`, `mm/slab_common.c`,
 `arch/arm/include/debug/omap4bc.S` (new), `arch/arm/boot/dts/ti/omap/
 omap4-winchester.dts` (new), `arch/arm/Kconfig.debug`. Recipe:
 ```bash
@@ -116,7 +117,7 @@ make -j12 ARCH=arm CROSS_COMPILE=/home/psyden/toolchains/armv7-eabihf/bin/arm-li
 |------|------|
 | `playbook-dev/kexec/` | **The payload & tools** (the table above) — the daily-work directory |
 | `playbook-dev/docs/` | This documentation set |
-| `playbook-dev/SESSION-HANDOFF/` | Session records + handoffs + `BOOTSTRAP_SESSION_7.md` (the session-7 start prompt) + `ring3-recovered-log-2026-09-02.txt` |
+| `playbook-dev/SESSION-HANDOFF/` | Session records + handoffs; the LATEST bootstrap = `BOOTSTRAP_SESSION_10.md` (the session-10 start prompt) + `ring3-recovered-log-2026-09-02.txt` |
 | `playbook-dev/device-binaries/` | **QNX OS binaries dumped from the device, many pre-disassembled** — including `trustzone-omap4` + `trustzone-omap4.dis` (**the secure monitor — ALREADY dumped and disassembled; session 7's RE target**), `procnto.dis`, `libsecure_dispatcher-omap4.so.1` + `.dis`, `devb-mmcsd-winchester` (+`.dis`), `devpm-omap4.so` (+`.dis`), `omap4430-wdtkick` (+`.dis`), `led-fan5702.so`, `winch_lcdctl` (+`.dis`), `setup-core-inactive` (+`.dis`), `splash_script`, `pidin-in.txt` |
 | `playbook-dev/dumped4869ifs/` | The dumped QNX 6.6 IFS (boot filesystem) tree: `etc/`, `proc/boot/`, `root/` — the OS's own files/configs |
 | `playbook-dev/optimized-docs/` | PlayBook NDK app-dev docs (QNX Neutrino kernel info included) — mostly irrelevant for the port, but the Neutrino sections document the kernel we are evicting |
@@ -213,7 +214,7 @@ ssh -i ../rsa root@169.254.0.1 "on -C 0 /tmp/memdump3 9fe00000 0x24"
 | Field | Meaning |
 |-------|---------|
 | bc[0]/bc[5] | magic / magic2 (0x4C424B43 / 0x4C424B44) |
-| bc[1] | last flushed marker (127 = the current wall; 133 = console registered; 132 = the old console-write wedge; 41 = jump-chain; 0xAB = abort) |
+| bc[1] | last flushed marker (historical: 127 = the session-7 wall; 133 = console registered; 132 = the old console-write wedge; 41 = jump-chain; 0xAB = abort). **Session-9 ladder: see docs/README's decision tree (the marker map + the setup.c collision rule)** |
 | bc[2] | v\|0x100 (the pb_bc pair — should match bc[1]); a junk value here = QNX-boot leftover, NOT a kernel wild write |
 | bc[3] | 0x41 = the kernel's ACTLR dump (start_kernel ran); otherwise the payload staging phys |
 | bc[6] | 0x2102 = --l2on kept the L2 on (may be overwritten by the stub's register echo) / initcall level |

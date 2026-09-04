@@ -46,7 +46,8 @@ SSH. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full picture.
 | T3.b — L2 cache state control via secure monitor | DONE (both on/off modes) |
 | T3.c — console visibility (DRAM ring capture of all kernel output) | DONE |
 | T3.d — bc=127 wall (dma_contiguous_remap) | **SOLVED** (2026-09-03, session 7) |
-| T3.e — bc=171 wall (taskstats_init_early) | **CURRENT WALL** (reached, under test with full memory) |
+| T3.e — the session-9 walls (the stale pv regime → CURED; the stale pgd pair → 2MB shave untested) | **CURRENT WALL** (W-39 pending) |
+| bc=171 wall (taskstats_init_early) | passed on the Image path (W-4); the zImage-path test resumes after the pgd wall |
 | Rootfs (eMMC) mount | Not started |
 
 ## What makes this hard (and interesting)

@@ -1,5 +1,25 @@
 # kexec Architecture Deep Dive
 
+## 2026-09-05 UPDATES (session 9 — the pv cure + the placement guard + the quiesce)
+1. **The pv cure = the W-32c block in start_kernel** (init/main.c,
+   marker 163): direct store of the build constants + DCCIMVAC. The
+   W-24 dual-level invalidate in adjust_lowmem_bounds was REMOVED —
+   its __pa() consumed the stale pv it repaired, and SMC 0x101's clean
+   step poisons DRAM with the stale L2 line (W-33's 8/8 failure).
+2. **--dmaquiet is the run mode**: --l2on + `slay devb-mmcsd-winchester`
+   after the last file read (rc → bc[14]) + the DISPC kill with
+   register readbacks (bc[16]/bc[17] = 0/0 verified) + bc[18] = the
+   payload placement written before the memtest.
+3. **The placement guard**: buf_placement_bad rejects any 24MB window
+   intersecting [0xa0000000, 0xa1000000) — the zreladdr inflation
+   region + the decompressor's relocation/heap (W-35's head.S-tail
+   death was the only overlapping placement ever).
+4. **The stale pgd pair** [VA 0xdfc/0xdfd] (QNX-era content, 0xbfc1141e)
+   wedges any allocation in the top 2MB of the linear map; #110 shaves
+   the allocator limit by 2MB (untested at this note's date). See
+   newdocs/contradictions/machine-corruption-vs-code-bugs.md — the
+   corruption theory is characterized as a stale-view class.
+
 ## 2026-09-02 NIGHT UPDATES (session 6 — SUPERSEDES the sections below where they conflict)
 1. **The L2-off mode is RETIRED.** `--l2test` A/B: device stores with the L2 ON
    = clean; the identical stores with L2 OFF = machine wedge. The "171 wall"

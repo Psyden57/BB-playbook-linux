@@ -1,5 +1,29 @@
 # Hardware Reference — BlackBerry PlayBook (Winchester)
 
+## 2026-09-05 UPDATES (session 9 — supersede the details below where they conflict)
+- **MMC2/eMMC MMCHS registers (0x480B4000+) are NOT NS-accessible**: the
+  first SYSCONFIG read from the payload = SIGBUS fltno=5 (external abort,
+  W-28) — and that abort class then FROZE the box completely (SSH dead,
+  display dead; power-hold required). Treat device-register external
+  aborts as device-wedging, not cheap userland crashes. DISPC registers
+  ARE NS-accessible (kill + readback verified, bc[16]/bc[17] = 0/0).
+- **The DMA-master quiesce state (run with --dmaquiet)**: eMMC via `slay
+  devb-mmcsd-winchester` (QNX survives — the qnx6 write-back cache
+  absorbs writes; only execs needing a devb READ fail, e.g. "cat: cannot
+  execute" — NOT a fault); DISPC killed at bc 34 + register-verified;
+  WiFi SDIO never brought up (DTS: mmc1/3/4/5 disabled). The kernel's
+  per-run deaths SURVIVED this quiesce → the source is the stale-view
+  class (newdocs/contradictions), not a rogue DMA master.
+- **The zreladdr inflation region** [0xa0008000, ~0xa0f80000): the payload
+  placement sweep now REJECTS any 24MB window intersecting
+  [0xa0000000, 0xa1000000) — the decompressor relocates itself + its
+  malloc pool into the window when they overlap, and W-35 (the only
+  overlapping placement ever) died in head.S's tail.
+- Extended bc slots (0x90000040+, read via `memdump3 90000040 0x30`):
+  bc[16]/bc[17] = DISPC kill readbacks (0/0), bc[18] = the payload's
+  placement, bc[19] = pmd/readback, bc[20]-bc[25] = the pmd pattern
+  (VAs 0xdfc/0xdfe/0xdf8/0xdf4/0xdf0/0xdfa).
+
 ## 2026-09-02 NIGHT UPDATES (session 6 — supersede the details below where they conflict)
 - **PL310 data latency = 0x111 (1/1/1 cycles), set by QNX, live** (read
   0x48242000+0x10C; tag latency @0x108 reads 0). The NS write to either =

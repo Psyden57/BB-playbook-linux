@@ -1,128 +1,103 @@
-# Project State (as of session 7, 2026-09-03)
+# Project State (as of session 9, 2026-09-05)
 
 This file tracks the *current technical state* precisely. Older docs
 (`docs/03`, `SESSION-HANDOFF/`) record how we got here; where they disagree
 with this file, this file wins (and any unresolved disagreement is listed in
-[contradictions/](contradictions/)).
+[contradictions/](contradictions/)). Per-session summaries live in
+`newdocs/session-notes/session-NN.md`; the historical recaps are kept below
+with dated headers.
 
 ## Where the boot stands
 
 Mainline Linux 6.15.11 (omap2plus, non-LPAE, patched for the PlayBook) is
-jumped from QNX. The boot currently:
+jumped from QNX via the **zImage path** (kernel #110 built and packed,
+W-39 unrun):
 
-1. Enters `stext` with the **MMU OFF** (it turns on at `__enable_mmu`,
-   after the pv fixups and `__create_page_tables`). The zImage-path
-   ladder: 101-103 land, **130 = post-__fixup_smp lands, 131 never
-   does** — the current front. (The numbering is non-monotonic:
-   130/131 execute BEFORE 119.)
-2. (Image path — historical, parked) passed the paging_init region —
-   **the bc=127 wall (`dma_contiguous_remap` "in user region" BUG) was
-   root-caused and fixed on 2026-09-03** (see below). Boot reached
-   **bc=171** in run W-4 — still the deepest boot, and the only one that
-   entered the C world.
-3. **★ THE FIXUP WALL IS BROKEN (W-17, 2026-09-04) ★**: the pv fixup,
-   INLINED into head.S's streamed region (W-17, commit c79de6f), EXECUTES
-   and the zImage boot reaches the **C WORLD with a live console**:
-   bc[1]=127 (the dma_contiguous_remap/PB-CMA point), parse_early_param
-   completed (bc[11]/bc[12] = 0xC0DE0010/0xC0DE0020), **1169 chars of
-   console** including "OF: fdt: Machine model: BlackBerry PlayBook
-   (winchester)", "cma: Reserved 16 MiB at 0xbe800000", and the PB-CMA
-   print with ALL-correct values (va=de800000, pv_off=ffffffffe0000000,
-   pfn=a0000). The pv machinery is proven end-to-end. The death is now
-   AT 127 (inside/just past dma_contiguous_remap) — with L2 OFF (--t3);
-   the discriminating next run = **--l2on** (the proper boot mode).
-   History: W-9..W-16 (flushed instrumentation, computed blx, I-clear,
-   smoke-test removal, CIPA removal) each exonerated one suspect; the
-   never-executed-via-any-delivery paradox resolved only by inlining.
-   Also closed this session: the dtb-phys
-   arithmetic (params block exonerated — bc[3] is the BUFFER base,
-   qnx2linux.c:935; W-8 and W-10 close exactly against their shipped
-   artifacts; W-6 closes with the inferred #85 packed size — consistent,
-   not artifact-verified), the bc[10]/bc[11]
-   writers (parse_early_param + bss-bounds dumps — W-9's values are
-   W-4-era residue, which SURVIVES the power-hold "hard reset" — it is a
-   warm reset, DRAM persists), the ring2 wild-index theory for bc[2]=0x3E7
-   (index sane), and bc[2]'s correlation: **0x3E7 needs the PROBE**
-   (probe+zImage runs show it with either L2 state; --t3 shows 0).
+1. The zImage decompressor inflates the kernel to zreladdr 0xa0008000
+   (PHYS_OFFSET = 0xa0000000 — the DTS bank = 0xa0000000+512MB must
+   match) and the payload's placement sweep now REJECTS any window
+   intersecting [0xa0000000, 0xa1000000) (the inflation + relocated-
+   decompressor region — W-35's head.S-tail death was the only
+   overlapping placement ever).
+2. head.S runs (the inline pv fixup, markers 143/144 + the delta in
+   bc[6]), MMU-on completes, and the boot reaches the C WORLD with a
+   correct pv state — **CURED this session (W-32c, build #106)**: the
+   pv-stale regime (decompressor-era stale L2 lines surviving eviction;
+   the fixup's MMU-off SO stores reach DRAM but not L2) is fixed by the
+   direct-store block in start_kernel (marker 163, retry count in
+   bc[19] slot 0xD000004C — tries=0 on every run since). The old W-24
+   invalidate block was REMOVED (self-defeating: its __pa consumed the
+   stale pv it repaired; SMC 0x101's clean step poisons DRAM with the
+   stale line — W-33's 8/8 failure).
+3. **The front = the stale pgd pair [VA 0xdfc/0xdfd]** (the LAST mapped
+   pair of the linear map, PA 0xbfc00000/0xbfd00000): it reads as
+   IDENTICAL bogus TABLE descriptors (0xbfc1141e → a QNX-era pte table
+   at 0xbfc11400, never allocated this boot) — deterministic across
+   runs AND placements (W-37/38). map_lowmem's section write for that
+   pair doesn't survive in the PTW's view ([0xdf8] = a CORRECT section
+   desc, 0xbf81141e). Any allocation in the top 2MB of the linear map
+   wedges on the walk — the svm memset deaths (W-25/31/32a/34/36/37,
+   bc[1]=161). Build #110 shaves the allocator limit by 2MB
+   (arm_lowmem_limit → 0xbfc00000) and probes the untested middle pair
+   [0xdfa/0xdfb] (W-39).
+4. The DMA masters are quiesced (--dmaquiet: devb slain via QNX's slay
+   after the file reads; DISPC killed + register-verified 0/0 in
+   bc[16]/bc[17]; WiFi SDIO never brought up). The randomness SURVIVED
+   the quiesce → the source is the stale-view class (see
+   [contradictions/machine-corruption-vs-code-bugs.md](contradictions/machine-corruption-vs-code-bugs.md)
+   — characterized 2026-09-05), not a rogue DMA master.
+5. Marker-number discipline: setup.c's pb_bc(130-136) pairs COLLIDE
+   with mmu.c's PB_MMU_BC numbers — discriminate via the mirror
+   channel (rule 17 in docs/README). Extended forensics slots
+   bc[16]-bc[25] (0x90000040+, `memdump3 90000040 0x30`).
 
-## What was fixed in session 7 (the bc=127 wall)
+## What was fixed, by session
 
-Root cause (proven, all grepped not recalled):
+- **Session 7 (2026-09-03) — the bc=127 wall**: the runtime-PHYS_OFFSET/
+  DTS-bank mismatch (bottom-up memblock allocs below PHYS_OFFSET →
+  `__phys_to_virt` under TASK_SIZE → the "in user region" BUG). Fixes:
+  the 129-slot placement sweep, `kern_off` placement,
+  `fdt_patch_memory`, the PB-CMA print, and the DTS bank baked to
+  match zreladdr. [UPDATE 2026-09-04 (W-21): the bank = 0xa0000000 +
+  512MB — the old 0xa4000000+448MB default put the kernel outside its
+  own memory.]
+- **Session 8 (2026-09-04) — the fixup delivery paradox**: the called
+  `__fixup_pv_table` never executed via ANY mechanism; INLINING it into
+  head.S's streamed region (W-17) broke the wall — the boot reached the
+  C world (bc=127/146-era). The paradox mechanism remains open
+  (KNOWN_ISSUES #10); the rule stands: MMU-off helpers are INLINED,
+  never called. Also session 8: the bank fix (W-21), the surviving-slot
+  markers (W-22), the dual-level pv invalidate (W-24 — later superseded).
+- **Session 9 (2026-09-05) — the pv cure + the stale pgd pair**: the
+  "wandering" early-C deaths (svm alloc W-25/31/32a, FDT walk stack
+  smash W-26, map_lowmem pte alloc W-27, MMU-enable W-29, head.S tail
+  W-35) all resolved to (a) the stale-pv regime (CURED) and (b) the
+  stale pgd pair (workaround in #110). The DMA quiesce (--dmaquiet)
+  did NOT cure the randomness → the corruption class = stale-view
+  (characterized in contradictions/), not a rogue DMA master. The
+  swipe/tap interaction variables were exonerated (W-32a hands-off =
+  byte-identical death). The placement-overlap guard came from W-35.
 
-- The kernel was loaded at an arbitrary QNX-given physical address; head.S
-  derives the runtime PHYS_OFFSET from the load address
-  (`ARM_PATCH_PHYS_VIRT`). The DTS declared a 1 GB bank at 0x80000000, so
-  576 MB of memblock sat *below* the runtime PHYS_OFFSET — memory that can
-  never be linear-mapped.
-- Bottom-up memblock allocations (the `omap_secure_ram_reserve_memblock`
-  steal, CMA) landed in that dead zone (e.g. 0xa1000000), and
-  `dma_contiguous_remap`'s `__phys_to_virt()` produced a VA below TASK_SIZE
-  (0xBF000000) → deterministic `BUG: not creating mapping ... in user
-  region` at bc=127.
-- Fixes now in place:
-  - payload v4: 129-slot 2 MB-aligned placement sweep with per-reason
-    diagnostics, then `kern_off` placement (kernel placed at the first
-    2 MB-aligned offset *inside* the buffer — QNX's free pool has no
-    aligned 24 MB run),
-  - runtime DTB memory-node patch (`fdt_patch_memory`) so the bank always
-    matches the actual placement,
-  - `PB-CMA` print in `dma_contiguous_remap` (kernel) as a permanent
-    discriminator,
-  - DTS memory node baked to 0xa4000000+0x1c000000 as the default.
-- Session 6's "silent DRAM corruption under QNX's L2 config" theory was
-  **not needed** to explain the 127 wall. It may still be real (see
-  [contradictions/](contradictions/)).
-
-## The DTB delivery issue (open, blocks clean testing)
+## The DTB delivery issue (Image path — PARKED)
 
 On the uncompressed-Image path, the kernel reports
 `Warning: Neither atags nor dtb found` twice and falls back to a 16 MB
 memblock region — yet both the payload (REVERIFY) and the probe validate
-the DTB at `params[1]` before the jump. W-5 (--t3, no probe, no 1 GB loop)
-still lost the DTB, so the probe loop is exonerated; the loss is somewhere
-in the r2 chain (cont → kernel entry → head.S r7/r8 save/restore →
-`__vet_atags`).
+the DTB at `params[1]` before the jump. The vet constant is exonerated
+(`head-common.S` defines `OF_DT_MAGIC 0xedfe0dd0` for LE builds) and the
+register chain was correct at probe time at least once. **Parked in
+favor of the zImage path** (D6); investigate only if the zImage path
+ever fails.
 
-Session-2 backfill narrows this: the register chain was correct at probe
-time at least once (bc[4]=0xa1e377f8 matched the placement math exactly),
-and the vet constant is exonerated — `head-common.S` defines
-`OF_DT_MAGIC 0xedfe0dd0` for LE builds (the LE read of the big-endian
-magic; grep-verified 2026-09-03), so a valid DTB passes `__vet_atags`
-(see session-notes/session-02.md CONFIRMED #3/#5).
+## Next run (W-39): build #110 — the 2MB allocator shave
 
-**Decision: park the uncompressed-Image path.** Session 6's proven path is
-the **zImage**: `CONFIG_ARM_APPENDED_DTB=y` + `CONFIG_AUTO_ZRELADDR=y`
-mean the decompressor natively finds the appended DTB and sets r2, and
-derives zreladdr from its own load address (512 MB granularity →
-PHYS_OFFSET 512 MB-aligned → pv-fixup-safe). Session 6's recovered log
-proves it worked (`OF: fdt: Machine model: BlackBerry PlayBook`,
-`cma: Reserved 16 MiB at 0xbe800000`).
-
-**W-6 (2026-09-04, first zImage test): the pivot FAILED to reach the wall —
-the boot died EARLIER, inside `__fixup_pv_table` (bc=107 post-fixup_smp;
-ring = smoke test only).** [SUPERSEDED 2026-09-04 by W-9: the "inside the
-fixup" reading was an artifact of unflushed markers — the flushed
-instrumentation proved the fixup's entry stores never landed; see
-"Where the boot stands" #3 and docs/03 run W-9. The bc[4]/bc[12] chain
-facts below stand; the dtb-phys math has since closed exactly (W-8/W-10).] Details: `docs/03` run W-6. Key facts: the
-chain held (bc[4]/bc[12] = dtb_phys), the DTB magic validated, zImage word
-0 confirmed — and **bc[2]=0x3E7 (999), the unexplained session-5/6 wild
-write, returned on the zImage path exactly as in runs 23-32**. The zImage
-environment differs from the Image path in one structural way: the
-decompressed kernel lands OUTSIDE the payload buffer (0xa0080000,
-decompressor-written, never verified) instead of the payload's
-memcmp-verified copy. The Image-path binary remains the deepest boot
-(bc=171); the zImage path now needs its own diagnosis before it can deliver
-the DTB+full-memory test the era matrix wants.
-
-**Next run** (W-39): build #110 — the 2MB allocator shave. W-38's pmd
-pattern: the pair [0xdfc/0xdfd] = IDENTICAL bogus table pointers
-(0xbfc1141e, both halves = the __pmd_populate signature), DETERMINISTIC
-across runs AND placements; [0xdf8] = a CORRECT section desc (0xbf81141e
-— map_lowmem's mapping of the range is healthy, only the LAST pair is
-stale); [0xdfe+]=0 ✓; [0xdf0/0xdf4]=0 (CMA-cleared ✓). Verdict: the
-last pair of the linear map holds STALE QNX-era page-table content
-(0xbfc11400 = a QNX-era pte table for that DRAM region) — the
+W-38's pmd pattern: the pair [0xdfc/0xdfd] = IDENTICAL bogus table
+pointers (0xbfc1141e, both halves = the __pmd_populate signature),
+DETERMINISTIC across runs AND placements; [0xdf8] = a CORRECT section
+desc (0xbf81141e — map_lowmem's mapping of the range is healthy, only
+the LAST pair is stale); [0xdfe+]=0 ✓; [0xdf0/0xdf4]=0 (CMA-cleared ✓).
+Verdict: the last pair of the linear map holds STALE QNX-era page-table
+content (0xbfc11400 = a QNX-era pte table for that DRAM region) — the
 write-back-loss class, same as the pv variables — NOT a random wild
 write. Build #110: arm_lowmem_limit -= 2MB after map_kernel (nothing
 allocated in the poisoned top; the svm lands at ~0xbfbfffd4, pair
@@ -135,7 +110,7 @@ stale → the stale region is wider → extend the shave or self-heal the
 pgd (the W-32c store+clean pattern applied to the pmd). Marker-number
 audit: setup.c's pb_bc(130-136) pairs COLLIDE with mmu.c's PB_MMU_BC
 numbers — discriminate via the mirror channel. See docs/03 W-25..W-38
-and SESSION-HANDOFF/BOOTSTRAP_SESSION_9.md.
+and SESSION-HANDOFF/BOOTSTRAP_SESSION_10.md.
 
 ## The secure monitor — RE closed (session 7)
 
@@ -167,12 +142,14 @@ when the boot gets there.
 
 ## Operational state
 
-- Payload v4 in `kexec/` (see [../kexec/README.md](../kexec/README.md)):
-  placement sweep, kern_off, DTB patching, WDT2 enable/disable lifecycle,
-  `--t3/--l2on/--probe/--ppa/--l2lat/--l2test` modes.
-- Kernel tree: `/home/psyden/kernel/linux` (6.15.11, config = the
-  session-6 config, recoverable from any built Image via
-  `scripts/extract-ikconfig`).
+- Payload in `kexec/` (see [../kexec/README.md](../kexec/README.md)):
+  the placement sweep + guard, kern_off, DTB patching, the WDT2
+  lifecycle, the DISPC kill, the devb slay; modes
+  `--dmaquiet/--l2on/--t3/--probe/--ppa/--l2lat/--l2test` —
+  **--dmaquiet is the run default (session 9)**.
+- Kernel tree: `/home/psyden/kernel/linux` (6.15.11, config recoverable
+  from any built Image via `scripts/extract-ikconfig`); the repo's
+  kernel state = `kernel-patches/` (regenerate after every change).
 - Device: SSH root@169.254.0.1, key at `playbook-dev/rsa` (local-only,
   never commit). WDT2 warm-reset cycle ~59 s. LED sequence observable
-  (user video-records runs).
+  (user video-records runs; the device clock = GMT-3, the host = UTC).

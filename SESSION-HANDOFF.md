@@ -1,6 +1,14 @@
 # PlayBook Bootchain RE — Session Handoff
 **Start here for background: `PLAYBOOK-REFERENCE.md`** — consolidated device/OS/flashing/NVRAM knowledge base (kept current).
 
+> **STATUS (2026-09-05): HISTORICAL EVIDENCE — superseded.** This file is the
+> pre-repo era handoff (2026-08-31). The live handoff is `newdocs/HANDOFF.md`
+> + `SESSION-HANDOFF/BOOTSTRAP_SESSION_10.md`; the live state is
+> `newdocs/PROJECT_STATE.md`. Several claims below are superseded — notably
+> "USE THE IMAGE" (the zImage is the preferred path since session 7, D6),
+> the "15 s kernel window" (the WDT2 = 58.6 s; the 15 s = QNX's wdtkick
+> period), and the bc=108-110 death window (long since crossed).
+
 ## ⚡⚡ CONTINUE HERE (next session, 2026-08-31 — READ FIRST — SUPERSEDES ALL BELOW)
 **Status: T3 is 90% done. The kernel ENTERS and EXECUTES (head.S breadcrumbs land); the blind-debug ring capture WORKS (kernel text captured). One death window remains: kernel dies between head.S fixups (bc=108) and setup.c post-paging_init (bc=110).**
 

@@ -1,5 +1,37 @@
 # Troubleshooting Guide
 
+## NEW (2026-09-05, session 9 — the session-9 failure modes; the sections below = earlier eras)
+
+### The early-C death ladder (bc[1]=161/156/133/142/121) — ONE root class
+- The "random wandering" early-C deaths (svm alloc W-25/31/32a, FDT walk
+  W-26, map_lowmem pte alloc W-27, MMU-enable W-29, head.S tail W-35) =
+  two root causes, both identified: (a) the stale-pv regime (CURED,
+  build #106: the W-32c direct-store block in start_kernel, marker 163,
+  tries in bc[19] slot 0xD000004C — if pv_off=0 EVER reappears in the
+  console, the fix failed: investigate immediately), and (b) the stale
+  pgd pair [VA 0xdfc/0xdfd] = bogus table descriptors (0xbfc1141e) → any
+  allocation in the top 2MB of the linear map wedges on the walk
+  (build #110 shaves the allocator limit by 2MB; untested as of this
+  note).
+- Distinguish the setup.c pb_bc pairs (130-136) from mmu.c's PB_MMU_BC
+  numbers via the MIRROR channel (rule 17, docs/README): a mirror value
+  of 0x46 with bc[1]=133 = setup.c's parse_early_param-done, NOT
+  map_lowmem.
+- **The head.S-tail death (bc[1]=142, ring 0, bc[2]=0x3E7)** = a payload
+  window overlapping the zreladdr inflation region (W-35 — the only one
+  ever; the placement guard now reserves [0xa0000000, 0xa1000000)).
+- **The payload's own memtest/copy writes can kill QNX** (W-30: froze
+  between bc 31 and 39, no jump, WDT2 reset ~1 min) — the sweep's
+  "free" window overlapped live QNX-owned memory; bc[18] now records
+  the placement BEFORE the memtest.
+- **The external-abort freeze class** (W-28): a SIGBUS fltno=5 on a
+  device register read (MMC2 MMCHS) = the box froze completely afterward
+  (SSH dead, display dead; power-hold to recover) — NOT the cheap
+  payload-crash class.
+- **A dead devb (the --dmaquiet slay) breaks eMMC execs**: "cat: cannot
+  execute - No such file" = an exec needing a devb READ — expected, NOT
+  a fault. qnx6's write-back cache still absorbs file WRITES.
+
 ## NEW (2026-09-03, session 7 — the l2x0_of_init hazards, BEFORE the boot reaches init_IRQ)
 
 ### The boot dies (deadlock) at l2x0_of_init / init_IRQ — EXPECTED unless patched

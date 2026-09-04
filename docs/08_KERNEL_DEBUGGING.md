@@ -1,5 +1,29 @@
 # Kernel Debugging Guide
 
+## 2026-09-05 UPDATES (session 9 — the marker map + the pv/pmd fixes)
+- **The pv cure moved to start_kernel** (init/main.c, right after the
+  first-printk marker 141): the W-32c block directly stores the build
+  constants (__pv_offset = 0xffffffffe0000000, __pv_phys_pfn_offset =
+  0xa0000) then DCCIMVAC — marker 163, retry count in bc[19] slot
+  0xD000004C. The W-24 block in adjust_lowmem_bounds was REMOVED (its
+  __pa consumed the stale pv it repaired; SMC 0x101's clean step
+  poisons DRAM with the stale line — W-33's 8/8 failure). pv_off=0 in
+  the console should now be IMPOSSIBLE.
+- **The marker map (current)**: payload 30-55 → head.S 119/121/122
+  (enable_mmu/turn_mmu_on), 142-144 (the inline fixup region) → main.c
+  140/141 → 163 (the pv fix) → setup_arch: setup.c pairs 130-136
+  (COLLIDE with mmu.c's numbers — rule 17: PB_MMU_BC also writes the
+  mirror 0xD4000004; setup.c's pb_bc does not) → mmu.c ladder
+  134/133/127/126/125/129/128 + the CMA remap's 145/146 + iotable_init
+  150/159/160/161/167/151/152/153 → alloc_init_pte 156/157/158 →
+  __create_mapping 155. Extended slots bc[16]-bc[25] = the DISPC/placement/
+  pmd forensics (`memdump3 90000040 0x30`).
+- **The stale pgd pair** [VA 0xdfc/0xdfd] = identical bogus TABLE
+  descriptors (0xbfc1141e — a QNX-era pte table) — the last mapped pair
+  of the linear map; allocations in the top 2MB wedge on the walk.
+  Build #110 shaves the allocator limit by 2MB (untested at this
+  note's date).
+
 ## 2026-09-04 CORRECTION (session 8 — applies to EVERY zreladdr/0x80008000
 mention below)
 AUTO_ZRELADDR computes zreladdr = (the relocated decompressor's PC &
