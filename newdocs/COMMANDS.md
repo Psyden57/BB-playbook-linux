@@ -10,8 +10,8 @@ Paths use the session-7 machine layout — adjust to yours (see SETUP.md).
 ```bash
 # the SSH option set is REQUIRED (old dropbear on the device):
 SSH="ssh -o StrictHostKeyChecking=no -o HostKeyAlgorithms=+ssh-rsa \
-  -o PubkeyAcceptedKeyTypes=+ssh-rsa -o MACs=+hmac-sha1 \
-  -o ConnectTimeout=8 -i ~/playbook-dev/rsa root@169.254.0.1"
+  -o PubkeyAcceptedKeyTypes=+ssh-rsa -o ConnectTimeout=8 \
+  -i ~/playbook-dev/rsa root@169.254.0.1"
 $SSH "echo up"                          # connectivity check
 $SSH "on -C 0 /tmp/memdump3 90000000 0x40"   # read the bc page
 ```

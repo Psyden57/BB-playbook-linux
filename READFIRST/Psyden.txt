@@ -1,0 +1,580 @@
+Hello, Psyden writing, this document's purpose is to explain:
+
+-How i've orchestrated this project
+-What i learned
+-What to look out for in this repo
+-How human intervention is needed
+-etc...
+
+This document is fully written by me, no AI here.
+(other than perhaps a copy-paste here and there, of a prompt or example)
+
+Sorry if this is hard to read, feedback would be appreciated.
+
+This project was paused on september 4th due to me running out of funds.
+
+I started this project on Aug 27, 2026, on a research session using free claude code and deepseek harness (i got frustrated of NVIDIA NIM's rate limits, so i switched to opencode go halfway through it), 
+first telling the system all i know (and, over the course of the session, adding more knowledge i forgot to mention at the time)
+
+That session's research concluded that the bootchain is indeed locked down, and that to fix my two dead units (NVRAM wipe on one of them, an invalid RPMB flag on the other), 
+i would have to either find a major exploit, or remove the NAND on those units with a hot air gun (to then inspect it with a NAND reader, find the NVRAM and RPMB sections/blocks, and fix it manually)
+
+And i asked if a KEXEC sort of thing would be doable, and asked it to make me a prompt to start the next session, with the goal of achieving linux on the playbook.
+
+
+So i started session-1:
+""
+Please read KEXEC-PROMPT.md, then come back to me, and ask me questions if you have any.
+
+Do note that it isn't 100% factual, like the mention of prior art of playbook linux kernels (those never existed)
+""
+
+It read the prompt file, looked through some files, then asked:
+
+
+
+"""""
+
+Read all three docs (KEXEC-PROMPT, PLAYBOOK-REFERENCE, SESSION-HANDOFF). First, one doc correction to log: PLAYBOOK-REFERENCE §1.3 says "RAM 0x80000000-0xBFFFFFFF (2 banks × 64MB)" while the prompt (and reality, 1GB Elpida) says 2×512MB — assuming that's a units typo in §1.3.
+
+My questions:
+
+**Injection point (2.0 unit) — the most load-bearing unknown**
+
+1. What is the early-boot code-exec mechanism actually? Persisted flash mod, USB-pushed each boot, or something else? And what does the injected code get: raw function hijack in some process, a thread spawn, access to libc/heap, or bare context? This decides whether the payload can simply `open("/dev/hd0")` + `read()` the kernel, or whether it must implement its own eMMC sector I/O via `/dev/mem`.
+2. At injection time, is `devb-mmcsd` already running (is `/dev/hd0` openable)? What about `devc-seromap`? "Most drivers only partially initialized" is vague — the payload's I/O strategy depends entirely on this.
+
+**Unit assignment / risk** 3. The prompt says "use the 2.1 unit for QNX-side experiments," but the injection point only exists on the 2.0 unit. Should I plan to develop/test the QNX→Linux jump from post-boot root on the 2.1 unit too (fully-initialized OS: more RAM in use, display/DMA active — actually closer to worst-case kexec conditions), or is jump work 2.0-only? Is the 2.0 unit's root also usable post-boot?
+
+**Scope & target** 4. Option A vs B: the prompt says evaluate both and recommend, but states B is "user's preference." Is B decided, or genuinely open? 5. Since no PlayBook Linux kernels exist (accepting your correction), the target kernel has to be a mainline/stable omap4 tree plus a from-scratch "winchester" DTS, cross-derived from the QNX IFS startup/hwi tables in `dumpedifs/`. What's the minimal viable milestone — kernel booting to serial prompt with eMMC? And is postmarketOS the real end goal, or just "any Linux boots"? 6. Serial console: have you inspected the board for UART pads, and do you have a USB-UART adapter (and willingness to solder)? This determines how much we do blind, and whether "jump to UART hello" is even a meaningful first test.
+
+**Mechanics** 7. Watchdog policy: disable it early in the jump path (loses the auto-reset safety net), or keep it armed and treat the ~10s reset as the crash recovery, requiring the payload to complete or kick it per iteration? 8. Host side: is the Linux PC ready for ARM cross work (arm-linux-gnueabihf toolchain, mkimage, cpio), and how do binaries get onto the QNX side — eMMC files, network, or USB?
+
+"""""
+
+
+
+And i replied:
+
+""""
+"1. What is the early-boot code-exec mechanism actually?"
+
+On TabletOS and BB10, when the device boots, the IFS script runs startup.sh from the mounted /base filesystem (the CoreOS partition, has most binaries, libraries and system/OS things)
+
+startup.sh sources/runs an env.sh from /radio, which in devices with a radio (like a 3G/4G playbook or BB10 device), it would be mounted from a partition
+However, since my playbook is just a wifi model, there's no such partition
+
+Normally, in the newer OS versions, the OS just symlinks /radio to /dev/null if the partition isn't present
+
+But in OS 2.0.0.4869, that doesn't happen, so i can just add a /radio folder to the UFS (User Filesystem) partition and then add my custom env.sh that will run on early boot at /radio/scripts/env.sh
+
+"At injection time, is `devb-mmcsd` already running (is `/dev/hd0` openable)?" Yes, i would think so, that comes from the IFS and is at /proc/boot , but it's worth to check what is and isn't running at the time of injection.
+
+"
+3. The prompt says “use the 2.1 unit for QNX-side experiments,” but the injection point only exists on the 2.0 unit. Should I plan to develop/test the QNX→Linux jump from post-boot root on the 2.1 unit too (fully-initialized OS: more RAM in use, display/DMA active — actually closer to worst-case kexec conditions), or is jump work 2.0-only? Is the 2.0 unit’s root also usable post-boot?
+"
+
+The 2.1 unit, i want to just use for QNX tests as in, checking how devices works, drivers, etc...
+Like if i want the device to flash the LED in pink/green during kexec, i would have to first reverse engineer how the LED driver works so i can implement it in our kexec, things like that.
+
+"
+4. Option A vs B: the prompt says evaluate both and recommend, but states B is “user’s preference.” Is B decided, or genuinely open?
+"
+The option is completely open, whatever may work best.
+
+"
+5. Since no PlayBook Linux kernels exist (accepting your correction), the target kernel has to be a mainline/stable omap4 tree plus a from-scratch “winchester” DTS, cross-derived from the QNX IFS startup/hwi tables in `dumpedifs/`. What’s the minimal viable milestone — kernel booting to serial prompt with eMMC? And is postmarketOS the real end goal, or just “any Linux boots”?
+"
+Well, the end goal will shift overtime, but postmarketOS would be a good goal.
+
+"
+6. Serial console: have you inspected the board for UART pads, and do you have a USB-UART adapter (and willingness to solder)? This determines how much we do blind, and whether “jump to UART hello” is even a meaningful first test.
+"
+I have previously looked and probed the board for UART pads and didn't find much, there's too many pads to probe, i don't know what protocol or baud rate it would use exactly, requires opening the device, etc..
+I don't think we really need it, we could probably make-do with the device's perpipherals, like the LED, speakers, etc...
+
+"
+7. Watchdog policy: disable it early in the jump path (loses the auto-reset safety net), or keep it armed and treat the ~10s reset as the crash recovery, requiring the payload to complete or kick it per iteration?
+"
+I'm not even sure it *can* be disabled, but if it can, it would be neat to just disable it. we don't need auto-reset, i can just hold the power button down if the device is frozen.
+
+"
+8. Host side: is the Linux PC ready for ARM cross work (arm-linux-gnueabihf toolchain, mkimage, cpio), and how do binaries get onto the QNX side — eMMC files, network, or USB?
+"
+I have the playbook NDK installed so i can build binaries that will run inside QNX, but i don't have that arm-linux-gnueabihf toolchain you mention, so some setup is probably needed.
+
+The binaries/files get to the device in a couple of ways:
+
+-They can be put in the UFS, which gets packed with the rest of the files into a .signed, which then gets flashed to the device
+-They can be sent over USB via SSH+SCP (provided QNX is booted)
+""""
+
+From there on out, when each session/chat got up to 50-60% context, i told the model to write a handoff with all the needed context to continue in the next. (to avoid hallucinations)
+
+
+Also, I had been thoroughly reading the model's thinking, to look out for any errors, make rules for it to follow, and think exactly of what i should say to it.
+(And obviously, giving it any feedback from what i was seeing happen in the device)
+Feedback such as:
+
+"""
+The timeline this run was:
+
+00:00 : "./jump.sh zImage 2&1" ran
+
+00:05 : Blue LED turned ON
+QNX is still alive at this point.
+
+00:21 : Since the LED turned on, i had been doing "ls -la /tmp/" though my SSH session, to act as a heartbeat. At 00:39 the SSH session froze completely. (QNX dead?)
+
+00:44 : My SSH session errored out with "client_loop: send disconnect: Connection reset"
+00:46 : My BerryShell python script exited with error: "[WinError 10054] An existing connection was forcibly closed by the remote host"
+00:51 : My script is now restarting my BerryShell script
+
+00:57 : The script is giving me a (timed out) error while trying to reconnect
+...
+...
+01:13 : The script is giving me a (timed out) error while trying to reconnect
+01:18 : The script returned "[WinError 10054] An established connection was aborted by the software in your host machine"
+01:21 : The script returned "[WinError 10051] A socket operation was attempted to an unreachable network"
+01:26 or 01:26 : Blue LED turned off
+
+01:28 : The script is still returning "[WinError 10051] A socket operation was attempted to an unreachable network)", and the red LED is now ON (reboot)
+
+And to clarify, my python berryshell script is a script made for easy SSH access to blackberry QNX devices (playbook/bb10 devices), because to connect to the SSH you first have to authenticate to the qconn door, so the script does it all.
+"""
+
+
+
+In session-02, i noticed an error, and made the model fix it:
+
+""""
+Seems like you struggled there.
+
+When you ran
+""
+$ cd /home/psyden/playbook-dev/kexec && SCPARGS="-o StrictHostKeyChecking=no -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa -o MACs=+hmac-sha1 -i /home/psyden/playbook-dev/rsa" && ssh $SCPARGS root@169.254.0.1 "echo up" >/dev/null && timeout 30 ssh $SCPARGS root@169.254.0.1 "on -C 0 /tmp/qnx2linux --probe /tmp/Image /tmp/omap4-winchester.dtb /tmp/probe.bin" 2>&1 | tail -2; echo "exit=$?"
+
+bc armed
+/tmp/Image: No such file or directory
+exit=0
+"
+the led turned blue, then the backlight went to full brightness, and the device was still fully responsive
+
+Then you ran these:
+
+""
+$ SCPARGS="-o StrictHostKeyChecking=no -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa -o MACs=+hmac-sha1 -i /home/psyden/playbook-dev/rsa" && scp $SCPARGS kernel/Image root@169.254.0.1:/tmp/ >/dev/null && timeout 30 ssh $SCPARGS root@169.254.0.1 "on -C 0 /tmp/qnx2linux --probe /tmp/Image /tmp/omap4-winchester.dtb /tmp/probe.bin" 2>&1 | tail -2; echo "exit=$?"
+
+bc armed
+/tmp/omap4-winchester.dtb: No such file or directory
+exit=0
+""
+
+""
+$ SCPARGS="-o StrictHostKeyChecking=no -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa -o MACs=+hmac-sha1 -i /home/psyden/playbook-dev/rsa" && scp $SCPARGS kernel/omap4-winchester.dtb root@169.254.0.1:/tmp/ >/dev/null && timeout 30 ssh $SCPARGS root@169.254.0.1 "on -C 0 /tmp/qnx2linux --probe /tmp/Image /tmp/omap4-winchester.dtb /tmp/probe.bin" 2>&1 | tail -2; echo "exit=$?"
+
+bc armed
+/tmp/probe.bin: No such file or directory
+exit=0
+""
+
+And the device was still responsive during those
+
+Then you thought
+
+""
+The device keeps rebooting between my commands — /tmp wiped each time (each missing file = one reboot cycle wasted, ~3 min each). The files are being deployed one at a time and each failed run takes a reboot cycle. I keep redeploying file-by-file because I forget the /tmp wipe. Deploy EVERYTHING in ONE scp command, then run once.
+""
+
+But the device did not reboot once, it was still on, blue LED on, backlight at full brightness (though, it seems that the backlight being at full brightness is a QNX thing, as it wasn't going back to low brightness, but it was respecting the OS's configs of automatically dimming after 10 seconds and such, then coming back to high brightness when the screen was tapped)
+
+Then you ran:
+
+""
+$ SCPARGS="-o StrictHostKeyChecking=no -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa -o MACs=+hmac-sha1 -i /home/psyden/playbook-dev/rsa" && scp $SCPARGS qnx2linux probe.bin memdump3 kernel/Image kernel/omap4-winchester.dtb root@169.254.0.1:/tmp/ >/dev/null && timeout 30 ssh $SCPARGS root@169.254.0.1 "on -C 0 /tmp/qnx2linux --probe /tmp/Image /tmp/omap4-winchester.dtb /tmp/probe.bin" 2>&1 | tail -2; echo "exit=$?"
+
+probe 400 bytes placed (entry 40309000, params 40309800)
+jumping: entry=40309000 exit=0
+""
+
+Which turned the device off after a bit (reboot)
+
+And, then you ran:
+
+""
+$ ./waitdev && SCPARGS="-o StrictHostKeyChecking=no -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa -o MACs=+hmac-sha1 -i /home/psyden/playbook-dev/rsa" && scp $SCPARGS memdump3 root@169.254.0.1:/tmp/ >/dev/null && ssh $SCPARGS root@169.254.0.1 "on -C 0 /tmp/memdump3 90000000 0x24; echo ---ring1; on -C 0 /tmp/memdump3 88000080 0x40" 2>&1
+
+/bin/bash: line 1: ./waitdev: No such file or directory
+""
+You do these mistakes very often, i'd advise setting up a little script to do the process instead, because you seem to forget to send the files to the device before running the jump, and also keep forgetting to add cd to the waitdev command.
+
+Anyways, the device is back up and ssh is up.
+""""
+
+
+
+In some session (can't find which), i noticed it was making an error in it's thinking, it was trying to recall files from the linux kernel in it's head,
+which wasn't working so well, so it was making assumptions about code that didn't even exist.
+So, i made it follow the rule of always grepping files instead of trying to recall them in it's head, because otherwise the errors would be catastrophic.
+
+
+
+Midway through session-7, i had an idea:
+
+""
+i'm planning to like, make the last session write full documentation to the best of it's knowledge, 
+then go back to the session before it and have it analyze it and add anything that might be missing (lost/forgotten between handoffs), 
+and keep going all the way back to the first session on the project, then have the last session verify and consolidate everything
+""
+
+So, i pitched the idea to some different models, and a friend of mine, and i landed on this:
+
+
+
+""""""
+
+Important context:
+
+- This project has been developed entirely locally.
+- It currently has no Git repository/history.
+- It has not previously been published to GitHub.
+- I want to turn the current project into a clean, professional GitHub repository that another developer could clone and continue working on.
+- The repository should preserve the actual current project, while excluding machine-specific, generated, temporary, secret, or otherwise inappropriate files.
+
+This is session #7, and some knowledge from earlier sessions may have been lost during handoffs. I want the repository itself to become the persistent source of truth.
+
+# Primary goals
+
+1. Comprehensively understand and document the current project.
+2. Preserve important knowledge that exists in your current context but may not exist in the files.
+3. Create a clean documentation structure under "newdocs/".
+4. Prepare the project for its first Git repository.
+5. Prepare it to be published as a GitHub repository.
+6. Leave enough documentation and project context that another developer can continue without access to our conversation history.
+
+# First: inspect the actual project
+
+Before making major changes, inspect the complete local project.
+
+Look at:
+
+- source code
+- configuration
+- package/dependency manifests
+- scripts
+- tests
+- build tooling
+- assets
+- database/storage files
+- environment/configuration files
+- existing documentation
+- generated files
+- development tooling
+- IDE/editor files
+- OS-specific files
+- anything else that appears relevant
+
+Determine how the project actually works rather than relying only on our conversation history.
+
+# Documentation strategy
+
+Create a "newdocs/" structure appropriate for this project.
+
+At minimum, consider:
+
+newdocs/
+├── PROJECT_OVERVIEW.md
+├── PROJECT_STATE.md
+├── ARCHITECTURE.md
+├── SETUP.md
+├── DEVELOPMENT.md
+├── DECISIONS.md
+├── KNOWN_ISSUES.md
+├── ROADMAP.md
+├── HANDOFF.md
+├── session-notes/
+│   └── session-07.md
+└── contradictions/
+
+Do not create unnecessary documents just for the sake of having more files. Adapt the structure to the actual project.
+
+The documentation should explain:
+
+- what the project is
+- why it exists
+- what problem it solves
+- major features
+- architecture
+- important components
+- how components interact
+- setup and installation
+- configuration
+- development workflow
+- running the project
+- testing
+- building
+- deployment, if applicable
+- important design decisions
+- current implementation status
+- known limitations
+- known bugs
+- unfinished work
+- future plans
+- anything a new developer would need to know
+
+# Preserve session-specific knowledge
+
+Create:
+
+"newdocs/session-notes/session-07.md"
+
+Capture the important project knowledge available from this session/context that may otherwise be lost.
+
+Distinguish between:
+
+- confirmed facts
+- reasonable inferences
+- unknowns
+- unresolved issues
+- contradictions
+
+Do not present guesses as facts.
+
+# Multiple-session handoff
+
+Other sessions will subsequently inspect this same documentation directory.
+
+Therefore:
+
+- preserve useful existing information
+- add genuinely missing information
+- avoid unnecessary duplication
+- do not silently overwrite information simply because your interpretation differs
+- do not silently resolve contradictions
+
+If you find contradictory information, create a file under:
+
+"newdocs/contradictions/"
+
+Document:
+
+- the conflicting claims
+- the evidence supporting each
+- what remains uncertain
+- what would need to be checked to resolve it
+
+# Git migration
+
+This project currently has no Git repository.
+
+Prepare it for its first Git repository.
+
+Before initializing Git or creating the first commit, carefully determine which files should and should not belong in version control.
+
+In particular, identify and exclude things such as:
+
+- secrets
+- API keys
+- passwords
+- tokens
+- private credentials
+- local environment files containing secrets
+- caches
+- build artifacts
+- temporary files
+- logs
+- IDE/editor state
+- OS-specific metadata
+- dependency/vendor directories when they should not be committed
+- generated output that should be reproducible rather than versioned
+- local databases or user-specific state when inappropriate
+- large unnecessary files
+- anything that should remain local
+
+Create an appropriate ".gitignore".
+
+Do not delete potentially important project data just because it should not be committed. Instead, distinguish between:
+
+1. files that belong in Git
+2. files that should remain local and be ignored
+3. files that are generated and can be recreated
+4. files that contain sensitive information and must not be committed
+
+If there are secrets or sensitive files currently present, make sure they are not included in the initial repository. Do not expose their actual secret values in documentation.
+
+Where useful, provide example/template files such as:
+
+".env.example"
+
+with placeholder values instead of real credentials.
+
+# GitHub readiness
+
+The final project should have a professional root-level README.
+
+The README should make it possible for someone discovering the GitHub repository to understand:
+
+- what the project is
+- what it does
+- why it exists
+- its current status
+- how to install it
+- how to run it
+- how to test it
+- where to find deeper documentation
+
+Link to the relevant files under "newdocs/".
+
+Also identify whether the project would benefit from standard repository files such as:
+
+- "LICENSE"
+- "CONTRIBUTING.md"
+- "SECURITY.md"
+- GitHub issue/PR templates
+- CI configuration
+- other standard repository metadata
+
+Do not invent legal or project policy decisions. If something requires my decision, document it clearly as an unresolved item instead.
+
+# Do not prematurely create a fake Git history
+
+There is no existing Git history to preserve.
+
+The goal is to prepare the project for its first legitimate Git initialization and initial commit.
+
+Do not fabricate historical commits, authorship, dates, or development history.
+
+The initial commit should represent the project as it exists now after the documentation and cleanup work.
+
+# Important: do not publish blindly
+
+Before anything is pushed to GitHub, perform a final review for:
+
+- secrets
+- private information
+- accidentally included local files
+- unnecessary large files
+- generated artifacts
+- credentials inside configuration or source files
+- incorrect ".gitignore" rules
+- documentation that exposes sensitive information
+
+Do not push anything to a remote repository unless the necessary GitHub destination/configuration is actually available and authorized.
+
+# Final state
+
+The desired final structure is:
+
+project/
+├── README.md
+├── .gitignore
+├── [project source/configuration/etc.]
+└── newdocs/
+    ├── PROJECT_OVERVIEW.md
+    ├── PROJECT_STATE.md
+    ├── ARCHITECTURE.md
+    ├── SETUP.md
+    ├── DEVELOPMENT.md
+    ├── DECISIONS.md
+    ├── KNOWN_ISSUES.md
+    ├── ROADMAP.md
+    ├── HANDOFF.md
+    ├── session-notes/
+    │   └── session-07.md
+    └── contradictions/
+
+Adapt this structure as appropriate to the actual project.
+
+The most important goal is not maximum documentation volume.
+
+The goal is to preserve project knowledge, create a trustworthy source of truth, make the local project understandable to a new developer, and prepare it for a clean first Git commit and eventual GitHub publication.
+
+Before finishing, verify important documentation claims against the actual codebase and clearly flag anything that cannot be established with confidence.
+
+
+Ask me any questions, if you have any that need my answer.
+
+""""""
+
+
+
+Then, i went down from session-6 to session-1, with this prompt:
+"""
+This session is session-06.
+Read everything under newdocs/, especially the existing session notes and contradiction logs. 
+Also read `docs/03_DEBUGGING_SESSIONS.md` and the relevant files in `SESSION-HANDOFF/` — they contain the run-by-run log, and check `newdocs/contradictions/` before writing.
+Now inspect the project using your own session context and identify information that is missing from the repository. 
+Add only genuinely new information. Do not duplicate existing material unnecessarily. 
+Do not silently resolve contradictions; record them. 
+Create newdocs/session-notes/session-06.md containing the important knowledge uniquely available to you. 
+Then update canonical newdocs only where your information adds something substantive.
+Use your native read/edit/write tools, no python3 or sed.
+When done, `git add` your changes and commit with a message like `docs: backfill session N knowledge`.
+"""
+
+
+
+Then, i came back to the model with this:
+
+"""
+Now all available session knowledge has been collected into newdocs
+Treat the session notes as evidence and the canonical documentation as the final product. 
+Review everything, reconcile information where the evidence allows it, preserve unresolved contradictions explicitly, verify important claims against the codebase, and produce the final GitHub-ready documentation. 
+Also, make sure to give PLAYBOOK-REFERENCE.md a good read, as it has critical information 
+(such as the NVRAM stuff, basically NVRAM is something that has to stay intact or otherwise the device will be bricked, same with RPMB)
+"""
+
+From that, the model then did a full inspection of the project's workspace, and asked me a few questions:
+
+""
+Which license for the repository? (This is a legal choice I won't make for you.)
+""
+(Chose none for now)
+
+""
+device-binaries/ and dumped4869ifs/ are proprietary QNX/BlackBerry code dumped from your device. They're the RE corpus but republishing them is legally dubious. Exclude from Git?
+""
+(Chose exclude all)
+
+""
+Should I initialize Git and create the initial commit once the cleanup is done? (No remote push — that stays with you.)
+""
+(Chose init + commit)
+
+
+""
+Do you intend the GitHub repo to be public or private? (Affects how cautious I am with content, e.g. device PIN/serial numbers in docs.)
+""
+(Chose public, but I actually made private for the time being, so that i could preview the repo by myself)
+
+
+
+And this repo was started.
+
+
+
+in session-7, i noticed a hallucination... where the agent thought it had fabricated the output of a script...
+"""
+The appended output is fictional. No real jump happened. No real device was touched by those commands.
+"""
+Perhaps z.ai (GLM 5.3 flash provider) had an issue, or was doing something heavy on their servers, or there was a token caching error, i don't know. 
+
+It at least seemed to continue just fine after i told it everything was fine, that the scripts existed and that the device did what it was supposed to do.
+
+
+
+Right now, i would like to have a good audit/inspection/verification of the whole repo/project/idea, with either:
+
+A big model, like gpt 6 astra (expensive AF though...)
+A reasearcher/developer who knows this stuff
+
+To know if the idea, or something from the very beginning, might be flawed, and if there was an easier way to do this all along... 
+- What if there's critical MMU/SMC/whatever setup in the QNX 6.5.0/6.6.0 SDP that the model didn't consider? (Like, i see there's paths like /qnx660-master/target/qnx6/usr/include/arm/mmu.h, which i don't remember it looking at)
+- What if it could've just dumped the bootrom and bootloader and RE'd them to check the setup there? 
+- What if it was easier to just clean the DRAM/IRAM first, before trying to jump to linux? 
+And more questions like that...
+
+And, on a personal note, it seems i might've gone through an "LLM Cognitive Virus", or perhaps a light "AI-induced psychosis"
+If you know anyone who heavily uses AI, and you notice they're a little weird lately, i'd recommend pointing them to this paper:
+https://arxiv.org/abs/2609.03344v1
+It helped me understand some of what's been happening to me, and get ahold of myself eventually.

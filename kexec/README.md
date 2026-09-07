@@ -8,7 +8,7 @@ Everything needed to rebuild and rerun the QNX→Linux jump experiment.
   (`source ../qnx-env.sh` from this directory sets `QNX_HOST/QNX_TARGET/PATH`;
   the stock `qnx660-env.sh` points at /opt — ours relocates it).
 - Device: PlayBook 64 GB, OS 2.0.0.4869, reachable over USB RNDIS:
-  `ssh -o StrictHostKeyChecking=no -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa -o MACs=+hmac-sha1 -i rsa -l root 169.254.0.1`
+  `ssh -o StrictHostKeyChecking=no -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa -i rsa -l root 169.254.0.1`
   (key file `rsa` in the workspace root; USB RNDIS, 169.254.0.1).
 - `/tmp` on the device is wiped by every reboot — redeploy binaries each session.
 
