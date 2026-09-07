@@ -1,3 +1,5 @@
+Please read READFIRST/Psyden.txt first.
+
 # PlayBook kexec — booting mainline Linux on the BlackBerry PlayBook from QNX
 
 Research project: **booting mainline Linux on the BlackBerry PlayBook (TI
