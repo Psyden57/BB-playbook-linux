@@ -13,10 +13,10 @@ Sorry if this is hard to read, feedback would be appreciated.
 
 This project was paused on september 4th due to me running out of funds.
 
-I started this project on Aug 27, 2026, on a research session using free claude code and deepseek harness (i got frustrated of NVIDIA NIM's rate limits, so i switched to opencode go halfway through it), 
-first telling the system all i know (and, over the course of the session, adding more knowledge i forgot to mention at the time)
+I started this project on Aug 27, 2026, on a research session using free claude code and deepseek harness (i got frustrated of NVIDIA NIM's rate limits, so i switched to opencode go using GLM-5.3 flash exclusively, abouthalfway through it), 
+first telling the system all i know about the device (and, over the course of the session/project, adding more knowledge i forgot to mention at the time)
 
-That session's research concluded that the bootchain is indeed locked down, and that to fix my two dead units (NVRAM wipe on one of them, an invalid RPMB flag on the other), 
+With that session's research I concluded that the bootchain is indeed locked down, and that to fix my two dead units (NVRAM wipe on one of them, an invalid RPMB flag on the other), 
 i would have to either find a major exploit, or remove the NAND on those units with a hot air gun (to then inspect it with a NAND reader, find the NVRAM and RPMB sections/blocks, and fix it manually)
 
 And i asked if a KEXEC sort of thing would be doable, and asked it to make me a prompt to start the next session, with the goal of achieving linux on the playbook.
@@ -109,6 +109,9 @@ The binaries/files get to the device in a couple of ways:
 -They can be sent over USB via SSH+SCP (provided QNX is booted)
 """"
 
+
+
+
 From there on out, when each session/chat got up to 50-60% context, i told the model to write a handoff with all the needed context to continue in the next. (to avoid hallucinations)
 
 
@@ -142,6 +145,8 @@ QNX is still alive at this point.
 
 And to clarify, my python berryshell script is a script made for easy SSH access to blackberry QNX devices (playbook/bb10 devices), because to connect to the SSH you first have to authenticate to the qconn door, so the script does it all.
 """
+
+
 
 
 
@@ -210,6 +215,7 @@ You do these mistakes very often, i'd advise setting up a little script to do th
 
 Anyways, the device is back up and ssh is up.
 """"
+
 
 
 
@@ -498,6 +504,8 @@ Ask me any questions, if you have any that need my answer.
 
 
 
+
+
 Then, i went down from session-6 to session-1, with this prompt:
 """
 This session is session-06.
@@ -511,6 +519,7 @@ Then update canonical newdocs only where your information adds something substan
 Use your native read/edit/write tools, no python3 or sed.
 When done, `git add` your changes and commit with a message like `docs: backfill session N knowledge`.
 """
+
 
 
 
@@ -549,7 +558,11 @@ Do you intend the GitHub repo to be public or private? (Affects how cautious I a
 
 
 
+
+
 And this repo was started.
+
+
 
 
 
@@ -574,7 +587,21 @@ To know if the idea, or something from the very beginning, might be flawed, and 
 - What if it was easier to just clean the DRAM/IRAM first, before trying to jump to linux? 
 And more questions like that...
 
+
+My takeaway from this project, is that if you use AI, you have to use it right, as it is only a tool, and you have to really know what you (instructing it, and putting things together), and *it* is doing.
+
+One thing to note, if you use AI for anything, you should at least know/learn the basics of anything you're using it for.
+For example, if you're using it to do assembly code/work, you should probably know the basics of it, so that you can catch any mistake it may do.
+(and, so that you can eventually learn it, because one should learn things so AI doesn't have to be used in the future for that task)
+
+
+
+And perhaps a good goal to have while using AI, is to learn from it while also doing the thing you need to do.
+to then not need to use it again and just do it yourself.
+
 And, on a personal note, it seems i might've gone through an "LLM Cognitive Virus", or perhaps a light "AI-induced psychosis"
 If you know anyone who heavily uses AI, and you notice they're a little weird lately, i'd recommend pointing them to this paper:
 https://arxiv.org/abs/2609.03344v1
 It helped me understand some of what's been happening to me, and get ahold of myself eventually.
+
+And, i'm a bit scared of AI for the time being, so i'm leaving this project on hold, for now.
