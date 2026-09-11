@@ -1435,7 +1435,7 @@
  SYM_FUNC_END(v7wbi_flush_kern_tlb_range)
 
 --- a/init/main.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/init/main.c	2026-09-11 04:37:26.469102436 +0000
++++ b/init/main.c	2026-09-11 05:30:42.137101479 +0000
 @@ -86,6 +86,7 @@
  #include <linux/sched/clock.h>
  #include <linux/sched/task.h>
@@ -1482,7 +1482,7 @@
  	done = 1;
  }
  
-@@ -892,18 +912,143 @@
+@@ -892,18 +912,155 @@
  #endif
  }
  
@@ -1573,12 +1573,24 @@
 +	 * sustained cached writes when the L2 is enabled (the bss-clear
 +	 * wedge, bc[1]=120 with 117 never landing). The decompressor
 +	 * (SMP=1, L2 on, CPU1 held, 5.5 MB of cached writes) proves the
-+	 * snoop-deadlock fear wrong at the traffic scale that matters. */
++	 * snoop-deadlock fear wrong at the traffic scale that matters.
++	 * W-45 (2026-09-11, session 10): the SMP=1 broadcast wedge is BACK
++	 * with a vengeance — the CMA TLB flush wedges on ANY TLB/barrier
++	 * broadcast to the HELD CPU1 (W-43: the ISH `dsb ish`; W-44: the
++	 * non-ISH c8,c7 TLB op = STILL wedges — the A9 broadcasts the TLB
++	 * ops via the SCU when ACTLR.SMP=1 regardless of the encoding).
++	 * FIX: clear ACTLR.SMP (0x40) — the SMP=0 cached-write wedge is
++	 * L2-ENABLED-specific (this very comment's history), so pair the
++	 * clear with --t3 (the payload's L2-off path, W-43-class runs).
++	 * bc[3] = the POST-clear ACTLR. */
 +	{
 +		register unsigned int pb_a __asm__("r0");
 +		__asm__ volatile("mrc p15, 0, %0, c1, c0, 1" : "=r"(pb_a));
-+		pb_bc_put(0xD000000C, pb_a);		   /* bc[3]: ACTLR */
-+		pb_bc_put(0xD0000008, 0x1);		   /* bc[2]: done */
++		pb_a &= ~0x40u;			   /* clear ACTLR.SMP */
++		__asm__ volatile("mcr p15, 0, %0, c1, c0, 1"
++				 :: "r"(pb_a) : "memory");
++		pb_bc_put(0xD000000C, pb_a);	   /* bc[3]: ACTLR post-clear */
++		pb_bc_put(0xD0000008, 0x1);	   /* bc[2]: done */
 +	}
 +
 +	/* PlayBook kexec diagnostic: bc=118 start_kernel entered — L2-aware
@@ -1626,7 +1638,7 @@
  
  	local_irq_disable();
  	early_boot_irqs_disabled = true;
-@@ -913,9 +1058,95 @@
+@@ -913,9 +1070,95 @@
  	 * enable them.
  	 */
  	boot_cpu_init();
@@ -1722,7 +1734,7 @@
  	/* Static keys and static calls are needed by LSMs */
  	jump_label_init();
  	static_call_init();
-@@ -1032,6 +1263,7 @@
+@@ -1032,6 +1275,7 @@
  	 * this. But we do want output early, in case something goes wrong.
  	 */
  	console_init();
@@ -1730,7 +1742,7 @@
  	if (panic_later)
  		panic("Too many boot %s vars at `%s'", panic_later,
  		      panic_param);
-@@ -1088,12 +1320,18 @@
+@@ -1088,12 +1332,18 @@
  	pidfs_init();
  	cpuset_init();
  	cgroup_init();
@@ -1749,7 +1761,7 @@
  
  	/* Do the rest non-__init'ed, we're now alive */
  	rest_init();
-@@ -1315,8 +1553,21 @@
+@@ -1315,8 +1565,21 @@
  		   NULL, ignore_unknown_bootoption);
  
  	trace_initcall_level(initcall_level_names[level]);
@@ -1772,7 +1784,7 @@
  }
  
  static void __init do_initcalls(void)
-@@ -1476,6 +1727,8 @@
+@@ -1476,6 +1739,8 @@
  	numa_default_policy();
  
  	rcu_end_inkernel_boot();
@@ -1781,7 +1793,7 @@
  
  	do_sysctl_args();
  
-@@ -1539,6 +1792,7 @@
+@@ -1539,6 +1804,7 @@
  {
  	/* Now the scheduler is fully set up and can do blocking allocations */
  	gfp_allowed_mask = __GFP_BITS_MASK;
@@ -1789,7 +1801,7 @@
  
  	/*
  	 * init can allocate pages on any node
-@@ -1565,6 +1819,7 @@
+@@ -1565,6 +1831,7 @@
  	page_alloc_init_late();
  
  	do_basic_setup();
