@@ -104,7 +104,7 @@
  	return 0;
 
 --- a/arch/arm/kernel/head-common.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head-common.S	2026-09-11 18:05:55.709546927 +0000
++++ b/arch/arm/kernel/head-common.S	2026-09-11 18:14:40.843189900 +0000
 @@ -79,6 +79,20 @@
  	mov	r7, r1
  	mov	r8, r2
@@ -126,7 +126,7 @@
  
  	adr	r4, __mmap_switched_data
  	mov	fp, #0
-@@ -103,17 +117,72 @@
+@@ -103,17 +117,70 @@
   THUMB(	mov	sp, r3 )
  	sub	r2, r1, r0
  	mov	r1, #0
@@ -184,13 +184,11 @@
 +	ldr	r0, =0xF6000003
 +	str	r0, [r1]
 +	dsb
-+	ldr	r0, [r2]
-+	mcr	p15, 0, r0, c7, c10, 1		@ DCCMVAC the .init.data line
-+	dsb
-+	ldr	r1, =0xD000006C
-+	ldr	r0, =0xF6000004
-+	str	r0, [r1]
-+	dsb
++	/* PlayBook W-64: the DCCMVAC on a DIRTY CACHEABLE line with the L2
++	 * bypassed HANGS (W-58's attempt = the death; the same op on the
++	 * uncached bc lines = harmless). The .init.data stores stay as they
++	 * are; setup.c recovers the FDT pointer from the bc page instead
++	 * (bc[20] = the appended DTB's phys, saved by the W-54 markers). */
 +	@ PlayBook: bc = 117 - plain store (the 0xD00 section is DEVICE-mapped;
 +	@ no DCCMVAC/CIPA/sync ritual - it wedged the L2-on boot, 2026-09-02).
 +	ldr	r1, =0xD0000004
@@ -857,11 +855,24 @@
  	b	__fixup_a_pv_table
 
 --- a/arch/arm/kernel/setup.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/setup.c	2026-09-11 16:09:20.191224807 +0000
-@@ -1101,9 +1101,55 @@
++++ b/arch/arm/kernel/setup.c	2026-09-11 18:15:00.462620661 +0000
+@@ -1100,10 +1100,68 @@
+ 
  	if (__atags_pointer)
  		atags_vaddr = FDT_VIRT_BASE(__atags_pointer);
- 
++	else {
++		/* PlayBook W-64 (2026-09-11, session 10): with the L2 off
++		 * the .init.data store of the atags pointer can be lost
++		 * (the L1-dirty write-back-loss class). The decompressor's
++		 * W-54 markers saved the appended DTB's phys to bc[20]
++		 * (MMU-off SO stores = DRAM truth) — recover from there. */
++		unsigned int pb_dtb = *(volatile unsigned int *)0xD0000050u;
++		if (pb_dtb) {
++			__atags_pointer = pb_dtb;
++			atags_vaddr = FDT_VIRT_BASE(__atags_pointer);
++		}
++	}
++
 +	/* PlayBook kexec: fine-grained bc markers in the 118..110 window.
 +	 * Triple-channel: bc[1] = full flush (DCCMVAC + PL310 CIPA + bounded
 +	 * sync poll); bc[2] = flush-free SO store (v|0x100, reaches DRAM only
@@ -880,7 +891,7 @@
 +progress = life (60 s window killed healthy L2-off boots) */ \
 +	dsb(sy); \
 +} while (0)
-+
+ 
 +	pb_bc(136);			/* setup_arch entered */
  	setup_processor();
 +	pb_bc(130);			/* setup_processor done */
@@ -914,7 +925,7 @@
  		if (mdesc)
  			memblock_reserve(__atags_pointer,
  					 fdt_totalsize(atags_vaddr));
-@@ -1118,6 +1164,7 @@
+@@ -1118,6 +1176,7 @@
  			early_print("  r2[]=%*ph\n", 16, atags_vaddr);
  		dump_machine_table();
  	}
@@ -922,7 +933,7 @@
  
  	machine_desc = mdesc;
  	machine_name = mdesc->name;
-@@ -1134,8 +1181,10 @@
+@@ -1134,8 +1193,10 @@
  
  	early_fixmap_init();
  	early_ioremap_init();
@@ -933,7 +944,7 @@
  
  #ifdef CONFIG_MMU
  	early_mm_init(mdesc);
-@@ -1151,11 +1200,27 @@
+@@ -1151,11 +1212,27 @@
  	arm_memblock_init(mdesc);
  	/* Memory may have been removed so recalculate the bounds. */
  	adjust_lowmem_bounds();
