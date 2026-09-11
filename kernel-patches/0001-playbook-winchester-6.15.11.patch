@@ -1385,8 +1385,8 @@
  	__flush_dcache_folio(NULL, page_folio(empty_zero_page));
 
 --- a/arch/arm/mm/tlb-v7.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/tlb-v7.S	2026-09-11 05:13:22.609102118 +0000
-@@ -69,7 +69,23 @@
++++ b/arch/arm/mm/tlb-v7.S	2026-09-11 05:21:53.377101528 +0000
+@@ -69,22 +69,42 @@
   *	- end   - end address (exclusive, may not be aligned)
   */
  SYM_TYPED_FUNC_START(v7wbi_flush_kern_tlb_range)
@@ -1411,7 +1411,16 @@
  	mov	r0, r0, lsr #PAGE_SHIFT		@ align address
  	mov	r1, r1, lsr #PAGE_SHIFT
  	mov	r0, r0, lsl #PAGE_SHIFT
-@@ -84,7 +100,11 @@
+ 	mov	r1, r1, lsl #PAGE_SHIFT
+ 1:
+ #ifdef CONFIG_ARM_ERRATA_720789
+-	ALT_SMP(mcr	p15, 0, r0, c8, c3, 3)	@ TLB invalidate U MVA all ASID (shareable)
++	ALT_SMP(mcr	p15, 0, r0, c8, c7, 3)	@ PlayBook W-44: was c8,c3,3 (the IS/broadcast variant) — the loop's first invalidate broadcast-waits for the HELD CPU1 (bc[27]=1 = entry passed, death in the loop); non-ISH encoding for the single-core boot
+ #else
+-	ALT_SMP(mcr	p15, 0, r0, c8, c3, 1)	@ TLB invalidate U MVA (shareable)
++	ALT_SMP(mcr	p15, 0, r0, c8, c7, 1)	@ PlayBook W-44: was c8,c3,1 (the IS variant) — same class
+ #endif
+ 	ALT_UP(mcr	p15, 0, r0, c8, c7, 1)	@ TLB invalidate U MVA
  	add	r0, r0, #PAGE_SZ
  	cmp	r0, r1
  	blo	1b
