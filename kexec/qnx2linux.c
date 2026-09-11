@@ -780,7 +780,22 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
      * loop. Every failure is counted by reason — v2 aborted blind
      * ("no usable placement" after a CLEAN boot) with zero visibility. */
     buf = NULL;
+    /* PlayBook W-61 (2026-09-11): the fresh-boot QNX pool is fragmented
+     * enough that even a 12 MB contiguous grab can fail twice in a row
+     * (all 129 hinted slots non-contiguous; the generic fallback's grabs
+     * land in the guarded inflation region). Ladder the size: 12 -> 8 ->
+     * 6 MB (the kernel+DTB need ~5.6 MB; the memtest shrinks with it),
+     * with a 2 s settle between passes so the pool can coalesce. */
     {
+        static const uint32_t ladder[] = { 0xC00000u, 0x800000u, 0x600000u };
+        unsigned li;
+        for (li = 0; li < sizeof(ladder) / sizeof(ladder[0]) && !buf; li++) {
+            if (li > 0)
+                sleep(2);   /* settle: let the pool coalesce */
+            g_bufsize = ladder[li];
+            printf("placement pass %u: buffer %u KB\n", li,
+                   g_bufsize / 1024);
+            {
         int a, sweep = 0;
         /* failure counters by reason */
         int c_mmap = 0, c_moved = 0, c_frag = 0, c_unaligned = 0,
@@ -831,10 +846,12 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
                 buf = b; phys = p;
             }
         }
-        printf("placement sweep: %d 2MB slots tried, failures: mmap=%d moved=%d "
-               "frag=%d unaligned=%d bank=%d protected=%d alias=%d -> %s\n",
-               sweep, c_mmap, c_moved, c_frag, c_unaligned, c_bank, c_prot,
-               c_alias, buf ? "FOUND" : "NONE");
+            printf("placement sweep: %d 2MB slots tried, failures: mmap=%d moved=%d "
+                   "frag=%d unaligned=%d bank=%d protected=%d alias=%d -> %s\n",
+                   sweep, c_mmap, c_moved, c_frag, c_unaligned, c_bank, c_prot,
+                   c_alias, buf ? "FOUND" : "NONE");
+            }
+        }
     }
     if (!buf) {
         fprintf(stderr, "FATAL: no usable 2MB-aligned 24MB placement — "
