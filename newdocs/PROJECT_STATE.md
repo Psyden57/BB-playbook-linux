@@ -10,8 +10,8 @@ with dated headers.
 ## Where the boot stands
 
 Mainline Linux 6.15.11 (omap2plus, non-LPAE, patched for the PlayBook) is
-jumped from QNX via the **zImage path** (kernel #110 built and packed,
-W-39 unrun):
+jumped from QNX via the **zImage path** (kernel #110; **W-39 RAN
+2026-09-11 — see the session-10 update at the end of this section**):
 
 1. The zImage decompressor inflates the kernel to zreladdr 0xa0008000
    (PHYS_OFFSET = 0xa0000000 — the DTS bank = 0xa0000000+512MB must
@@ -40,6 +40,38 @@ W-39 unrun):
    bc[1]=161). Build #110 shaves the allocator limit by 2MB
    (arm_lowmem_limit → 0xbfc00000) and probes the untested middle pair
    [0xdfa/0xdfb] (W-39).
+
+**SESSION-10 UPDATE (2026-09-11) — W-39 ran; the front re-characterized;
+the cure proven:**
+- W-39 (kernel #110, --dmaquiet): bc[1]=167 — the dump markers all
+  landed, death AT the first re-enabled svm store. **The middle pair
+  [0xdfa/0xdfb] reads HEALTHY via the pgd path (0xbfa1141e, a proper
+  section desc — bc[13] confirms the svm landed at 0xbfbfffd4 exactly
+  as computed) yet the store through it STILL wedges.** And **[0xdfc]
+  STILL reads the byte-identical bogus 0xbfc1141e** across a third
+  placement (0xa3200000) AND the 2MB allocator shift — the shave
+  relocated the victim, it did not cure the poison.
+- ⇒ The stale-view sits BETWEEN the pgd's cached content (healthy) and
+  what the PTW serves (poison): a **per-line L2 discrepancy class**,
+  not a single fixed pair and not a kernel bug.
+- **The cure is PROVEN on-device** (kexec/l2canary.c, same session):
+  **NS PL310+0x770 = invalidate-by-PA, NO clean** — the dirty line is
+  discarded and DRAM truth served (0xC0FFEE11 refetch); config
+  registers untouched. (The first ladder's "0x7F0 abort" was the
+  assistant's own PROT_READ-only mapping — corrected; 0x7F0 CIPA also
+  works from NS; 0x768 = no-op-or-clean+inv.)
+- **Build #111 plan**: kernel-side sweep — static-map 0x48242000 in
+  omap4-common.c map_io; after map_lowmem, re-write the section descs
+  + inv-by-PA sweep over swapper_pg_dir (16 KB); payload-side sweep of
+  the buffer region pre-jump for the decompressor-era lines. The
+  per-victim ladders (W-32c block, the 2MB shave) retire once the
+  sweep passes 167/0x567/151. Full record: docs/03 W-39 + the session-10
+  documents (bootdumps-2026-09-11/, newdocs/audit-approach-2026-09-11.md).
+- Also this session: the bootrom dumped + RE'd (0x40028000, 48 KB +
+  the lower block 0x40020000-0x40026F24 with a 4 KB ROM_HIDE hole =
+  the dispatch-region candidate); TRM §27.5 documents 0x112 = the
+  latency service (session-7 erratum) and it ABORTS NS callers;
+  fresh device dumps verified the old corpus byte-identical.
 4. The DMA masters are quiesced (--dmaquiet: devb slain via QNX's slay
    after the file reads; DISPC killed + register-verified 0/0 in
    bc[16]/bc[17]; WiFi SDIO never brought up). The randomness SURVIVED
