@@ -200,7 +200,7 @@
  #endif
 
 --- a/arch/arm/kernel/head.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head.S	2026-09-11 16:36:34.591223101 +0000
++++ b/arch/arm/kernel/head.S	2026-09-11 19:52:42.579224891 +0000
 @@ -98,6 +98,134 @@
   THUMB(	.thumb			)	@ switch to Thumb now.
   THUMB(1:			)
@@ -855,8 +855,8 @@
  	b	__fixup_a_pv_table
 
 --- a/arch/arm/kernel/setup.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/setup.c	2026-09-11 18:15:00.462620661 +0000
-@@ -1100,10 +1100,68 @@
++++ b/arch/arm/kernel/setup.c	2026-09-11 19:53:13.871224682 +0000
+@@ -1100,10 +1100,74 @@
  
  	if (__atags_pointer)
  		atags_vaddr = FDT_VIRT_BASE(__atags_pointer);
@@ -889,7 +889,8 @@
 +	*(volatile unsigned int *)0xFEC14030 = \
 +		~*(volatile unsigned int *)0xFEC14030; /* WDT2 kick: \
 +progress = life (60 s window killed healthy L2-off boots) */ \
-+	dsb(sy); \
++	dsb(sy); /* PlayBook 2026-09-11 (session 11, W-70): restored (see \
++pb_bc_put in main.c — the W-69 "nosh" never existed on the hardware). */ \
 +} while (0)
  
 +	pb_bc(136);			/* setup_arch entered */
@@ -909,7 +910,12 @@
 +		register unsigned int pb_a __asm__("r0");
 +		pb_bc_put(0xD000006C, 0xF4000001u);	/* pre re-clear */
 +		__asm__ volatile("mrc p15, 0, %0, c1, c0, 1" : "=r"(pb_a));
-+		pb_a &= ~(1u << 6);
++		/* PlayBook 2026-09-11 (session 11, W-70): clear bit 6 (SMP)
++		 * AND bit 0 (FW = the cache/TLB maintenance broadcast) —
++		 * bit 6 alone left FW armed, so setup_processor's re-set
++		 * kept the broadcast alive (the W-44 class; see start_kernel's
++		 * W-70 note in main.c). */
++		pb_a &= ~0x41u;
 +		__asm__ volatile("mcr p15, 0, %0, c1, c0, 1" : : "r"(pb_a));
 +		pb_bc_put(0xD000006C, 0xF4000002u);	/* post re-clear */
 +	}
@@ -925,7 +931,7 @@
  		if (mdesc)
  			memblock_reserve(__atags_pointer,
  					 fdt_totalsize(atags_vaddr));
-@@ -1118,6 +1176,7 @@
+@@ -1118,6 +1182,7 @@
  			early_print("  r2[]=%*ph\n", 16, atags_vaddr);
  		dump_machine_table();
  	}
@@ -933,7 +939,7 @@
  
  	machine_desc = mdesc;
  	machine_name = mdesc->name;
-@@ -1134,8 +1193,10 @@
+@@ -1134,8 +1199,10 @@
  
  	early_fixmap_init();
  	early_ioremap_init();
@@ -944,7 +950,7 @@
  
  #ifdef CONFIG_MMU
  	early_mm_init(mdesc);
-@@ -1151,11 +1212,27 @@
+@@ -1151,11 +1218,27 @@
  	arm_memblock_init(mdesc);
  	/* Memory may have been removed so recalculate the bounds. */
  	adjust_lowmem_bounds();
@@ -1001,7 +1007,7 @@
  #endif
 
 --- a/arch/arm/mm/dma-mapping.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/dma-mapping.c	2026-09-11 18:48:14.006399618 +0000
++++ b/arch/arm/mm/dma-mapping.c	2026-09-11 19:53:27.055224566 +0000
 @@ -270,6 +270,8 @@
  void __init dma_contiguous_remap(void)
  {
@@ -1050,7 +1056,7 @@
 +		 * marker, the TLBIALL never completed). Do it locally:
 +		 * TLBIALL + dsb nosh + isb. */
 +		asm volatile("mcr p15, 0, %0, c8, c7, 0" :: "r"(0) : "memory");
-+		asm volatile(".word 0xF57FF062" ::: "memory");	/* dsb nosh */
++		asm volatile(".word 0xF57FF04F" ::: "memory");	/* dsb sy — PlayBook 2026-09-11 (session 11, W-70): the W-68 literal was f57ff062 = an ISB-class encoding with an invalid option, unpredictable on the A9 — almost certainly the W-69 death site (F5-span landed, 145 the last bc write). Restored to the true DSB SY; with ACTLR.FW+SMP cleared in start_kernel (the W-70 fix) it is CPU-local. */
 +		asm volatile(".word 0xF57FF06F" ::: "memory");	/* isb */
 +		pb_bc_put(0xD0000004, 146);	/* PlayBook W-20: tlb flush done */
  
@@ -1098,7 +1104,7 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-11 04:59:17.217102626 +0000
++++ b/arch/arm/mm/mmu.c	2026-09-11 19:53:23.327224580 +0000
 @@ -758,18 +758,27 @@
  	return arm_pte_alloc(pmd, addr, prot, early_alloc);
  }
@@ -1272,7 +1278,7 @@
  	high_memory = __va(arm_lowmem_limit - 1) + 1;
  
  	if (!memblock_limit)
-@@ -1363,6 +1476,19 @@
+@@ -1363,6 +1476,20 @@
   * Any other function or debugging method which may touch any device _will_
   * crash the kernel.
   */
@@ -1286,13 +1292,14 @@
 +	pb_bc_put(0xD4000004, ((v) | 0x200)); \
 +	*(volatile unsigned int *)0xFEC14030 = \
 +		~*(volatile unsigned int *)0xFEC14030; /* WDT2 kick */ \
-+	dsb(sy); \
++	dsb(sy); /* PlayBook 2026-09-11 (session 11, W-70): restored (see \
++pb_bc_put in main.c). */ \
 +} while (0)
 +
  static void __init devicemaps_init(const struct machine_desc *mdesc)
  {
  	struct map_desc map;
-@@ -1375,12 +1501,20 @@
+@@ -1375,12 +1502,20 @@
  	vectors = early_alloc(PAGE_SIZE * 2);
  
  	early_trap_init(vectors);
@@ -1314,7 +1321,7 @@
  
  	if (__atags_pointer) {
  		/* create a read-only mapping of the device tree */
-@@ -1445,10 +1579,16 @@
+@@ -1445,10 +1580,16 @@
  		mdesc->map_io();
  	else
  		debug_ll_io_init();
@@ -1331,7 +1338,7 @@
  
  	/*
  	 * Finally flush the caches and tlb to ensure that we're in a
-@@ -1457,10 +1597,13 @@
+@@ -1457,10 +1598,13 @@
  	 * back.  After this point, we can start to touch devices again.
  	 */
  	local_flush_tlb_all();
@@ -1346,7 +1353,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1908,104 @@
+@@ -1765,7 +1909,104 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1412,7 +1419,7 @@
 +				__asm__ volatile("mcr p15, 0, %0, c7, c10, 1"
 +						 :: "r"(va) : "memory");
 +				__asm__ volatile(".word 0xF57FF04F\n"
-+						 ::: "memory");
++						 ::: "memory");	/* dsb sy */
 +				pb_pl[0x7F0 / 4] = pa;
 +				pb_pl[0x730 / 4] = 0;
 +				while ((pb_pl[0x730 / 4] & 1) && --n)
@@ -1451,7 +1458,7 @@
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +2013,30 @@
+@@ -1773,9 +2014,30 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1482,7 +1489,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +2046,7 @@
+@@ -1785,6 +2047,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
@@ -1492,7 +1499,7 @@
  	__flush_dcache_folio(NULL, page_folio(empty_zero_page));
 
 --- a/arch/arm/mm/tlb-v7.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/tlb-v7.S	2026-09-11 18:25:39.466593263 +0000
++++ b/arch/arm/mm/tlb-v7.S	2026-09-11 19:53:32.763224555 +0000
 @@ -69,22 +69,42 @@
   *	- end   - end address (exclusive, may not be aligned)
   */
@@ -1514,7 +1521,7 @@
 +	ldr	r3, =0xD000006C
 +	mov	ip, #1
 +	str	ip, [r3]
-+	dsb	nosh	/* PlayBook W-66: DSB SY = a full-system barrier = waits for the HELD CPU1 (the W-66 run: the boot died AT the entry phase with bc[27]=1!). NOSH = the CPU-local barrier = no dead-core wait for a single-core boot. */
++	dsb	sy	/* PlayBook 2026-09-11 (session 11, W-70): restored. The W-66 "dsb nosh" = an invalid GAS barrier name — GCC's integrated assembler silently accepted it and emitted the SAME full-system mcr c7,c10,4 encoding (rule 16, W-69 audit). True NSH DSB = f57ff047, but with ACTLR.FW+SMP cleared (the W-70 start_kernel fix) the plain SY DSB is CPU-local. */
  	mov	r0, r0, lsr #PAGE_SHIFT		@ align address
  	mov	r1, r1, lsr #PAGE_SHIFT
  	mov	r0, r0, lsl #PAGE_SHIFT
@@ -1532,7 +1539,7 @@
  	cmp	r0, r1
  	blo	1b
 -	dsb	ish
-+	dsb	nosh	/* PlayBook W-66: nosh (see the entry). */
++	dsb	sy	/* PlayBook 2026-09-11 (session 11, W-70): restored (see the entry note). */
 +	mov	ip, #2
 +	str	ip, [r3]
  	isb
@@ -1541,81 +1548,8 @@
  	ret	lr
  SYM_FUNC_END(v7wbi_flush_kern_tlb_range)
 
---- a/arch/arm/kernel/devtree.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/devtree.c	2026-09-11 06:05:58.313101552 +0000
-@@ -192,6 +192,18 @@
- const struct machine_desc * __init setup_machine_fdt(void *dt_virt)
- {
- 	const struct machine_desc *mdesc, *mdesc_best = NULL;
-+	extern noinline void pb_bc_put(unsigned int addr, unsigned int v);
-+
-+	/* PlayBook W-49 (2026-09-11, session 10): the boot wedges
-+	 * deterministically at setup_bc 130->131 (inside this function)
-+	 * with ACTLR.SMP=0 and the L2 off — not the broadcast class and
-+	 * not a cache anomaly. Step markers -> bc[27]:
-+	 * 0xF3000001 entry, ...02 after early_init_dt_verify, ...03
-+	 * after of_flat_dt_match_machine. */
-+	{
-+		noinline void pb_bc_put(unsigned int addr, unsigned int v);
-+		pb_bc_put(0xD000006C, 0xF3000001u);
-+	}
- 
- 	DT_MACHINE_START(GENERIC_DT, "Generic DT based system")
- 		.l2c_aux_val = 0x0,
-@@ -203,8 +215,12 @@
- 	if (!dt_virt || !early_init_dt_verify(dt_virt, __pa(dt_virt)))
- 		return NULL;
- 
-+	pb_bc_put(0xD000006C, 0xF3000002u);
-+
- 	mdesc = of_flat_dt_match_machine(mdesc_best, arch_get_next_mach);
- 
-+	pb_bc_put(0xD000006C, 0xF3000003u);
-+
- 	if (!mdesc) {
- 		const char *prop;
- 		int size;
-
---- a/arch/arm/boot/compressed/head.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/boot/compressed/head.S	2026-09-11 16:26:54.131223198 +0000
-@@ -367,6 +367,18 @@
- 		ldr	lr, [r6, #0]
- 		ldr	r1, =OF_DT_MAGIC
- 		cmp	lr, r1
-+		/* PlayBook W-54 (2026-09-11): the appended-DTB search is
-+		 * failing — r2 reaches setup_arch as 0 (bc[12]) and the
-+		 * null-tags read freezes the box. Dump the check's inputs
-+		 * to the bc page (MMU-off SO stores = DRAM truth):
-+		 * bc[20] = r6 (_edata), bc[21] = [r6] (the magic),
-+		 * bc[22] = r8 (the incoming atags), bc[23] = r4 (the
-+		 * kernel base). */
-+		ldr	r0, =0x90000050
-+		str	r6, [r0]
-+		str	lr, [r0, #4]
-+		str	r8, [r0, #8]
-+		str	r4, [r0, #12]
- 		bne	dtb_check_done		@ not found
- 
- #ifdef CONFIG_ARM_ATAG_DTB_COMPAT
-@@ -1435,6 +1447,15 @@
- 		mov	r0, #0			@ must be 0
- 		mov	r1, r7			@ restore architecture number
- 		mov	r2, r8			@ restore atags pointer
-+		/* PlayBook W-55 (2026-09-11): r8 is clobbered en route from
-+		 * dtb_check_done to here (bc[12] showed r2=0 at the kernel
-+		 * while the check's bc[20] held the appended DTB's address
-+		 * and bc[22] the incoming atags — both correct). Recover
-+		 * the appended DTB's address from the bc page (DRAM truth,
-+		 * saved at the check by the W-54 markers): bc[20] = r6 =
-+		 * the appended DTB's phys. */
-+		ldr	r2, =0x90000050
-+		ldr	r2, [r2]
-  ARM(		mov	pc, r4		)	@ call kernel
-  M_CLASS(	add	r4, r4, #1	)	@ enter in Thumb mode for M class
-  THUMB(		bx	r4		)	@ entry point is always ARM for A/R classes
-
 --- a/init/main.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/init/main.c	2026-09-11 06:15:02.397102315 +0000
++++ b/init/main.c	2026-09-11 19:53:04.311224819 +0000
 @@ -86,6 +86,7 @@
  #include <linux/sched/clock.h>
  #include <linux/sched/task.h>
@@ -1662,7 +1596,7 @@
  	done = 1;
  }
  
-@@ -892,18 +912,166 @@
+@@ -892,18 +912,201 @@
  #endif
  }
  
@@ -1676,7 +1610,17 @@
 +	register unsigned long r0 __asm__("r0") = pa;
 +	register unsigned long r1 __asm__("r1") = size;
 +	register unsigned long r12v __asm__("r12") = 0x101;
-+	__asm__ volatile(".word 0xF57FF04F\n"	/* dsb sy */
++	__asm__ volatile(".word 0xF57FF04F\n"	/* dsb sy — PlayBook 2026-09-11
++			 * (session 11, W-70): restored. The W-69/rule-16 audit:
++			 * GNU as rejects the invalid name `nosh`; GCC's
++			 * integrated assembler silently accepted it and
++			 * emitted this same full-system mcr form — the
++			 * W-66..W-68 "dsb nosh" conversions were a no-op on
++			 * the hardware (the W-44 evidence already said the
++			 * encoding does not matter: ACTLR.FW (bit 0) is the
++			 * broadcast bit and was never cleared). True NSH DSB
++			 * = f57ff047, but on the A9 with FW=0 + SMP=0 the
++			 * plain SY DSB is CPU-local anyway. */
 +			 ".word 0xE320F000\n"	/* smc #0 */
 +			 ".word 0xF57FF05F\n"	/* dmb sy */
 +			 : "+r"(r0)
@@ -1704,6 +1648,15 @@
 +	*(volatile unsigned int *)addr = v;
 +	__asm__ volatile("mcr p15, 0, %0, c7, c10, 1"
 +			 :: "r"(line) : "memory");	/* DCCMVAC */
++	/* PlayBook 2026-09-11 (session 11, W-70): restored to dsb(sy). The
++	 * W-69 death was NOT this barrier — the rule-16 audit proved the
++	 * W-68 literal f57ff062 (an ISB-class encoding with an invalid
++	 * option, unpredictable on the A9) = the actual W-69 death site.
++	 * The real conversion this build tests = ACTLR.FW (bit 0, the
++	 * cache/TLB maintenance broadcast) cleared in start_kernel: with
++	 * FW=0 + SMP=0, plain DSB SY is CPU-local and TLB ops no longer
++	 * broadcast to the HELD CPU1 (W-44's "non-ISH still wedges"
++	 * re-explained). */
 +	dsb(sy);
 +	if (*(volatile unsigned int *)0xFEB42100 & 1)
 +		pb_smc_flush(line - 0x40000000u, 32);
@@ -1777,7 +1730,21 @@
 +	{
 +		register unsigned int pb_a __asm__("r0");
 +		__asm__ volatile("mrc p15, 0, %0, c1, c0, 1" : "=r"(pb_a));
-+		pb_a &= ~0x40u;			   /* clear ACTLR.SMP */
++		/* PlayBook 2026-09-11 (session 11, W-70): clear bit 6 (SMP)
++		 * AND bit 0 (FW = "cache and TLB maintenance broadcast").
++		 * W-44's evidence ("the non-ISH c8,c7 TLB op STILL wedges")
++		 * + the CMSIS-verified A9 ACTLR map pin the broadcast on
++		 * FW — bit 6 alone never stopped the TLB-op broadcasts, so
++		 * every TLB op still waited for the HELD CPU1 through the
++		 * SCU (W-43..W-69's whole "nosh" chain never changed a
++		 * barrier: rule 16 proved `dsb nosh` = silently assembled
++		 * to the same full-system mcr form). With FW=0 + SMP=0 and
++		 * maxcpus=1, plain DSB SY is CPU-local and the TLB ops are
++		 * local — the L2-off run mode keeps the old SMP=0 cached-
++		 * write wedge (the 2026-09-02 L2-ON-era bss-clear class)
++		 * out of the picture. bc[3] = the post-clear ACTLR = 0x0
++		 * = the discriminator for this fix. */
++		pb_a &= ~0x41u;			   /* clear ACTLR.SMP + FW */
 +		__asm__ volatile("mcr p15, 0, %0, c1, c0, 1"
 +				 :: "r"(pb_a) : "memory");
 +		pb_bc_put(0xD000000C, pb_a);	   /* bc[3]: ACTLR post-clear */
@@ -1806,7 +1773,9 @@
 +	*(volatile unsigned int *)0xFEC14030 = \
 +		~*(volatile unsigned int *)0xFEC14030; /* WDT2 kick: \
 +progress = life (60 s window killed healthy L2-off boots) */ \
-+	dsb(sy); \
++	dsb(sy); /* PlayBook 2026-09-11 (session 11, W-70): restored (the
++W-69 "nosh" never existed on the hardware — see pb_bc_put). The ACTLR.FW
++clear is the real fix. */ \
 +} while (0)
 +
  	set_task_stack_end_magic(&init_task);
@@ -1829,7 +1798,7 @@
  
  	local_irq_disable();
  	early_boot_irqs_disabled = true;
-@@ -913,9 +1081,95 @@
+@@ -913,9 +1116,95 @@
  	 * enable them.
  	 */
  	boot_cpu_init();
@@ -1925,7 +1894,7 @@
  	/* Static keys and static calls are needed by LSMs */
  	jump_label_init();
  	static_call_init();
-@@ -1032,6 +1286,7 @@
+@@ -1032,6 +1321,7 @@
  	 * this. But we do want output early, in case something goes wrong.
  	 */
  	console_init();
@@ -1933,7 +1902,7 @@
  	if (panic_later)
  		panic("Too many boot %s vars at `%s'", panic_later,
  		      panic_param);
-@@ -1088,12 +1343,18 @@
+@@ -1088,12 +1378,18 @@
  	pidfs_init();
  	cpuset_init();
  	cgroup_init();
@@ -1952,7 +1921,7 @@
  
  	/* Do the rest non-__init'ed, we're now alive */
  	rest_init();
-@@ -1315,8 +1576,21 @@
+@@ -1315,8 +1611,22 @@
  		   NULL, ignore_unknown_bootoption);
  
  	trace_initcall_level(initcall_level_names[level]);
@@ -1969,13 +1938,14 @@
 +		*(volatile unsigned int *)0xD0000008 = 0xBEEF;
 +		*(volatile unsigned int *)0xFEC14030 =
 +			~*(volatile unsigned int *)0xFEC14030;
-+		dsb(sy);
++		dsb(sy); /* PlayBook 2026-09-11 (session 11, W-70): restored
++			 * (see pb_bc_put). */
  		do_one_initcall(initcall_from_entry(fn));
 +	}
  }
  
  static void __init do_initcalls(void)
-@@ -1476,6 +1750,8 @@
+@@ -1476,6 +1786,8 @@
  	numa_default_policy();
  
  	rcu_end_inkernel_boot();
@@ -1984,7 +1954,7 @@
  
  	do_sysctl_args();
  
-@@ -1539,6 +1815,7 @@
+@@ -1539,6 +1851,7 @@
  {
  	/* Now the scheduler is fully set up and can do blocking allocations */
  	gfp_allowed_mask = __GFP_BITS_MASK;
@@ -1992,7 +1962,7 @@
  
  	/*
  	 * init can allocate pages on any node
-@@ -1565,6 +1842,7 @@
+@@ -1565,6 +1878,7 @@
  	page_alloc_init_late();
  
  	do_basic_setup();

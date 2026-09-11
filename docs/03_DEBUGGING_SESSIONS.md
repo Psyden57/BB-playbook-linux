@@ -2292,3 +2292,62 @@ zero direct PL310 access); the fresh device dumps verified the old
 corpus byte-identical; the fresh-boot QNX pool has NO 24MB contiguous
 run (the placement ladder 12→8→6 MB = the fix); the pb_bc_put fix
 (the markers = L1-dirty-lost with the L2 off; always DCCMVAC now).
+
+### Run W-69 (2026-09-11, session 11): build #139 — STILL bc[1]=145; the rule-16 audit
+### found the "dsb nosh" fixes were NEVER on the hardware (invalid barrier name + a
+### wrong literal); the W-69 death = the f57ff062 literal itself
+
+Run: PAYLOAD_MODE=--dmaquiet ./jump.sh zImage (#139), hands-off, unfiltered
+jump.sh output. Jump ~t=25s; WDT2 reboot; readbacks via memdump3.
+
+Readbacks (nonce 0xef02980c fresh): **bc[1] = 145** (the pmd_clear-done
+marker; no 146). bc[2]=0x17F, bc[3]=0x1 (the W-45 ACTLR.SMP clear ran),
+bc[4]/bc[5]=0x8F/0x90 (143/144), **bc[8]=0 — THE L2 OFF CONFIRMED**
+(W-39 had bc[8]=1: the payload's mon_call(0x102) inside --dmaquiet
+works), bc[9]=0x111, bc[10..12]=0xC0DE0002/10/20, bc[16]/bc[17]=0/0,
+bc[18]=0xa1c00000, bc[19]=0 (pv tries=0), bc[20]=0xa21431f8,
+bc[21]=0xedfe0dd0, bc[22]=0xa2158718, bc[23]=0xa0008000,
+bc[24]=0xa21431f8 (r2@stext = the DTB), bc[25]=0xffffffff,
+bc[26]=0xBEEF0000 (the sweep tally: completed, zero mismatches),
+**bc[27]=0xF5000002 = the setup.c F5 span "post fdt call" — the FDT-
+recovery chain works end-to-end.** Ring 0x492=1170 (the pv-correct
+count). The death region = between marker 145 and pb_bc_put(146):
+TLBIALL -> .word 0xF57FF062 ("dsb nosh") -> isb -> pb_bc_put(146).
+
+DISCOVERY 1 (the rule-16 audit, W-70): **GNU as rejects `dsb nosh` as
+an invalid barrier type** ("invalid barrier type -- `dsb nosh'"); the
+valid v7 name = `nsh` (option 0x7 = f57ff047). GCC's integrated
+assembler SILENTLY accepted `dsb nosh` and emitted the same full-system
+mcr c7,c10,4 encoding — **every "dsb nosh" conversion of W-66..W-68
+(tlb-v7.S entry+post-loop, the C-side dsb(nosh) via barriers.h) was a
+NO-OP on the hardware.** The encodings never changed; the W-44
+evidence ("the non-ISH c8,c7 TLB op STILL wedges") was the correct
+signal all along: the barrier encoding does not matter on the A9.
+
+DISCOVERY 2: **the W-68 literal f57ff062 = an ISB-class encoding with
+an invalid option** (the barrier-class field = bits[7:4]: DSB=4, DMB=5,
+ISB=6 — f57ff04f=DSB sy, f57ff05f=DMB sy, f57ff06f=ISB sy all verified;
+0x62's class field = 0110 = ISB with option 0x2 = UNPREDICTABLE on
+v7-A). **The W-69 death is most plausibly AT that literal** (c0f07e40
+in the shipped vmlinux): the F5 span landed pre-CMA, 145 was the last
+bc write, and the literal sits between the TLBIALL and the 146 marker.
+
+DISCOVERY 3 (the mechanism): the CMSIS/kernel-verified Cortex-A9 ACTLR
+map: **bit 0 = FW = "cache and TLB maintenance broadcast"** (the actual
+broadcast-enable), bit 6 = SMP (coherent requests). QNX leaves ACTLR=
+0x41 (both set); every prior clear touched ONLY bit 6 — **FW=1
+persisted through every run, so every TLB op broadcast to the HELD
+CPU1 via the SCU regardless of encoding** — W-44's "non-ISH still
+wedges" re-explained. The whole "nosh" hunt chased an encoding that
+never mattered; with FW=0 + SMP=0, plain DSB SY IS CPU-local.
+
+Build #140 (W-70, the batch per the session-10 agent): (a) all the
+"nosh" conversions REVERTED to plain dsb sy (restore-to-known-good, not
+a variable — the encodings never changed); (b) the f57ff062 literals
+(dma-mapping.c CMA flush, the mmu.c sweep) restored to f57ff04f; (c)
+**BOTH ACTLR sites (start_kernel's W-45 clear + setup.c's W-48 re-clear)
+now clear ~0x41 (SMP+FW)** — bc[3]=0x0 = the discriminator. Packed
+5,568,577 B (zImage 5,481,256 + DTB 87,321); shipped vmlinux verified
+(bic r0,r0,#65 at both sites, zero f57ff062, the CMA block =
+TLBIALL+f57ff04f+isb). kernel-patches regenerated — NOTE: tlb-v7.S was
+session-10-modified but was MISSING from the snapshot list; now added.

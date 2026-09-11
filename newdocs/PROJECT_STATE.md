@@ -1,4 +1,4 @@
-# Project State (as of session 9, 2026-09-04)
+# Project State (as of session 11, 2026-09-11)
 
 This file tracks the *current technical state* precisely. Older docs
 (`docs/03`, `SESSION-HANDOFF/`) record how we got here; where they disagree
@@ -10,78 +10,43 @@ with dated headers.
 ## Where the boot stands
 
 Mainline Linux 6.15.11 (omap2plus, non-LPAE, patched for the PlayBook) is
-jumped from QNX via the **zImage path** (kernel #110; **W-39 RAN
-2026-09-11 — see the session-10 update at the end of this section**):
+jumped from QNX via the **zImage path** (the L2 is turned OFF by the
+payload inside the proven --dmaquiet shape — mon_call(0x102), verified
+by bc[8]=0 in W-69):
 
-1. The zImage decompressor inflates the kernel to zreladdr 0xa0008000
-   (PHYS_OFFSET = 0xa0000000 — the DTS bank = 0xa0000000+512MB must
-   match) and the payload's placement sweep now REJECTS any window
-   intersecting [0xa0000000, 0xa1000000) (the inflation + relocated-
-   decompressor region — W-35's head.S-tail death was the only
-   overlapping placement ever).
-2. head.S runs (the inline pv fixup, markers 143/144 + the delta in
-   bc[6]), MMU-on completes, and the boot reaches the C WORLD with a
-   correct pv state — **CURED this session (W-32c, build #106)**: the
-   pv-stale regime (decompressor-era stale L2 lines surviving eviction;
-   the fixup's MMU-off SO stores reach DRAM but not L2) is fixed by the
-   direct-store block in start_kernel (marker 163, retry count in
-   bc[19] slot 0xD000004C — tries=0 on every run since). The old W-24
-   invalidate block was REMOVED (self-defeating: its __pa consumed the
-   stale pv it repaired; SMC 0x101's clean step poisons DRAM with the
-   stale line — W-33's 8/8 failure).
-3. **The front = the stale pgd pair [VA 0xdfc/0xdfd]** (the LAST mapped
-   pair of the linear map, PA 0xbfc00000/0xbfd00000): it reads as
-   IDENTICAL bogus TABLE descriptors (0xbfc1141e → a QNX-era pte table
-   at 0xbfc11400, never allocated this boot) — deterministic across
-   runs AND placements (W-37/38). map_lowmem's section write for that
-   pair doesn't survive in the PTW's view ([0xdf8] = a CORRECT section
-   desc, 0xbf81141e). Any allocation in the top 2MB of the linear map
-   wedges on the walk — the svm memset deaths (W-25/31/32a/34/36/37,
-   bc[1]=161). Build #110 shaves the allocator limit by 2MB
-   (arm_lowmem_limit → 0xbfc00000) and probes the untested middle pair
-   [0xdfa/0xdfb] (W-39).
-
-**SESSION-10 UPDATE (2026-09-11) — W-39 ran; the front re-characterized;
-the cure proven:**
-- W-39 (kernel #110, --dmaquiet): bc[1]=167 — the dump markers all
-  landed, death AT the first re-enabled svm store. **The middle pair
-  [0xdfa/0xdfb] reads HEALTHY via the pgd path (0xbfa1141e, a proper
-  section desc — bc[13] confirms the svm landed at 0xbfbfffd4 exactly
-  as computed) yet the store through it STILL wedges.** And **[0xdfc]
-  STILL reads the byte-identical bogus 0xbfc1141e** across a third
-  placement (0xa3200000) AND the 2MB allocator shift — the shave
-  relocated the victim, it did not cure the poison.
-- ⇒ The stale-view sits BETWEEN the pgd's cached content (healthy) and
-  what the PTW serves (poison): a **per-line L2 discrepancy class**,
-  not a single fixed pair and not a kernel bug.
-- **The cure is PROVEN on-device** (kexec/l2canary.c, same session):
-  **NS PL310+0x770 = invalidate-by-PA, NO clean** — the dirty line is
-  discarded and DRAM truth served (0xC0FFEE11 refetch); config
-  registers untouched. (The first ladder's "0x7F0 abort" was the
-  assistant's own PROT_READ-only mapping — corrected; 0x7F0 CIPA also
-  works from NS; 0x768 = no-op-or-clean+inv.)
-- **Build #111 plan**: kernel-side sweep — static-map 0x48242000 in
-  omap4-common.c map_io; after map_lowmem, re-write the section descs
-  + inv-by-PA sweep over swapper_pg_dir (16 KB); payload-side sweep of
-  the buffer region pre-jump for the decompressor-era lines. The
-  per-victim ladders (W-32c block, the 2MB shave) retire once the
-  sweep passes 167/0x567/151. Full record: docs/03 W-39 + the session-10
-  documents (bootdumps-2026-09-11/, newdocs/audit-approach-2026-09-11.md).
-- Also this session: the bootrom dumped + RE'd (0x40028000, 48 KB +
-  the lower block 0x40020000-0x40026F24 with a 4 KB ROM_HIDE hole =
-  the dispatch-region candidate); TRM §27.5 documents 0x112 = the
-  latency service (session-7 erratum) and it ABORTS NS callers;
-  fresh device dumps verified the old corpus byte-identical.
-4. The DMA masters are quiesced (--dmaquiet: devb slain via QNX's slay
-   after the file reads; DISPC killed + register-verified 0/0 in
-   bc[16]/bc[17]; WiFi SDIO never brought up). The randomness SURVIVED
-   the quiesce → the source is the stale-view class (see
-   [contradictions/machine-corruption-vs-code-bugs.md](contradictions/machine-corruption-vs-code-bugs.md)
-   — characterized 2026-09-04), not a rogue DMA master.
-5. Marker-number discipline: setup.c's pb_bc(130-136) pairs COLLIDE
-   with mmu.c's PB_MMU_BC numbers — discriminate via the mirror
-   channel (rule 17 in docs/README). Extended forensics slots
-   bc[16]-bc[25] (0x90000040+, `memdump3 90000040 0x30`).
+1. The zImage decompressor inflates the kernel to zreladdr 0xa0008000,
+   delivers the appended DTB natively (bc[20..23] markers), and the
+   payload's placement sweep reserves [0xa0000000, 0xa1000000).
+2. head.S runs (the inline pv fixup, markers 143/144), MMU-on completes,
+   and the boot reaches the C world with correct pv state (the W-32c
+   block, tries=0).
+3. **The setup.c FDT-recovery chain works end-to-end (W-69, bc[27]=
+   0xF5000002 "post fdt call")**: setup.c recovers the FDT pointer from
+   bc[20] when __atags_pointer=0 — the W-64 cure. The image-region CIPA
+   sweep self-verify is clean (bc[26]=0xBEEF0000, zero mismatches).
+4. **The front (W-69) = the CMA remap's TLBIALL block** — bc[1]=145, the
+   death between marker 145 and 146. SESSION-11's rule-16 audit
+   DISPROVED the session-10 "dsb nosh" chain (see the W-69 record in
+   docs/03): GNU as rejects `dsb nosh` (the valid name = `nsh`); GCC's
+   integrated assembler silently accepted it and emitted the same
+   full-system mcr encoding — the conversions were NO-OPS on the
+   hardware; and the W-68 literal f57ff062 = an ISB-class encoding with
+   an invalid option = UNPREDICTABLE on the A9 = the W-69 death site
+   (c0f07e40). **The mechanism: the A9 ACTLR bit 0 = FW = "cache and
+   TLB maintenance broadcast" — every prior clear touched only bit 6,
+   so every TLB op broadcast to the HELD CPU1 via the SCU regardless of
+   encoding (W-44 re-explained).**
+5. **Build #140 (W-70) = the batch**: all nosh reverted to plain dsb sy
+   (restore-to-known-good), the f57ff062 literals fixed to f57ff04f,
+   and BOTH ACTLR sites clear ~0x41 (SMP+FW) — bc[3]=0x0 = the
+   discriminator. The L2-off run mode keeps the old SMP=0 cached-write
+   wedge (the 2026-09-02 L2-ON-era class) out of the picture.
+6. The DMA masters are quiesced (--dmaquiet: devb slain, DISPC killed +
+   register-verified 0/0; WiFi SDIO never brought up).
+7. Marker-number discipline: setup.c's pb_bc(130-136) pairs COLLIDE
+   with mmu.c's PB_MMU_BC numbers — discriminate via the mirror channel
+   (rule 17 in docs/README). Extended forensics slots bc[16]-bc[27]
+   (0x90000040+, `memdump3 90000040 0x30`).
 
 ## What was fixed, by session
 
