@@ -1385,26 +1385,38 @@
  	__flush_dcache_folio(NULL, page_folio(empty_zero_page));
 
 --- a/arch/arm/mm/tlb-v7.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/tlb-v7.S	2026-09-11 04:08:28.137102372 +0000
-@@ -69,6 +69,14 @@
++++ b/arch/arm/mm/tlb-v7.S	2026-09-11 05:13:22.609102118 +0000
+@@ -69,7 +69,23 @@
   *	- end   - end address (exclusive, may not be aligned)
   */
  SYM_TYPED_FUNC_START(v7wbi_flush_kern_tlb_range)
+-	dsb	ish
 +	/* PlayBook W-40c (session 10): the W-40c run died inside this
 +	 * flush (dma_contiguous_remap: pmd_clear done 145, TLB flush
 +	 * never completed 146). Phase markers -> bc[27] (0xD000006C):
 +	 * 0xF1000001 entry, 0xF1000002 after the loop's final dsb,
-+	 * 0xF1000003 after isb. The LAST flush's phase = what we read. */
++	 * 0xF1000003 after isb. The LAST flush's phase = what we read.
++	 * W-43 (session 10, --t3 L2-OFF): died with bc[27]=1 = AT the
++	 * entry `dsb ish` — the first Inner-Shareable barrier in the
++	 * boot; CPU1 is HELD in warm reset and the ISH barrier waits for
++	 * the dead core (the ACTLR.SMP wedge class, main.c's note).
++	 * Flaky: W-40d/W-41 passed the same flush. FIX: `dsb sy` (the
++	 * domain is irrelevant for a single-core boot); the W-43 evidence
++	 * (the wedge reproduces L2-ON and L2-OFF) pins the CPU1-hold, not
++	 * the L2. */
 +	ldr	r3, =0xD000006C
 +	mov	ip, #1
 +	str	ip, [r3]
- 	dsb	ish
++	dsb	sy
  	mov	r0, r0, lsr #PAGE_SHIFT		@ align address
  	mov	r1, r1, lsr #PAGE_SHIFT
-@@ -85,6 +93,10 @@
+ 	mov	r0, r0, lsl #PAGE_SHIFT
+@@ -84,7 +100,11 @@
+ 	add	r0, r0, #PAGE_SZ
  	cmp	r0, r1
  	blo	1b
- 	dsb	ish
+-	dsb	ish
++	dsb	sy
 +	mov	ip, #2
 +	str	ip, [r3]
  	isb
