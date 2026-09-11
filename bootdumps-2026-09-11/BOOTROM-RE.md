@@ -35,12 +35,27 @@ instruction)"):
 (session 7, derived from QNX-binary RE) is contradicted by the TRM's own
 Table 27-61 — **0x112 writes the Tag AND Data RAM latency registers, r0/r1**.
 The observed QNX latency value (payload readback bc[4]=0x111 = 1/1/1) is
-exactly what this service sets. UNTIL TESTED ON DEVICE: on an HS-fused unit
-the monitor may reject NS callers of any service (the PPA 0x25/0x23
-probes were rejected 0xFF02; 0x100/0x101/0x102 are proven-accepted).
-Test cost: one `mon_call(0x112, tag, data)` + PL310 0x728/0x72C readback
-(the readback registers themselves stay NS-readable — only CTRL/AUX/latency
-WRITES are NS-fatal).
+exactly what this service sets.
+
+**ON-DEVICE TEST (session 10, 2026-09-11, smctest ladder, no jump):**
+1. Baseline 0x103 from System mode ANSWERED (ret r0=2 — the monitor is
+   alive; AUX_CORE_BOOT_0=2 consistent with a released CPU1).
+   PL310 readback intact: ctrl=1, aux=1e070000, tag(0x108)=0,
+   data(0x10C)=0x111, prefetch=0.
+2. 0x112 accept-test (SAME values — no functional change): the caller
+   **external-aborted** (SIGBUS fltno=5, ref=0716bff0) — the monitor took
+   an exception path on 0x112, NOT a rejection return. **The latency fix
+   path via 0x112 from NS is CLOSED on this HS unit** (worse than the PPA
+   0xFF02 rejections: it aborts). L2 state verified intact after the
+   abort (ctrl=1, aux=1e070000, tag=0, data=0x111).
+   Box survived fine; no WDT2 cycle needed. Payload: kexec/smctest.c
+   (extended with the `--lat112`-style ladder).
+3. Anomaly: the first memdump3 read of aux(+0x104) read 0x1e340340
+   (= the +0x004 CACHE-TYPE value), the read minutes later = 1e070000
+   (the stable value, matching session-7's PPA-1). Suspect: a devpm
+   suspend/resume between the reads rewrites/restores L2 aux (devpm's
+   0x26/0x27 pair). NOTE for future runs: aux state can apparently vary
+   mid-QNX; take readbacks close in time.
 
 **Why this matters**: the L2 latency config is the shared variable of
 everything unexplained: the device-op cliff (SO stores wedge at ~4-5k ops
@@ -112,3 +127,32 @@ right track and was dropped on session 7's (wrong) negative RE.
    SAR-RAM trampoline notes (0x4A326B00-CD0, monitor-verifies saved
    context via 0x26/0x27) — the ROM's own 0x103/0x107 sites are the
    ROM-side of that same flow.
+
+## ADDENDUM 2026-09-11 (session 10, evening): the ROM is TWO blocks + a 4 KB
+## hidden hole — the monitor dispatch region
+
+- 0x40020000-0x40026F24: readable ROM block (~28 KB) — discovered by
+  probing below the documented 48 KB window. Ends mid-dump at
+  0x40026F24 (the next word SIGBUS'd = unmapped/secure).
+- 0x40026F28-0x40027FFF: **~4 KB non-readable hole** — matches the TRM's
+  `STD_FUSE_ROM_HIDE` note ("BOOT ROM upper 4-KB region" protection).
+  **This hole is the prime candidate for the SMC dispatch region** —
+  which is why no dispatch was found in either visible block, and why
+  NS callers of unimplemented-for-NS services (0x112) abort instead of
+  returning a code.
+- 0x40028000-0x40033FFF: the 48 KB window (the original dump).
+- 0x40034000+: SIGBUS (boundary confirmed twice).
+- **0x40026098-0x400260e8 = the secure handoff tail** (ARM): NSACR = 0x20C00
+  (CP10/CP11 granted to NS), **MVBAR set from a literal pool pair**
+  (`ldr r4,[pc,#0x80] − ldr r5,[pc,#0x80]` computed base →
+  `mcr p15,c12,c0,1`), VBAR = 0 (`mcr p15,c12,c0,0`), SCR = 0x30,
+  then `mov ip,#9; smc #0` and an infinite `b self` — service **0x9**
+  (outside the 0x100 table; the handoff's final call). This is the
+  ROM's exit-to-boot-chain machinery, not HLOS monitor code.
+- Captures: `bootrom-lower-0x40020000.memdump3.txt` (28 KB block).
+- Service table status after the 0x112 test: 0x100/0x101/0x102/0x103/
+  0x106-0x108 work (or are proven) from NS; **0x112 = aborts**; 0xF0
+  unidentified. The latency reconfiguration has no NS path; the only
+  remaining leads are the hidden 4 KB (needs a secure-context dump —
+  not available from QNX NS) and the audit's NS-register experiments
+  (0x770 invalidate-by-PA remains untested and unblocked).
