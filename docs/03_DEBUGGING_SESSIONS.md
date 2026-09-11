@@ -2202,3 +2202,93 @@ descs for the pgd's mapped range + inv-by-PA sweep over swapper_pg_dir
 (16 KB) + the image region (payload-side, pre-jump, for the
 decompressor-era lines). The per-victim ladders (W-32c, the 2MB shave)
 retire once the sweep passes 167/0x567/151.
+
+### SESSION 10 (2026-09-11): the W-40..W-68 run map — backfilled from the
+### git log by the session-10 agent at session 11's request (the runs were
+### recorded only as commit messages; the session-11 agent's Q1 prompted
+### this backfill). The kernel builds here = the local counter (#111-#139
+### = the mkkernel's own sequence, NOT the session numbering).
+
+**Run W-40 (#111→#115, five fast iterations):** build #111 = the
+kernel-side per-line CIPA sweep of the pgd (PL310 mapped at VA
+0xFEB42000 right after map_lowmem; DCCMVAC + 0x7F0 per 32B line,
+markers 168/169) + the payload-side 0x7F0 fix (0x768 was the no-op) +
+the image-region sweep (bc 47). W-40a: the payload died at the image
+sweep — pl310_ns NULL (the assignment happens ~400 lines after the
+call site in --dmaquiet; ref=0x7f0 = the NULL deref, not an external
+abort); fixed (the assignment at the mapdev). W-40b: the sweep's own
+iotable_init = its own poison — its svm alloc lands just under the
+PRE-shave limit (bc[13]=0xbfdfffd4, pair [0xdfd/0xdfe]) and the memset
+wedges before the sweep runs; the PL310 desc is now written directly
+into pgd[0xFEB] (no allocator). W-40c: the front MOVED — the sweep
+passed, map_kernel passed, the CMA pmd_clear passed (145), death INSIDE
+flush_tlb_kernel_range (145→146); fine markers: the flush phases →
+bc[27], the sweep tally → bc[26]. W-40d: the ring console ALIVE (2429
+chars: the full banner, the PB prints, the cma reserve, a live
+pv-stale BUG print at map_lowmem, the PB-CMA print showing the
+block's value = the pv FLIP-FLOP); the W-32c block's DCCIMVAC clean
+never reached DRAM (the 0x768 no-op) — the pv lines now CIPA'd via NS
+0x7F0 after the stores. W-40e: death INSIDE the sweep before its
+entry marker — the sweep's first PL310 access (the sync read at
+0xFEB42730) triggers a TLB refill for VA 0xFEB whose PTW walk reads
+the NOT-YET-SWEPT pgd[0xFEB] line (the loop starts at line 0, reaches
+0xFA0 last) = poison = wedge; fix = the pre-clean of pgd[0xFEB]'s own
+line before any PL310 access.
+
+**Run W-41 (#116→#117 era): the sweep completed (bc[26] = 0xBEEF0000,
+zero timeouts) and the pv cure held (no BUG line) — yet [0xdfc] still
+read 0xbfc1141e. THE DRAM PROOF (memdump3 a00077e0): the runtime pgd's
+[0xdf8-0xdff] entries = ALL ZERO in DRAM while the C world reads
+section descs — map_lowmem's cached writes for the top pmds NEVER
+reached DRAM even through the sweep's CIPA (the write-back-loss class,
+DRAM-proven). NOTE: 0x768's real identity = not a mainline l2x0
+register at all (the audit); the "CLEAN_INV_LINE_PA at 0x768" comment
+in head.S = the W-37-era misread.** The sweep self-verifies now (the
+per-line save → DCCMVAC → CIPA → re-read; the mismatch tally in
+bc[26]).
+
+**Run W-42 (#117→#118): the TLB-flush wedge = AT the entry `dsb ish`**
+(bc[27] = 1) — the first inner-shareable barrier in the boot; CPU1
+held in warm reset gates the ISH ACK (the ACTLR.SMP wedge class from
+main.c's own note); reproduces L2-ON and L2-OFF = the CPU1-hold, not
+the L2; explains the 145→146 flake. Fixes: `dsb sy`→`dsb nosh`... no —
+first `dsb sy` (the W-43), then the non-ISH c8,c7 TLB encodings (the
+W-44), then **ACTLR.SMP cleared in start_kernel + the setup.c
+re-clear re-activated (the W-45/W-48: setup_processor RE-SETS SMP=1 —
+the start_kernel clear gets overridden!)**, then the set_current
+bypass (the W-62/W-63: the mcr c13,c0,3 TPIDRURO write = a wedge
+site), then the DCCMVAC discovery (the W-58/W-64: the clean of a
+DIRTY CACHEABLE line with the L2 bypassed HANGS — the same op on the
+uncached bcs = harmless), then the FDT-pointer chain (the W-53..W-57:
+r2 = the DTB at stext bc[24] but __atags_pointer = 0 at setup — the
+.init.data store lost (the L1-dirty class) — the CURE = setup.c
+recovers the FDT pointer from bc[20] (the decompressor's W-54
+MMU-off SO-store dump = the appended DTB's phys) when
+__atags_pointer == 0), then the barrier sweep (the W-66/W-67/W-68:
+`dsb nosh` — the full-system/ISH barriers wait for the HELD CPU1 = the
+unified diagnosis of ALL the session-10 flakiness; the CMA flush = now
+local: TLBIALL + dsb nosh + isb at c0f07e3c-44).
+
+**W-66 (the breakthrough run): bc[12] = the DTB (the bc[20]-recovery
+WORKS), the ring = the FULL healthy boot log THROUGH the CMA (the
+machine model, the PB-MEM prints, the cma reserve) — every prior wall
+behind us. bc[14] = the correct FDT fixed-map VA.**
+
+**W-66/W-67/68 (the current front): the boot reaches bc[1] = 145 (the
+CMA pmd_clear marker) and dies at the flush (bc[27] = 1 twice, then
+frozen at the TLBIALL's trailing dsb). The #139 = the CMA flush done
+locally: TLBIALL + dsb nosh + isb (verified c0f07e3c-44). W-69 =
+run #139.**
+
+**Also session 10 (the audit/dumps, before the run ladder):** the
+approach audit (newdocs/audit-approach-2026-09-11.md): the NS PL310
+0x768 = a no-op (the real map: 0x770 inv-by-PA PROVEN working — the
+l2canary ladder: the dirty line discarded, the DRAM canary served;
+0x7F0 CIPA works from NS); the TRM 0x112 = the latency service
+EXISTS (the session-7 erratum) but ABORTS NS callers; the boot ROM
+dumped + RE'd (two readable blocks + the 4KB ROM_HIDE hole = the
+dispatch-region candidate; its own SMC sites = ip=0x103/0x107/0xF0;
+zero direct PL310 access); the fresh device dumps verified the old
+corpus byte-identical; the fresh-boot QNX pool has NO 24MB contiguous
+run (the placement ladder 12→8→6 MB = the fix); the pb_bc_put fix
+(the markers = L1-dirty-lost with the L2 off; always DCCMVAC now).
