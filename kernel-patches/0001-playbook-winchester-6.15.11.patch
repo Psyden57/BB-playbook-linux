@@ -991,7 +991,7 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-11 03:58:32.585101671 +0000
++++ b/arch/arm/mm/mmu.c	2026-09-11 04:08:33.573102383 +0000
 @@ -758,18 +758,27 @@
  	return arm_pte_alloc(pmd, addr, prot, early_alloc);
  }
@@ -1239,7 +1239,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1908,57 @@
+@@ -1765,7 +1908,65 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1276,28 +1276,36 @@
 +		pb_pgd[0xFEB] = (0x48242000 & ~(SECTION_SIZE - 1)) |
 +				mem_types[MT_DEVICE].prot_sect;
 +		pb_bc_put(0xD0000004, 168);	/* sweep entry */
++		{
++			unsigned pb_tmo = 0;
 +			for (pb_i = 0; pb_i < 16384; pb_i += 32) {
 +				volatile void *va =
 +					(volatile void *)((u8 *)pb_pgd + pb_i);
 +				u32 pa = __pa((unsigned long)pb_pgd + pb_i);
-+			unsigned n = 100000;
-+			__asm__ volatile("mcr p15, 0, %0, c7, c10, 1"
-+					 :: "r"(va) : "memory");
-+			__asm__ volatile(".word 0xF57FF04F\n"
-+					 ::: "memory");	/* dsb sy */
-+			pb_pl[0x7F0 / 4] = pa;	/* clean+inv by PA */
-+			__asm__ volatile(".word 0xF57FF04F\n"
-+					 ::: "memory");	/* dsb sy */
-+			pb_pl[0x730 / 4] = 0;
-+			while ((pb_pl[0x730 / 4] & 1) && --n)
-+				;
++				unsigned n = 100000;
++				__asm__ volatile("mcr p15, 0, %0, c7, c10, 1"
++						 :: "r"(va) : "memory");
++				__asm__ volatile(".word 0xF57FF04F\n"
++						 ::: "memory");	/* dsb sy */
++				pb_pl[0x7F0 / 4] = pa;	/* clean+inv by PA */
++				__asm__ volatile(".word 0xF57FF04F\n"
++						 ::: "memory");	/* dsb sy */
++				pb_pl[0x730 / 4] = 0;
++				while ((pb_pl[0x730 / 4] & 1) && --n)
++					;
++				if (!n)
++					pb_tmo++;
++			}
++			/* bc[26] = 0xBEEF0000 | sync timeouts — SURVIVES the
++			 * later CMA-era markers (they use bc[19..25]) */
++			pb_bc_put(0xD0000068, 0xBEEF0000u | pb_tmo);
 +		}
 +		pb_bc_put(0xD0000004, 169);	/* sweep done */
 +	}
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +1966,30 @@
+@@ -1773,9 +1974,30 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1328,7 +1336,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +1999,7 @@
+@@ -1785,6 +2007,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
@@ -1336,6 +1344,35 @@
  
  	empty_zero_page = virt_to_page(zero_page);
  	__flush_dcache_folio(NULL, page_folio(empty_zero_page));
+
+--- a/arch/arm/mm/tlb-v7.S	2025-08-20 16:36:36.000000000 +0000
++++ b/arch/arm/mm/tlb-v7.S	2026-09-11 04:08:28.137102372 +0000
+@@ -69,6 +69,14 @@
+  *	- end   - end address (exclusive, may not be aligned)
+  */
+ SYM_TYPED_FUNC_START(v7wbi_flush_kern_tlb_range)
++	/* PlayBook W-40c (session 10): the W-40c run died inside this
++	 * flush (dma_contiguous_remap: pmd_clear done 145, TLB flush
++	 * never completed 146). Phase markers -> bc[27] (0xD000006C):
++	 * 0xF1000001 entry, 0xF1000002 after the loop's final dsb,
++	 * 0xF1000003 after isb. The LAST flush's phase = what we read. */
++	ldr	r3, =0xD000006C
++	mov	ip, #1
++	str	ip, [r3]
+ 	dsb	ish
+ 	mov	r0, r0, lsr #PAGE_SHIFT		@ align address
+ 	mov	r1, r1, lsr #PAGE_SHIFT
+@@ -85,6 +93,10 @@
+ 	cmp	r0, r1
+ 	blo	1b
+ 	dsb	ish
++	mov	ip, #2
++	str	ip, [r3]
+ 	isb
++	mov	ip, #3
++	str	ip, [r3]
+ 	ret	lr
+ SYM_FUNC_END(v7wbi_flush_kern_tlb_range)
 
 --- a/init/main.c	2025-08-20 16:36:36.000000000 +0000
 +++ b/init/main.c	2026-09-04 19:16:48.756387757 +0000
