@@ -1375,7 +1375,7 @@
  SYM_FUNC_END(v7wbi_flush_kern_tlb_range)
 
 --- a/init/main.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/init/main.c	2026-09-04 19:16:48.756387757 +0000
++++ b/init/main.c	2026-09-11 04:37:26.469102436 +0000
 @@ -86,6 +86,7 @@
  #include <linux/sched/clock.h>
  #include <linux/sched/task.h>
@@ -1566,7 +1566,7 @@
  
  	local_irq_disable();
  	early_boot_irqs_disabled = true;
-@@ -913,9 +1058,65 @@
+@@ -913,9 +1058,95 @@
  	 * enable them.
  	 */
  	boot_cpu_init();
@@ -1598,12 +1598,15 @@
 +		unsigned long va0 = (unsigned long)&__pv_phys_pfn_offset;
 +		unsigned long va1 = (unsigned long)&__pv_offset;
 +		const u64 want = 0xffffffffe0000000ULL;
++		volatile u32 *pb_pl = (volatile u32 *)0xFEB42000;
 +		volatile u64 *pv_off = (volatile u64 *)&__pv_offset;
 +		volatile unsigned long *pv_pfn =
 +			(volatile unsigned long *)&__pv_phys_pfn_offset;
 +		int tries;
++		unsigned pb_tmo = 0;
 +
 +		for (tries = 0; tries < 8; tries++) {
++			unsigned k;
 +			*pv_off = want;
 +			*pv_pfn = 0xa0000ul;
 +			dsb(ish);
@@ -1614,11 +1617,38 @@
 +			asm volatile("mcr p15, 0, %0, c7, c14, 1"
 +				     :: "r" ((va1 & ~0x1f) + 32));
 +			dsb(ish);
++			/* W-40d (2026-09-11): the DCCIMVAC's clean only
++			 * reaches L2 — nothing forced the L2 line to DRAM
++			 * (the old flush paths were the 0x768 no-op), so
++			 * the L2 line flip-flopped between views (the
++			 * W-40d run: map_lowmem's BUG print served STALE
++			 * pv, the later PB-CMA print served the block's
++			 * value). Now: CIPA the three lines by PA via NS
++			 * PL310+0x7F0 (proven by kexec/l2canary.c) —
++			 * DRAM holds the truth, every later read = DRAM.
++			 * The CIPA's clean step is safe: the L2 content =
++			 * the just-written CORRECT value. */
++			for (k = 0; k < 3; k++) {
++				unsigned long line = ((va0 & ~0x1ful)
++						      + k * 32);
++				/* __pa for the kernel image: VA 0xc0xxxxxx
++				 * -> PA 0xa0xxxxxx (fixed constants, no
++				 * pv dependency) */
++				u32 pa = (u32)line - 0x20000000u;
++				unsigned n = 100000;
++				pb_pl[0x7F0 / 4] = pa;
++				pb_pl[0x730 / 4] = 0;
++				while ((pb_pl[0x730 / 4] & 1) && --n)
++					;
++				if (!n)
++					pb_tmo++;
++			}
 +			if (*pv_off == want && *pv_pfn == 0xa0000ul)
 +				break;
 +		}
 +		pb_bc_put(0xD0000004, 163);	/* block ran; bc[19] = tries */
-+		pb_bc_put(0xD000004C, (unsigned int)tries);
++		pb_bc_put(0xD000004C,
++			  (unsigned int)tries | (pb_tmo << 8));
 +	}
  	setup_arch(&command_line);
 +	/* PlayBook kexec diagnostic: bc + LED on (FAN5702 EN high).
@@ -1632,7 +1662,7 @@
  	/* Static keys and static calls are needed by LSMs */
  	jump_label_init();
  	static_call_init();
-@@ -1032,6 +1233,7 @@
+@@ -1032,6 +1263,7 @@
  	 * this. But we do want output early, in case something goes wrong.
  	 */
  	console_init();
@@ -1640,7 +1670,7 @@
  	if (panic_later)
  		panic("Too many boot %s vars at `%s'", panic_later,
  		      panic_param);
-@@ -1088,12 +1290,18 @@
+@@ -1088,12 +1320,18 @@
  	pidfs_init();
  	cpuset_init();
  	cgroup_init();
@@ -1659,7 +1689,7 @@
  
  	/* Do the rest non-__init'ed, we're now alive */
  	rest_init();
-@@ -1315,8 +1523,21 @@
+@@ -1315,8 +1553,21 @@
  		   NULL, ignore_unknown_bootoption);
  
  	trace_initcall_level(initcall_level_names[level]);
@@ -1682,7 +1712,7 @@
  }
  
  static void __init do_initcalls(void)
-@@ -1476,6 +1697,8 @@
+@@ -1476,6 +1727,8 @@
  	numa_default_policy();
  
  	rcu_end_inkernel_boot();
@@ -1691,7 +1721,7 @@
  
  	do_sysctl_args();
  
-@@ -1539,6 +1762,7 @@
+@@ -1539,6 +1792,7 @@
  {
  	/* Now the scheduler is fully set up and can do blocking allocations */
  	gfp_allowed_mask = __GFP_BITS_MASK;
@@ -1699,7 +1729,7 @@
  
  	/*
  	 * init can allocate pages on any node
-@@ -1565,6 +1789,7 @@
+@@ -1565,6 +1819,7 @@
  	page_alloc_init_late();
  
  	do_basic_setup();
