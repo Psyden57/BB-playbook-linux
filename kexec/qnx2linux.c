@@ -712,6 +712,9 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
      * secure-side via SMC 0x105 (its internal clean sequence is
      * foreground/safe). Results go to breadcrumbs (console dead). */
     pl310 = mapdev(0x48242000ull, 0x1000);
+    pl310_ns = pl310;   /* PlayBook W-40: the image sweep (bc 47) runs
+                         * BEFORE the --l2on branch's own assignment —
+                         * without this it deref'd NULL (+0x7f0, W-40a). */
     bc_write(35);
     /* Fresh 15 s WDT2 window for the whole setup: the file reads + 24 MB
      * NOCACHE copies + verifies take multiple seconds, and the remainder of
