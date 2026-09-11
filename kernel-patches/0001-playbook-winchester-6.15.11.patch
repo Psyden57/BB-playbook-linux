@@ -991,7 +991,7 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-11 04:08:33.573102383 +0000
++++ b/arch/arm/mm/mmu.c	2026-09-11 04:45:26.917102162 +0000
 @@ -758,18 +758,27 @@
  	return arm_pte_alloc(pmd, addr, prot, early_alloc);
  }
@@ -1239,7 +1239,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1908,65 @@
+@@ -1765,7 +1908,89 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1278,6 +1278,30 @@
 +		pb_bc_put(0xD0000004, 168);	/* sweep entry */
 +		{
 +			unsigned pb_tmo = 0;
++			/* W-41: sweep pgd[0xFEB]'s OWN line FIRST — the
++			 * sweep's first PL310 access (the sync read at
++			 * 0xFEB42730) triggers a TLB refill for VA 0xFEB,
++			 * and the PTW then walks the [0xFEB] line. If it
++			 * is still poison (the loop starts at line 0 and
++			 * reaches 0xFA0 last), the walk wedges (the
++			 * W-40e death at 133->sweep). DCCMVAC + CIPA this
++			 * one line before any PL310 access. */
++			{
++				volatile void *va = (volatile void *)
++					((u8 *)pb_pgd + 0xFA0);
++				u32 pa = (0xc0004000u + 0xFA0u) - 0x20000000u;
++				unsigned n = 100000;
++				__asm__ volatile("mcr p15, 0, %0, c7, c10, 1"
++						 :: "r"(va) : "memory");
++				__asm__ volatile(".word 0xF57FF04F\n"
++						 ::: "memory");
++				pb_pl[0x7F0 / 4] = pa;
++				pb_pl[0x730 / 4] = 0;
++				while ((pb_pl[0x730 / 4] & 1) && --n)
++					;
++				if (!n)
++					pb_tmo++;
++			}
 +			for (pb_i = 0; pb_i < 16384; pb_i += 32) {
 +				volatile void *va =
 +					(volatile void *)((u8 *)pb_pgd + pb_i);
@@ -1305,7 +1329,7 @@
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +1974,30 @@
+@@ -1773,9 +1998,30 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1336,7 +1360,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +2007,7 @@
+@@ -1785,6 +2031,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
