@@ -1001,7 +1001,7 @@
  #endif
 
 --- a/arch/arm/mm/dma-mapping.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/dma-mapping.c	2026-09-04 11:38:06.056387220 +0000
++++ b/arch/arm/mm/dma-mapping.c	2026-09-11 18:33:55.604320642 +0000
 @@ -270,6 +270,8 @@
  void __init dma_contiguous_remap(void)
  {
@@ -1029,14 +1029,22 @@
  		map.length = end - start;
  		map.type = MT_MEMORY_DMA_READY;
  
-@@ -298,11 +311,14 @@
+@@ -298,11 +311,20 @@
  		for (addr = __phys_to_virt(start); addr < __phys_to_virt(end);
  		     addr += PMD_SIZE)
  			pmd_clear(pmd_off_k(addr));
 +		pb_bc_put(0xD0000004, 145);	/* PlayBook W-20: pmd_clear done */
  
- 		flush_tlb_kernel_range(__phys_to_virt(start),
- 				       __phys_to_virt(end));
+-		flush_tlb_kernel_range(__phys_to_virt(start),
+-				       __phys_to_virt(end));
++		/* PlayBook W-67 (2026-09-11, session 10): the per-page
++		 * flush_tlb_kernel_range loop over the CMA range wedges
++		 * the boot twice (W-43/W-67: bc[27] stuck at phase 1 = the
++		 * entry passed, the loop never completed) even with the
++		 * non-broadcast TLB encodings and nosh barriers. Replace
++		 * with a single TLBIALL: the whole TLB is ours at this
++		 * point in the boot anyway. */
++		local_flush_tlb_all();
 +		pb_bc_put(0xD0000004, 146);	/* PlayBook W-20: tlb flush done */
  
  		iotable_init(&map, 1);
