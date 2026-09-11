@@ -200,7 +200,7 @@
  #endif
 
 --- a/arch/arm/kernel/head.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head.S	2026-09-11 23:00:39.363846278 +0000
++++ b/arch/arm/kernel/head.S	2026-09-11 23:26:38.851846904 +0000
 @@ -98,6 +98,113 @@
   THUMB(	.thumb			)	@ switch to Thumb now.
   THUMB(1:			)
@@ -635,23 +635,15 @@
  #if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
  	orr	r0, r0, #CR_A
  #else
-@@ -479,9 +850,29 @@
+@@ -479,9 +850,21 @@
  #ifdef CONFIG_CPU_ICACHE_DISABLE
  	bic	r0, r0, #CR_I
  #endif
-+	@ PlayBook 2026-09-11 (session 11, W-76): HARDWARE-UNCACHED boot —
-+	@ clear SCTLR.C and SCTLR.I. The W-75 descriptor strip (C/B/S off in
-+	@ mem_types) did NOT cure the TLB-op wedge, which pins the era delta
-+	@ on the CACHE STATE ITSELF: the runs-23-32 era (the only boots that
-+	@ ever completed TLB ops on this machine) ran the hardware caches
-+	@ OFF — no L1 dirty lines, no writebacks, no eviction traffic — the
-+	@ TLB maintenance transactions then see a quiescent L1. With the L1
-+	@ ON (this era), the TLBIALL wedges REGARDLESS of CPU1's state
-+	@ (W-73's park), ACTLR (W-70), and the pgd content (W-74). The boot
-+	@ is slow but era-proven to reach deep (171). Revisit the caches
-+	@ only with the SMP bring-up (the wedge's real cure).
-+	bic	r0, r0, #CR_C
-+	bic	r0, r0, #CR_I
++	@ PlayBook 2026-09-11 (session 11, W-76): the hardware-uncached
++	@ experiment (bic CR_C|CR_I) is REVERTED (W-78): it did not cure
++	@ the TLB-op wedge (W-76 = still bc[1]=145) and the era-matrix
++	@ re-read shows the L2-ON boots (W-38/39) PASSED the CMA — the
++	@ wedge = L2-OFF-specific, not cache-state-specific.
  #ifdef CONFIG_ARM_LPAE
  	mcrr	p15, 0, r4, r5, c2		@ load TTBR0
  #else
@@ -665,7 +657,7 @@
  	mov	r5, #DACR_INIT
  	mcr	p15, 0, r5, c3, c0, 0		@ load domain access register
  	mcr	p15, 0, r4, c2, c0, 0		@ load page table pointer
-@@ -506,12 +897,28 @@
+@@ -506,12 +889,28 @@
  	.align	5
  	.pushsection	.idmap.text, "ax"
  ENTRY(__turn_mmu_on)
@@ -1140,36 +1132,22 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-11 23:02:05.483846796 +0000
-@@ -700,6 +700,27 @@
++++ b/arch/arm/mm/mmu.c	2026-09-11 23:28:32.875846107 +0000
+@@ -700,6 +700,13 @@
  	pr_info("Memory policy: %sData cache %s\n",
  		ecc_mask ? "ECC enabled, " : "", cp->policy);
  
-+	/* PlayBook W-75 (2026-09-11, session 11): the UNCACHED (C/B/S-
-+	 * stripped) section descriptors — the era-proven config. The runs
-+	 * 23-32 (the session-5/6 era, the SAME payload shape: CPU1 held,
-+	 * the L2 off via mon_call(0x102), ACTLR=0x41) passed 171 — i.e.
-+	 * EVERY early TLB op ran fine — with the UNCACHED-stripped kernel.
-+	 * Every CACHED-kernel build since wedges at the FIRST TLB op (the
-+	 * W-72 A/B proved the TLBIALL mcr itself; W-73/74 proved CPU1's
-+	 * state, ACTLR, and the pgd poison pair are all irrelevant). The
-+	 * leading remaining delta = the descriptor cacheability (the
-+	 * era-matrix's own conclusion). This run strips C/B/S from ALL
-+	 * the section descriptors: every RAM access = strongly-ordered-
-+	 * class (slow but coherent — the era ran the full boot this way).
-+	 * If the TLBIALL now completes, the wedge = a cacheability-
-+	 * dependent machine property (the L1 dirty/writeback interaction
-+	 * with the TLB-op path is the suspect) and the fix design starts
-+	 * from there. The pte-level prots are untouched (small surface). */
-+	for (i = 0; i < ARRAY_SIZE(mem_types); i++)
-+		mem_types[i].prot_sect &= ~(PMD_SECT_BUFFERABLE |
-+					    PMD_SECT_CACHEABLE |
-+					    PMD_SECT_S);
-+
++	/* PlayBook 2026-09-11 (session 11, W-78): the W-75 descriptor strip
++	 * is REVERTED. It did not cure the TLB-op wedge (W-75 = still
++	 * bc[1]=145) and the era matrix re-read pins the wedge on the L2-OFF
++	 * payload shape (the W-38/39 L2-ON boots PASSED the CMA to 156/167).
++	 * This build returns to the cached W-39 shape + the L2-on payload
++	 * (--l2on), with the guarded sweep machinery now ACTIVE (the
++	 * stale-L2-line cure that W-38/39 lacked). */
  	for (i = 0; i < ARRAY_SIZE(mem_types); i++) {
  		struct mem_type *t = &mem_types[i];
  		if (t->prot_l1)
-@@ -758,18 +779,27 @@
+@@ -758,18 +765,27 @@
  	return arm_pte_alloc(pmd, addr, prot, early_alloc);
  }
  
@@ -1198,7 +1176,7 @@
  }
  
  static void __init __map_init_section(pmd_t *pmd, unsigned long addr,
-@@ -965,6 +995,7 @@
+@@ -965,6 +981,7 @@
  		phys += next - addr;
  		addr = next;
  	} while (pgd++, addr != end);
@@ -1206,7 +1184,7 @@
  }
  
  /*
-@@ -1022,10 +1053,76 @@
+@@ -1022,10 +1039,76 @@
  	if (!nr)
  		return;
  
@@ -1284,7 +1262,7 @@
  
  		vm = &svm->vm;
  		vm->addr = (void *)(md->virtual & PAGE_MASK);
-@@ -1035,6 +1132,7 @@
+@@ -1035,6 +1118,7 @@
  		vm->flags |= VM_ARM_MTYPE(md->type);
  		vm->caller = iotable_init;
  		add_static_vm_early(svm++);
@@ -1292,7 +1270,7 @@
  	}
  }
  
-@@ -1147,6 +1245,21 @@
+@@ -1147,6 +1231,21 @@
  	map.length = PAGE_SIZE;
  	map.type = MT_DEVICE;
  	iotable_init(&map, 1);
@@ -1314,7 +1292,7 @@
  }
  #endif
  
-@@ -1250,6 +1363,27 @@
+@@ -1250,6 +1349,27 @@
  
  	arm_lowmem_limit = lowmem_limit;
  
@@ -1342,7 +1320,7 @@
  	high_memory = __va(arm_lowmem_limit - 1) + 1;
  
  	if (!memblock_limit)
-@@ -1363,6 +1497,20 @@
+@@ -1363,6 +1483,20 @@
   * Any other function or debugging method which may touch any device _will_
   * crash the kernel.
   */
@@ -1363,7 +1341,7 @@
  static void __init devicemaps_init(const struct machine_desc *mdesc)
  {
  	struct map_desc map;
-@@ -1375,12 +1523,20 @@
+@@ -1375,12 +1509,20 @@
  	vectors = early_alloc(PAGE_SIZE * 2);
  
  	early_trap_init(vectors);
@@ -1385,7 +1363,7 @@
  
  	if (__atags_pointer) {
  		/* create a read-only mapping of the device tree */
-@@ -1445,10 +1601,16 @@
+@@ -1445,10 +1587,16 @@
  		mdesc->map_io();
  	else
  		debug_ll_io_init();
@@ -1402,7 +1380,7 @@
  
  	/*
  	 * Finally flush the caches and tlb to ensure that we're in a
-@@ -1457,10 +1619,13 @@
+@@ -1457,10 +1605,13 @@
  	 * back.  After this point, we can start to touch devices again.
  	 */
  	local_flush_tlb_all();
@@ -1417,7 +1395,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1930,121 @@
+@@ -1765,7 +1916,121 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1539,7 +1517,7 @@
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +2052,30 @@
+@@ -1773,9 +2038,30 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1570,7 +1548,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +2085,7 @@
+@@ -1785,6 +2071,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();

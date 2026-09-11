@@ -1107,29 +1107,15 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
     rst = mapdev(RSTCTRL_CPU1, 4);
     wdt = mapdev(0x4A314000ull, 0x100);
     gicd = mapdev(GICD_CTLR, 4);
-    /* PlayBook W-73 (session 11): PARK CPU1 instead of holding it. The
-     * W-72 A/B proved ANY TLB maintenance op wedges the machine with
-     * CPU1 held (the SCU routes the broadcasts to CPU1's dead port;
-     * ACTLR is irrelevant — W-70/71). The --hello mode's release
-     * mechanics (ROUND 3, qnx2linux.c's --hello) are PROVEN: hold,
-     * redirect AUX_CORE_BOOT_1 to an IRAM blob, set the AUX_CORE_BOOT_0
-     * flag bits, release -> CPU1 runs the blob. Park = the same shape
-     * with a spin-loop blob at 0x40309A00 (free IRAM: after the params
-     * 0x40309800, before the ROM's exception-ladder workspace
-     * 0x4030d000). CPU1 alive = the SCU's CPU1 port lives = the
-     * kernel's TLB ops complete. Residual risk: if the redirect fails,
-     * CPU1 re-enters QNX via the SAR path = the run's death (recoverable;
-     * the hello-era evidence says the redirect works). */
-    {
-        volatile uint32_t *park = mapdev(0x40309A00ULL, 0x40);
-        volatile uint32_t *aux = mapdev(AUX_BOOT, 8);
-        park[0] = 0xE1A00000u;              /* nop */
-        park[1] = 0xEAFFFFFDu;              /* b .-4 (spin in place) */
-        aux[1] = 0x40309A00u;               /* AUX_CORE_BOOT_1 = the park */
-        aux[0] = (aux[0] & ~0xCu) | 0x6u;   /* the hello flow's flag bits */
-        *rst = 1;                           /* hold (the proven sample point) */
-        *rst = 0;                           /* release -> CPU1 parks */
-    }
+    /* PlayBook 2026-09-11 (session 11, W-78): the W-73 CPU1 PARK is
+     * REVERTED to the proven hold. The park (a) did not cure the
+     * TLB-op wedge (W-73 = still bc[1]=145), and (b) BROKE the
+     * post-WDT2-reset recovery: the PRCM hold bit persists across
+     * warm resets by design, so the released CPU1 re-entered the
+     * ROM's SAR path after the reset and resurrected QNX mid-boot
+     * (the W-77 post-mortem: the dark device for 11 minutes, the
+     * dual-core collision). The hold = load-bearing. */
+    *rst = 1;
     bc_write(37);
     clean_inval_l1_all();
     /* Fresh WDT2 window EARLY (right after the L1 clean): the SMC-hang
