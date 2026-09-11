@@ -1164,8 +1164,36 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-11 19:53:23.327224580 +0000
-@@ -758,18 +758,27 @@
++++ b/arch/arm/mm/mmu.c	2026-09-11 22:23:06.843847579 +0000
+@@ -700,6 +700,27 @@
+ 	pr_info("Memory policy: %sData cache %s\n",
+ 		ecc_mask ? "ECC enabled, " : "", cp->policy);
+ 
++	/* PlayBook W-75 (2026-09-11, session 11): the UNCACHED (C/B/S-
++	 * stripped) section descriptors — the era-proven config. The runs
++	 * 23-32 (the session-5/6 era, the SAME payload shape: CPU1 held,
++	 * the L2 off via mon_call(0x102), ACTLR=0x41) passed 171 — i.e.
++	 * EVERY early TLB op ran fine — with the UNCACHED-stripped kernel.
++	 * Every CACHED-kernel build since wedges at the FIRST TLB op (the
++	 * W-72 A/B proved the TLBIALL mcr itself; W-73/74 proved CPU1's
++	 * state, ACTLR, and the pgd poison pair are all irrelevant). The
++	 * leading remaining delta = the descriptor cacheability (the
++	 * era-matrix's own conclusion). This run strips C/B/S from ALL
++	 * the section descriptors: every RAM access = strongly-ordered-
++	 * class (slow but coherent — the era ran the full boot this way).
++	 * If the TLBIALL now completes, the wedge = a cacheability-
++	 * dependent machine property (the L1 dirty/writeback interaction
++	 * with the TLB-op path is the suspect) and the fix design starts
++	 * from there. The pte-level prots are untouched (small surface). */
++	for (i = 0; i < ARRAY_SIZE(mem_types); i++)
++		mem_types[i].prot_sect &= ~(PMD_SECT_BUFFERABLE |
++					    PMD_SECT_CACHEABLE |
++					    PMD_SECT_S);
++
+ 	for (i = 0; i < ARRAY_SIZE(mem_types); i++) {
+ 		struct mem_type *t = &mem_types[i];
+ 		if (t->prot_l1)
+@@ -758,18 +779,27 @@
  	return arm_pte_alloc(pmd, addr, prot, early_alloc);
  }
  
@@ -1194,7 +1222,7 @@
  }
  
  static void __init __map_init_section(pmd_t *pmd, unsigned long addr,
-@@ -965,6 +974,7 @@
+@@ -965,6 +995,7 @@
  		phys += next - addr;
  		addr = next;
  	} while (pgd++, addr != end);
@@ -1202,7 +1230,7 @@
  }
  
  /*
-@@ -1022,10 +1032,76 @@
+@@ -1022,10 +1053,76 @@
  	if (!nr)
  		return;
  
@@ -1280,7 +1308,7 @@
  
  		vm = &svm->vm;
  		vm->addr = (void *)(md->virtual & PAGE_MASK);
-@@ -1035,6 +1111,7 @@
+@@ -1035,6 +1132,7 @@
  		vm->flags |= VM_ARM_MTYPE(md->type);
  		vm->caller = iotable_init;
  		add_static_vm_early(svm++);
@@ -1288,7 +1316,7 @@
  	}
  }
  
-@@ -1147,6 +1224,21 @@
+@@ -1147,6 +1245,21 @@
  	map.length = PAGE_SIZE;
  	map.type = MT_DEVICE;
  	iotable_init(&map, 1);
@@ -1310,7 +1338,7 @@
  }
  #endif
  
-@@ -1250,6 +1342,27 @@
+@@ -1250,6 +1363,27 @@
  
  	arm_lowmem_limit = lowmem_limit;
  
@@ -1338,7 +1366,7 @@
  	high_memory = __va(arm_lowmem_limit - 1) + 1;
  
  	if (!memblock_limit)
-@@ -1363,6 +1476,20 @@
+@@ -1363,6 +1497,20 @@
   * Any other function or debugging method which may touch any device _will_
   * crash the kernel.
   */
@@ -1359,7 +1387,7 @@
  static void __init devicemaps_init(const struct machine_desc *mdesc)
  {
  	struct map_desc map;
-@@ -1375,12 +1502,20 @@
+@@ -1375,12 +1523,20 @@
  	vectors = early_alloc(PAGE_SIZE * 2);
  
  	early_trap_init(vectors);
@@ -1381,7 +1409,7 @@
  
  	if (__atags_pointer) {
  		/* create a read-only mapping of the device tree */
-@@ -1445,10 +1580,16 @@
+@@ -1445,10 +1601,16 @@
  		mdesc->map_io();
  	else
  		debug_ll_io_init();
@@ -1398,7 +1426,7 @@
  
  	/*
  	 * Finally flush the caches and tlb to ensure that we're in a
-@@ -1457,10 +1598,13 @@
+@@ -1457,10 +1619,13 @@
  	 * back.  After this point, we can start to touch devices again.
  	 */
  	local_flush_tlb_all();
@@ -1413,7 +1441,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1909,104 @@
+@@ -1765,7 +1930,104 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1518,7 +1546,7 @@
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +2014,30 @@
+@@ -1773,9 +2035,30 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1549,7 +1577,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +2047,7 @@
+@@ -1785,6 +2068,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
