@@ -1007,7 +1007,7 @@
  #endif
 
 --- a/arch/arm/mm/dma-mapping.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/dma-mapping.c	2026-09-11 19:53:27.055224566 +0000
++++ b/arch/arm/mm/dma-mapping.c	2026-09-11 21:17:00.975847047 +0000
 @@ -270,6 +270,8 @@
  void __init dma_contiguous_remap(void)
  {
@@ -1035,7 +1035,7 @@
  		map.length = end - start;
  		map.type = MT_MEMORY_DMA_READY;
  
-@@ -298,11 +311,27 @@
+@@ -298,11 +311,41 @@
  		for (addr = __phys_to_virt(start); addr < __phys_to_virt(end);
  		     addr += PMD_SIZE)
  			pmd_clear(pmd_off_k(addr));
@@ -1055,9 +1055,23 @@
 +		 * CPU1 = the wedge (bc[1] frozen at 145 = the pmd_clear
 +		 * marker, the TLBIALL never completed). Do it locally:
 +		 * TLBIALL + dsb nosh + isb. */
++		/* PlayBook W-71 (2026-09-11, session 11): the W-70 run proved
++		 * ACTLR.FW=0+SMP=0 does NOT cure this block (bc[3]=0x0, still
++		 * bc[1]=145) — and across #137/#138/#139/#140 the death never
++		 * moved despite three different barrier encodings (and #137
++		 * even wedged at its ENTRY dsb, before any TLB op). The block
++		 * ops wedge FLAKILY at this boot point. Bisect inside:
++		 * bc[27] phases (0xE1 span, unused): 01 = post-TLBIALL,
++		 * 02 = post-DSB, 03 = post-ISB; the put(146) follows. Each
++		 * phase = a pb_bc_put (DRAM-truth guaranteed — the W-50
++		 * lesson); if a phase-put wedges internally, the readback
++		 * names the PREVIOUS op anyway. */
 +		asm volatile("mcr p15, 0, %0, c8, c7, 0" :: "r"(0) : "memory");
++		pb_bc_put(0xD000006C, 0xE1000001u);	/* post-TLBIALL */
 +		asm volatile(".word 0xF57FF04F" ::: "memory");	/* dsb sy — PlayBook 2026-09-11 (session 11, W-70): the W-68 literal was f57ff062 = an ISB-class encoding with an invalid option, unpredictable on the A9 — almost certainly the W-69 death site (F5-span landed, 145 the last bc write). Restored to the true DSB SY; with ACTLR.FW+SMP cleared in start_kernel (the W-70 fix) it is CPU-local. */
++		pb_bc_put(0xD000006C, 0xE1000002u);	/* post-DSB */
 +		asm volatile(".word 0xF57FF06F" ::: "memory");	/* isb */
++		pb_bc_put(0xD000006C, 0xE1000003u);	/* post-ISB */
 +		pb_bc_put(0xD0000004, 146);	/* PlayBook W-20: tlb flush done */
  
  		iotable_init(&map, 1);
@@ -2111,7 +2125,7 @@
  	omap4-xyboard-mz617.dtb
  dtb-$(CONFIG_SOC_AM33XX) += \
 
---- /dev/null	2026-09-11 15:41:25.759280386 +0000
+--- /dev/null	2026-09-11 20:16:38.068084800 +0000
 +++ b/arch/arm/boot/dts/ti/omap/omap4-winchester.dts	2026-09-04 12:02:36.388387867 +0000
 @@ -0,0 +1,120 @@
 +// SPDX-License-Identifier: GPL-2.0-only
@@ -2235,7 +2249,7 @@
 +	status = "disabled";
 +};
 
---- /dev/null	2026-09-11 15:41:25.759280386 +0000
+--- /dev/null	2026-09-11 20:16:38.068084800 +0000
 +++ b/arch/arm/include/debug/omap4bc.S	2026-09-02 20:18:39.913189588 +0000
 @@ -0,0 +1,116 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
