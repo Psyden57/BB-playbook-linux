@@ -1488,7 +1488,7 @@
  		int size;
 
 --- a/arch/arm/boot/compressed/head.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/boot/compressed/head.S	2026-09-11 16:19:53.315223457 +0000
++++ b/arch/arm/boot/compressed/head.S	2026-09-11 16:26:54.131223198 +0000
 @@ -367,6 +367,18 @@
  		ldr	lr, [r6, #0]
  		ldr	r1, =OF_DT_MAGIC
@@ -1508,6 +1508,22 @@
  		bne	dtb_check_done		@ not found
  
  #ifdef CONFIG_ARM_ATAG_DTB_COMPAT
+@@ -1435,6 +1447,15 @@
+ 		mov	r0, #0			@ must be 0
+ 		mov	r1, r7			@ restore architecture number
+ 		mov	r2, r8			@ restore atags pointer
++		/* PlayBook W-55 (2026-09-11): r8 is clobbered en route from
++		 * dtb_check_done to here (bc[12] showed r2=0 at the kernel
++		 * while the check's bc[20] held the appended DTB's address
++		 * and bc[22] the incoming atags — both correct). Recover
++		 * the appended DTB's address from the bc page (DRAM truth,
++		 * saved at the check by the W-54 markers): bc[20] = r6 =
++		 * the appended DTB's phys. */
++		ldr	r2, =0x90000050
++		ldr	r2, [r2]
+  ARM(		mov	pc, r4		)	@ call kernel
+  M_CLASS(	add	r4, r4, #1	)	@ enter in Thumb mode for M class
+  THUMB(		bx	r4		)	@ entry point is always ARM for A/R classes
 
 --- a/init/main.c	2025-08-20 16:36:36.000000000 +0000
 +++ b/init/main.c	2026-09-11 06:15:02.397102315 +0000
