@@ -1477,7 +1477,7 @@
  	__flush_dcache_folio(NULL, page_folio(empty_zero_page));
 
 --- a/arch/arm/mm/tlb-v7.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/tlb-v7.S	2026-09-11 05:21:53.377101528 +0000
++++ b/arch/arm/mm/tlb-v7.S	2026-09-11 18:25:39.466593263 +0000
 @@ -69,22 +69,42 @@
   *	- end   - end address (exclusive, may not be aligned)
   */
@@ -1499,7 +1499,7 @@
 +	ldr	r3, =0xD000006C
 +	mov	ip, #1
 +	str	ip, [r3]
-+	dsb	sy
++	dsb	nosh	/* PlayBook W-66: DSB SY = a full-system barrier = waits for the HELD CPU1 (the W-66 run: the boot died AT the entry phase with bc[27]=1!). NOSH = the CPU-local barrier = no dead-core wait for a single-core boot. */
  	mov	r0, r0, lsr #PAGE_SHIFT		@ align address
  	mov	r1, r1, lsr #PAGE_SHIFT
  	mov	r0, r0, lsl #PAGE_SHIFT
@@ -1517,7 +1517,7 @@
  	cmp	r0, r1
  	blo	1b
 -	dsb	ish
-+	dsb	sy
++	dsb	nosh	/* PlayBook W-66: nosh (see the entry). */
 +	mov	ip, #2
 +	str	ip, [r3]
  	isb
