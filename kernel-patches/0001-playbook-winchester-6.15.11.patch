@@ -1957,6 +1957,41 @@
  	omap4-xyboard-mz617.dtb
  dtb-$(CONFIG_SOC_AM33XX) += \
 
+--- a/arch/arm/kernel/devtree.c	2025-08-20 16:36:36.000000000 +0000
++++ b/arch/arm/kernel/devtree.c	2026-09-11 06:05:58.313101552 +0000
+@@ -192,6 +192,18 @@
+ const struct machine_desc * __init setup_machine_fdt(void *dt_virt)
+ {
+ 	const struct machine_desc *mdesc, *mdesc_best = NULL;
++	extern noinline void pb_bc_put(unsigned int addr, unsigned int v);
++
++	/* PlayBook W-49 (2026-09-11, session 10): the boot wedges
++	 * deterministically at setup_bc 130->131 (inside this function)
++	 * with ACTLR.SMP=0 and the L2 off — not the broadcast class and
++	 * not a cache anomaly. Step markers -> bc[27]:
++	 * 0xF3000001 entry, ...02 after early_init_dt_verify, ...03
++	 * after of_flat_dt_match_machine. */
++	{
++		noinline void pb_bc_put(unsigned int addr, unsigned int v);
++		pb_bc_put(0xD000006C, 0xF3000001u);
++	}
+ 
+ 	DT_MACHINE_START(GENERIC_DT, "Generic DT based system")
+ 		.l2c_aux_val = 0x0,
+@@ -203,8 +215,12 @@
+ 	if (!dt_virt || !early_init_dt_verify(dt_virt, __pa(dt_virt)))
+ 		return NULL;
+ 
++	pb_bc_put(0xD000006C, 0xF3000002u);
++
+ 	mdesc = of_flat_dt_match_machine(mdesc_best, arch_get_next_mach);
+ 
++	pb_bc_put(0xD000006C, 0xF3000003u);
++
+ 	if (!mdesc) {
+ 		const char *prop;
+ 		int size;
+
 --- /dev/null	2026-09-11 01:48:42.845100314 +0000
 +++ b/arch/arm/boot/dts/ti/omap/omap4-winchester.dts	2026-09-04 12:02:36.388387867 +0000
 @@ -0,0 +1,120 @@
