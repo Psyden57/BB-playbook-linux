@@ -24,29 +24,39 @@ by bc[8]=0 in W-69):
    0xF5000002 "post fdt call")**: setup.c recovers the FDT pointer from
    bc[20] when __atags_pointer=0 — the W-64 cure. The image-region CIPA
    sweep self-verify is clean (bc[26]=0xBEEF0000, zero mismatches).
-4. **The front (W-69) = the CMA remap's TLBIALL block** — bc[1]=145, the
-   death between marker 145 and 146. SESSION-11's rule-16 audit
-   DISPROVED the session-10 "dsb nosh" chain (see the W-69 record in
-   docs/03): GNU as rejects `dsb nosh` (the valid name = `nsh`); GCC's
-   integrated assembler silently accepted it and emitted the same
-   full-system mcr encoding — the conversions were NO-OPS on the
-   hardware; and the W-68 literal f57ff062 = an ISB-class encoding with
-   an invalid option = UNPREDICTABLE on the A9 = the W-69 death site
-   (c0f07e40). **The mechanism: the A9 ACTLR bit 0 = FW = "cache and
-   TLB maintenance broadcast" — every prior clear touched only bit 6,
-   so every TLB op broadcast to the HELD CPU1 via the SCU regardless of
-   encoding (W-44 re-explained).**
-5. **Build #140 (W-70) = the batch**: all nosh reverted to plain dsb sy
-   (restore-to-known-good), the f57ff062 literals fixed to f57ff04f,
-   and BOTH ACTLR sites clear ~0x41 (SMP+FW) — bc[3]=0x0 = the
-   discriminator. The L2-off run mode keeps the old SMP=0 cached-write
-   wedge (the 2026-09-02 L2-ON-era class) out of the picture.
+4. **THE FRONT (session 11, W-72 A/B = PROVEN): ANY TLB maintenance op
+   post-jump wedges the machine.** The W-72 run SKIPPED the CMA block's
+   TLBIALL and the boot PASSED the entire CMA path (146/147/126) — the
+   death then moved to early_fixmap_shutdown (126→125, the next TLB-op
+   site, via clear_fixmap). TLBIALL, per-page TLBIMVA (W-43/67), and
+   clear_fixmap all wedge. The boot performs NO TLB op before the CMA
+   (head.S builds its tables MMU-off) — the CMA's = the first TLB op of
+   every boot. Known since session 1: stub3.S avoids the TLBIALL
+   ("wedged with CPU1 in reset"). Prime suspect = the SCU routing TLB-op
+   broadcasts to CPU1's dead port. RULED OUT with evidence: the barrier
+   domain/encoding (the session-10 "dsb nosh" chain NEVER existed on the
+   hardware — GNU as rejects the name, GCC's IAS silently emitted the
+   same full-system mcr; the f57ff062 literal = an ISB-class encoding
+   with an invalid option), and ACTLR.SMP/FW (all three states wedged;
+   FW=0+SMP=0 = the standing config).
+5. **The scuprobe (session 11)**: the NS write to the SCU CTRL
+   (0x48240000) = FILTERED (reads fine: CTRL=1 enabled, CFG=0x511).
+   The NS SCU-disable path = closed. **The next move = the CPU1-parking
+   investigation** (the bequest's SMP item, now load-bearing): neutralize
+   the SAR wake context (0x4A326B00, NS-writable per the session-1 RE),
+   release CPU1 (the inverse of the payload's proven RSTCTRL hold),
+   expect the ROM's fallback = the AUX_CORE_BOOT wfe-poll = CPU1 parked
+   alive = the SCU's CPU1 port lives = the TLB broadcasts complete.
+   Full shape + risks: newdocs/session-notes/session-11.md.
 6. The DMA masters are quiesced (--dmaquiet: devb slain, DISPC killed +
-   register-verified 0/0; WiFi SDIO never brought up).
+   register-verified 0/0; WiFi SDIO never brought up). The L2 is OFF
+   (the payload's mon_call(0x102) inside --dmaquiet — bc[8]=0 verified
+   in W-69/70/71/72).
 7. Marker-number discipline: setup.c's pb_bc(130-136) pairs COLLIDE
    with mmu.c's PB_MMU_BC numbers — discriminate via the mirror channel
-   (rule 17 in docs/README). Extended forensics slots bc[16]-bc[27]
-   (0x90000040+, `memdump3 90000040 0x30`).
+   (rule 17 in docs/README). Extended forensics slots bc[16]-bc[27],
+   plus bc[28..31] (0x90000070-7C, the W-72 pgd-dump slots — free DRAM
+   before the ring2 header) via `memdump3 90000040 0x40`.
 
 ## What was fixed, by session
 

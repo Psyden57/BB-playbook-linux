@@ -2351,3 +2351,80 @@ now clear ~0x41 (SMP+FW)** — bc[3]=0x0 = the discriminator. Packed
 (bic r0,r0,#65 at both sites, zero f57ff062, the CMA block =
 TLBIALL+f57ff04f+isb). kernel-patches regenerated — NOTE: tlb-v7.S was
 session-10-modified but was MISSING from the snapshot list; now added.
+
+### Run W-70 (2026-09-11, session 11): build #140 — bc[3]=0x0 (the FW+SMP clear
+### TOOK) yet bc[1]=145 STILL — the ACTLR theory dies
+
+Run: PAYLOAD_MODE=--dmaquiet ./jump.sh zImage, hands-off. Nonce 0xece2af27
+fresh. bc[1]=145, no 146; bc[3]=0x0 (BOTH broadcast bits cleared — the
+discriminator landed); bc[8]=0 (L2 off); bc[18]=0xa2200000; bc[27]=
+0xF5000002 (the F5 residue — the pre-CMA spans landed, nothing after).
+**With SMP=0+FW=0 the TLBIALL block STILL wedges — the barrier-domain and
+ACTLR theories are both dead. The A9 broadcasts TLB ops regardless.**
+
+### Run W-71 (2026-09-11, session 11): build #141 (the in-block bisect) —
+### NO E1 phase landed: the wedge is AT the TLBIALL mcr or the first
+### fetch/access after it
+
+The block was instrumented: put(0xE1000001) post-TLBIALL / 2 post-DSB /
+3 post-ISB. Readback: bc[1]=145, **bc[27]=0xF5000002 = the F5 residue —
+NONE of the E1 phases landed**. The phase-put after the TLBIALL never
+ran => the wedge = the mcr itself OR the first instruction fetch after
+it (which, post-TLBIALL, is itself a re-walk). The DSB and ISB are
+exonerated by position.
+
+### Run W-72 (2026-09-11, session 11): build #142 (the A/B: TLBIALL
+### SKIPPED) — ★★★ THE BOOT PASSES THE ENTIRE CMA BLOCK ★★★ — the
+### TLBIALL mcr = the deterministic machine wedge; death moves to
+### early_fixmap_shutdown (the NEXT TLB-op site); the pgd poison pair
+### CONFIRMED live
+
+The A/B: the TLBIALL mcr commented out (the stale-TLB risk = old
+memory-type descs for the same PA — tolerable for one diagnostic run);
+phases 0xE1000004/01/02/03; the pgd words [0xdfa/0xdfc/0xdfd/0xdfe]
+dumped into bc[28..31] (0x90000070-7C, free DRAM before the ring2
+header).
+
+Readback (nonce 0xec42b547 fresh): **bc[1]=126 = "dma_contiguous_remap
+done"** — 146/147/126 ALL LANDED; bc[27]=0xE1000003 (post-ISB ✓; the
+whole block completed); death between 126 and 125 (early_fixmap_shutdown
+= clear_fixmap = THE NEXT TLB-OP SITE — the model predicts it).
+
+**THE PGD POISON, DIRECTLY MEASURED THIS BOOT:**
+- bc[28] pmd[0xdfa] = 0xbfa1141e — a CORRECT section desc (PA 0xbfa00000)
+- **bc[29] pmd[0xdfc] = 0xbfc1141e — the QNX-era TABLE descriptor, LIVE**
+- **bc[30] pmd[0xdfd] = 0xbfd1141e — the same-shape poison (0xbfd11400)**
+- bc[31] pmd[0xdfe] = 0 — clean
+NOTE: the mmu.c sweep is CONSISTENCY-ONLY (pre != post) — it never
+verified VALIDITY; the #111 plan's "re-write the section descs" half was
+NEVER implemented. The poison pair stands in the live pgd.
+
+### The consolidated wedge model (session 11, W-69..W-72)
+
+**ANY TLB maintenance op post-jump wedges the machine** — TLBIALL (the
+W-72 A/B), per-page TLBIMVA (W-43/W-67's loop), clear_fixmap (the 126→125
+death). ACTLR.SMP/FW = irrelevant (all three states wedged, W-70/71);
+the barrier encoding/domain = irrelevant (W-69's audit). The boot
+performs NO TLB op before the CMA block (head.S builds its tables
+MMU-off; the pbmarkv ops = cache ops) — the CMA's TLBIALL = the FIRST
+TLB op of every boot = deterministic. **Known since session 1**: stub3.S
+deliberately avoids the TLBIALL ("wedged with CPU1 in reset") — the
+connection to the kernel's TLB ops was never made. Prime suspect: the
+SCU routes TLB-op broadcasts to CPU1's dead port (QNX leaves the SCU
+enabled; CPU1 = held in warm reset).
+
+### The scuprobe (2026-09-11, session 11): the NS SCU disable = FILTERED
+
+kexec/scuprobe.c (in-QNX, no jump): SCU_CTRL=0x1 (enabled), SCU_CFG=
+0x511, SCU_PWRSTS=0x03030300; **the NS write to clear the enable bit
+survived but the register reads back still-enabled = the secure filter**
+(the PL310-CTRL class). Box alive. **The NS SCU-disable path is CLOSED.**
+Remaining leads: (a) the CPU1-parking experiment — release CPU1 from the
+payload's hold with the SAR context neutralized first (devpm's SAR blob
+at 0x4A326B00 is NS-writable, session-1 RE) so the ROM's monitor-verify
+fails and CPU1 falls into the ROM's AUX_CORE_BOOT wfe-poll = parked
+alive = the SCU's CPU1 port lives = the TLB broadcasts complete; (b) an
+undocumented monitor service (0xF0 is unidentified; 0x103/0x107 = the
+bootrom's own CPU1-path sites); (c) the full SMP bring-up (the bequest).
+The TLB-op avoidance (stubbing the kernel's flushes) = NOT viable (the
+stale-translation corruption class).
