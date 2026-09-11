@@ -424,7 +424,7 @@ Transfer off-device before any risky operation; qnx6 discards uncommitted cache 
 
 | layer | protection | state |
 |---|---|---|
-| TI boot ROM | verifies CertISW/first loader (HS eFuse) | no bypass known; ROM dump pending |
+| TI boot ROM | verifies CertISW/first loader (HS eFuse) | **DUMPED 2026-09-11** (48 KB at 0x40028000-0x40033FFF, NS-readable from QNX; see `bootdumps-2026-09-11/README.md` — its own SMC sites use ip=0x103/0x107/0xF0, all undocumented) |
 | PRIMAPP/CertISW | RIM-signed, "Cert"ed | dumped; not yet analyzed |
 | RIM-BootLoader / "RIM bootrom" | signed chain stage | dumped (hd0 0x4000-0x14900, 0x14900-0x1D044); not yet analyzed |
 | OS slot boot region (1MB) | "QNXH/QNXL/QNX" trailer blocks | dumped; verifier not yet analyzed |
