@@ -1487,6 +1487,28 @@
  		const char *prop;
  		int size;
 
+--- a/arch/arm/boot/compressed/head.S	2025-08-20 16:36:36.000000000 +0000
++++ b/arch/arm/boot/compressed/head.S	2026-09-11 16:19:53.315223457 +0000
+@@ -367,6 +367,18 @@
+ 		ldr	lr, [r6, #0]
+ 		ldr	r1, =OF_DT_MAGIC
+ 		cmp	lr, r1
++		/* PlayBook W-54 (2026-09-11): the appended-DTB search is
++		 * failing — r2 reaches setup_arch as 0 (bc[12]) and the
++		 * null-tags read freezes the box. Dump the check's inputs
++		 * to the bc page (MMU-off SO stores = DRAM truth):
++		 * bc[20] = r6 (_edata), bc[21] = [r6] (the magic),
++		 * bc[22] = r8 (the incoming atags), bc[23] = r4 (the
++		 * kernel base). */
++		ldr	r0, =0x90000050
++		str	r6, [r0]
++		str	lr, [r0, #4]
++		str	r8, [r0, #8]
++		str	r4, [r0, #12]
+ 		bne	dtb_check_done		@ not found
+ 
+ #ifdef CONFIG_ARM_ATAG_DTB_COMPAT
+
 --- a/init/main.c	2025-08-20 16:36:36.000000000 +0000
 +++ b/init/main.c	2026-09-11 06:15:02.397102315 +0000
 @@ -86,6 +86,7 @@
