@@ -200,7 +200,7 @@
  #endif
 
 --- a/arch/arm/kernel/head.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head.S	2026-09-11 19:52:42.579224891 +0000
++++ b/arch/arm/kernel/head.S	2026-09-11 22:48:19.551846998 +0000
 @@ -98,6 +98,134 @@
   THUMB(	.thumb			)	@ switch to Thumb now.
   THUMB(1:			)
@@ -675,7 +675,23 @@
  #if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
  	orr	r0, r0, #CR_A
  #else
-@@ -482,6 +893,13 @@
+@@ -479,9 +890,29 @@
+ #ifdef CONFIG_CPU_ICACHE_DISABLE
+ 	bic	r0, r0, #CR_I
+ #endif
++	@ PlayBook 2026-09-11 (session 11, W-76): HARDWARE-UNCACHED boot —
++	@ clear SCTLR.C and SCTLR.I. The W-75 descriptor strip (C/B/S off in
++	@ mem_types) did NOT cure the TLB-op wedge, which pins the era delta
++	@ on the CACHE STATE ITSELF: the runs-23-32 era (the only boots that
++	@ ever completed TLB ops on this machine) ran the hardware caches
++	@ OFF — no L1 dirty lines, no writebacks, no eviction traffic — the
++	@ TLB maintenance transactions then see a quiescent L1. With the L1
++	@ ON (this era), the TLBIALL wedges REGARDLESS of CPU1's state
++	@ (W-73's park), ACTLR (W-70), and the pgd content (W-74). The boot
++	@ is slow but era-proven to reach deep (171). Revisit the caches
++	@ only with the SMP bring-up (the wedge's real cure).
++	bic	r0, r0, #CR_C
++	bic	r0, r0, #CR_I
  #ifdef CONFIG_ARM_LPAE
  	mcrr	p15, 0, r4, r5, c2		@ load TTBR0
  #else
@@ -689,7 +705,7 @@
  	mov	r5, #DACR_INIT
  	mcr	p15, 0, r5, c3, c0, 0		@ load domain access register
  	mcr	p15, 0, r4, c2, c0, 0		@ load page table pointer
-@@ -506,12 +924,28 @@
+@@ -506,12 +937,28 @@
  	.align	5
  	.pushsection	.idmap.text, "ax"
  ENTRY(__turn_mmu_on)
