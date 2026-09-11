@@ -35,14 +35,20 @@ analyzing.
 Patch `l2c_enable` to skip the by-way op (0x7FC) on winchester, or set
 `CONFIG_CACHE_L2X0=n` (keep QNX's L2 setup). See KNOWN_ISSUES #3.
 
-## 4. RE SMC 0x112 (the undocumented loader service) + test NS 0x772
+## 4. RE SMC 0x112 (the undocumented loader service) + test NS 0x770
 
 0x112: full disassembly of `bootblob_arm9000.bin` (local-only), find
 0x112's callers and arguments — if it is an L2 latency service, the
-1/1/1 config becomes fixable pre-jump. 0x772 (PL310 invalidate-by-PA,
-no clean) from NS via smctest: if it works, the stale-L2-line class
-(pv + the pgd pair) gets its REAL cure (invalidate without poisoning
-DRAM).
+1/1/1 config becomes fixable pre-jump. **ERRATUM 2026-09-11 (approach
+audit): the PL310 invalidate-by-PA register is 0x770, not "0x772"**
+(mainline cache-l2x0.h: L2X0_INV_LINE_PA 0x770, CLEAN_LINE_PA 0x7B0,
+CLEAN_INV_LINE_PA 0x7F0). Worse: the NS line-op the payload/kernel have
+been writing all along (0x768) is NOT a documented op register on this
+map — the "NS flush" is unverified and likely a no-op (see
+newdocs/audit-approach-2026-09-11.md). Test 0x770 from NS via smctest:
+if it works, the stale-L2-line class (pv + the pgd pair) gets its REAL
+cure (invalidate without poisoning DRAM). Also ranked there: the
+never-run cell "current kernel × L2-off" (--t3).
 
 ## 5. Rootfs (T4)
 
