@@ -152,7 +152,41 @@ right track and was dropped on session 7's (wrong) negative RE.
 - Captures: `bootrom-lower-0x40020000.memdump3.txt` (28 KB block).
 - Service table status after the 0x112 test: 0x100/0x101/0x102/0x103/
   0x106-0x108 work (or are proven) from NS; **0x112 = aborts**; 0xF0
-  unidentified. The latency reconfiguration has no NS path; the only
-  remaining leads are the hidden 4 KB (needs a secure-context dump —
-  not available from QNX NS) and the audit's NS-register experiments
-  (0x770 invalidate-by-PA remains untested and unblocked).
+  unidentified. The latency reconfiguration has no NS path; the remaining
+  leads are the hidden 4 KB (needs a secure-context dump — not available
+  from QNX NS) and the NS-register experiments.
+
+## ADDENDUM 2 (session 10, evening): ★★★ THE NS LINE-OP REGISTERS WORK ★★★
+
+Second experiment ladder (l2test770.c / l2op.c / l2dirty.c / l2canary.c):
+**the PL310 by-PA line-op registers are WRITABLE from NS with a normal
+writable device mapping** — the NS write filter blocks only the CONFIG
+registers (CTRL/AUX/latencies — the 0x112-class writes; the first ladder's
+"0x7F0 abort" was the assistant's own PROT_READ-only mapping, a plain
+userland protection fault, NOT an external abort — corrected here).
+
+Register-matrix results (single-line probes, DRAM canary proof):
+
+| op | name | NS write | effect observed |
+|----|------|----------|-----------------|
+| 0x768 | (project's "CLEAN_INV_LINE_PA") | survives | read preserved A — **no-op or clean+inv** (indistinguishable in this test; either way NOT inv-only) |
+| 0x770 | INV_LINE_PA (invalidate, NO clean) | survives | **REAL INVALIDATE: dirty L2 line discarded, DRAM canary (0xC0FFEE11) served on refetch** |
+| 0x7F0 | CLEAN_INV_LINE_PA | survives | works (used as the canary-to-DRAM force in the proof ladder) |
+
+Proof ladder (l2canary.c): canary written + CIPA'd to DRAM → A written on
+top (L2-dirty, DRAM=canary) → `0x770 = pa` → cached read returns
+**0xC0FFEE11** — the dirty A was discarded and the DRAM truth served.
+Box fine, L2 config intact throughout (ctrl=1, aux=1e070000, tag=0,
+data=0x111).
+
+**THE STALE-VIEW CLASS GETS ITS REAL CURE**: the payload can, pre-jump,
+sweep any PA range with inv-by-PA (0x770) — killing every stale
+QNX-era/decompressor-era L2 line WITHOUT poisoning DRAM (unlike SMC 0x101's
+clean step, W-33's 8/8 failure). Application shape: after copying the
+kernel/DTB into the buffer (DRAM truth in place), invalidate the whole
+buffer region + the bc/mirror bands + the pgd region before the jump; the
+decompressor and C world then run against clean L2 everywhere. The
+per-victim self-heal ladders (W-32c, the 2MB shave) can then be retired
+once the sweep is in place. NOTE: the busy-bit never set in any probe
+(0 polls) — ops complete immediately or the SYNC semantics differ; the
+canary result is the operative evidence, not the busy bit.
