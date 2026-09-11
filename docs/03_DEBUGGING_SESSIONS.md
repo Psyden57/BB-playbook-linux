@@ -2149,3 +2149,56 @@ placement-independent.**
   = readback; the pmd dumps extended with bc[25] = VA 0xdfa.
 - Fixed a duplicate-151 compile artifact (the leftover pre-split marker).
 Packed 5,572,533 B; kernel-patches regenerated, apply-check clean.
+
+### Run W-39 (2026-09-11): build #110 — the middle pair [0xdfa/0xdfb] reads
+### HEALTHY via the pgd yet the store through it STILL wedges; [0xdfc] stays
+### identical-bogus (0xbfc1141e) regardless of the allocator limit
+
+Run: PAYLOAD_MODE=--dmaquiet ./jump.sh zImage, hands-off (user recording
+optional; jump ~t=25s per jump.sh poll). Nonce bc[15]=0xede2b050 fresh.
+
+Readbacks:
+- **bc[1] = 167** — all dump markers landed (160/161 + the bc[19..25]
+  pmd set), death AT the re-enabled first svm store (0x567 never
+  landed, 151 absent).
+- bc[2]=0x17F (C-world pb_bc second channel), bc[3]=0x41, bc[4]=0x8F,
+  bc[5]=0x90 (the head.S inline markers), bc[8]=1/bc[9]=0x111 (PL310
+  readbacks), bc[10]=0xC0DE0002, bc[11]/bc[12]=0xC0DE0010/0xC0DE0020
+  (parse_early_param entered/completed), **bc[13]=0xbfbfffd4 = the svm
+  VA — the middle-pair placement EXACTLY as build #110 computed**
+  (VA 0xdfbfffd4, pair [0xdfa/0xdfb]), bc[14]=0xd1eb0100 (--dmaquiet
+  devb rc), bc[16]/bc[17]=0/0 (DISPC kill readbacks ✓),
+  bc[18]=0xa3200000 (placement, guard ≥0xa1200000 ✓).
+- Ring count = 0x492 = 1170 chars — the pv-correct regime (same as
+  W-38's ring length).
+- **The pmd pattern (bc[19]=readback 0xbfa1141e, bc[20]=VA 0xdfc
+  0xbfc1141e, bc[21]=VA 0xdfe 0, bc[22]=VA 0xdf8 0xbf81141e,
+  bc[23]=VA 0xdf4 0, bc[24]=VA 0xdf0 0, bc[25]=VA 0xdfa 0xbfa1141e):**
+  1. **The middle pair [0xdfa/0xdfb] reads HEALTHY** (0xbfa1141e = a
+     proper section desc for PA 0xbfa00000, B/C/S bits intact) via the
+     pgd-walk path — the previously-untested pair is correctly written
+     in the pgd as the C world's cached view sees it.
+  2. **[0xdfc] STILL reads the IDENTICAL bogus TABLE descriptor
+     0xbfc1141e** — byte-identical to W-37/W-38 across a placement
+     change (0xa1100000→0xa2a00000→0xa3200000) AND a 2MB allocator
+     shift. The shave did NOT cure it; it just relocated the victim.
+  3. Yet the actual store through the healthy middle pair wedges the
+     walk (no 0x567).
+
+**INTERPRETATION: the stale-view sits BETWEEN the pgd's cached content
+(healthy) and what the PTW serves (poison) — a per-line L2 discrepancy,
+not a kernel bug and not a single fixed pair. The W-33-era write-back-
+loss class, now with a second deterministic line (0xbfc1141e = a fixed
+QNX-era pte-table content for that DRAM region, placement- AND
+allocator-independent).**
+
+**AND THE CURE IS PROVEN (same session):** the l2canary ladder (see
+bootdumps-2026-09-11/BOOTROM-RE.md ADDENDUM 2) demonstrated **NS
+PL310+0x770 = invalidate-by-PA, NO clean** — the dirty line is
+discarded and DRAM truth served (0xC0FFEE11 refetch), config registers
+untouched. Build #111 plan: kernel-side sweep — static-map 0x48242000
+in omap4-common.c map_io, then after map_lowmem: re-write the section
+descs for the pgd's mapped range + inv-by-PA sweep over swapper_pg_dir
+(16 KB) + the image region (payload-side, pre-jump, for the
+decompressor-era lines). The per-victim ladders (W-32c, the 2MB shave)
+retire once the sweep passes 167/0x567/151.
