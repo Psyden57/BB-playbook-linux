@@ -104,17 +104,29 @@
  	return 0;
 
 --- a/arch/arm/kernel/head-common.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head-common.S	2026-09-02 19:42:49.544525384 +0000
-@@ -79,6 +79,8 @@
++++ b/arch/arm/kernel/head-common.S	2026-09-11 16:45:22.703223413 +0000
+@@ -79,6 +79,20 @@
  	mov	r7, r1
  	mov	r8, r2
  	mov	r10, r0
++	/* PlayBook W-57 (2026-09-11): the r2-arg observed AT the switch.
++	 * With the fixed pb_bc_put, residue means "never written" — so a
++	 * landed marker = real. The head.S sets r2 = the atags at line
++	 * 266 (mov r2, r8) and r8 becomes PHYS_OFFSET; this marker shows
++	 * whether r2 survived the MMU-on path. clobbers r0 only (r0/r1/r2
++	 * already saved to r10/r7/r8). */
++	ldr	r0, =0xD0000068
++	str	r2, [r0]
++	dsb	sy
++	mcr	p15, 0, r0, c7, c10, 1		@ DCCMVAC
++	dsb
++	mov	r0, #0
 +	pbmarkv	120			@ virtual world entered (r0/r1 dead here)
 +	pbmarkv	125			@ PlayBook: 120's macro tail (flush+kick) survived
  
  	adr	r4, __mmap_switched_data
  	mov	fp, #0
-@@ -103,7 +105,18 @@
+@@ -103,7 +117,18 @@
   THUMB(	mov	sp, r3 )
  	sub	r2, r1, r0
  	mov	r1, #0
@@ -133,7 +145,7 @@
  
  	adr_l	r0, init_task			@ get swapper task_struct
  	set_current r0, r1
-@@ -114,6 +127,12 @@
+@@ -114,6 +139,12 @@
  	str	r8, [r2]			@ Save atags pointer
  	cmp	r3, #0
  	strne	r10, [r3]			@ Save control register values
