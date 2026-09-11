@@ -991,7 +991,7 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-11 03:09:52.309102794 +0000
++++ b/arch/arm/mm/mmu.c	2026-09-11 03:58:32.585101671 +0000
 @@ -758,18 +758,27 @@
  	return arm_pte_alloc(pmd, addr, prot, early_alloc);
  }
@@ -1239,7 +1239,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1908,56 @@
+@@ -1765,7 +1908,57 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1258,45 +1258,46 @@
 +	 * invalidate). The PTW then walks DRAM = map_lowmem's correct
 +	 * descs, and the top-of-map poison lines become irrelevant. Runs
 +	 * before any access through the top-of-map pmds (the svm memset /
-+	 * CMA pte alloc). The PL310 is mapped here early — devicemaps_init
-+	 * later re-maps the same VA/PFN (a same-desc rewrite, harmless). */
++	 * CMA pte alloc). NOTE: iotable_init must NOT be used here — its
++	 * svm alloc lands just under the PRE-shave limit (0xbfdfffd4,
++	 * pair [0xdfd/0xdfe]) and its memset wedges in the poison region
++	 * BEFORE the sweep runs (W-40b). The PL310 section desc is written
++	 * directly into the pgd instead (no allocator). devicemaps_init
++	 * later re-maps the same VA/PFN (same-desc rewrite, harmless). */
 +	{
-+		struct map_desc pb_l2_map = {
-+			.virtual = 0xFEB42000,
-+			.pfn = __phys_to_pfn(0x48242000),
-+			.length = SECTION_SIZE,
-+			.type = MT_DEVICE,
-+		};
++		u32 *pb_pgd = (u32 *)swapper_pg_dir;
++		volatile u32 *pb_pl = (volatile u32 *)0xFEB42000;
 +		volatile unsigned long pb_i;
 +
-+		iotable_init(&pb_l2_map, 1);
-+		{
-+			volatile u32 *pl = (volatile u32 *)0xFEB42000;
-+			volatile u8 *pgdva = (volatile u8 *)swapper_pg_dir;
-+			pb_bc_put(0xD0000004, 168);	/* sweep entry */
++		/* VA 0xFEB42000 -> PA 0x48242000, MT_DEVICE section, index
++		 * 0xFEB in the pgd (VA >> 20); write + clean the line so the
++		 * PTW serves it (the sweep's CIPA of this very line does
++		 * that below — the desc write happens first). */
++		pb_pgd[0xFEB] = (0x48242000 & ~(SECTION_SIZE - 1)) |
++				mem_types[MT_DEVICE].prot_sect;
++		pb_bc_put(0xD0000004, 168);	/* sweep entry */
 +			for (pb_i = 0; pb_i < 16384; pb_i += 32) {
 +				volatile void *va =
-+					(volatile void *)(pgdva + pb_i);
-+				u32 pa = __pa((unsigned long)pgdva + pb_i);
-+				unsigned n = 100000;
-+				__asm__ volatile("mcr p15, 0, %0, c7, c10, 1"
-+						 :: "r"(va) : "memory");
-+				__asm__ volatile(".word 0xF57FF04F\n"
-+						 ::: "memory");	/* dsb sy */
-+				pl[0x7F0 / 4] = pa;	/* clean+inv by PA */
-+				__asm__ volatile(".word 0xF57FF04F\n"
-+						 ::: "memory");	/* dsb sy */
-+				pl[0x730 / 4] = 0;
-+				while ((pl[0x730 / 4] & 1) && --n)
-+					;
-+			}
-+			pb_bc_put(0xD0000004, 169);	/* sweep done */
++					(volatile void *)((u8 *)pb_pgd + pb_i);
++				u32 pa = __pa((unsigned long)pb_pgd + pb_i);
++			unsigned n = 100000;
++			__asm__ volatile("mcr p15, 0, %0, c7, c10, 1"
++					 :: "r"(va) : "memory");
++			__asm__ volatile(".word 0xF57FF04F\n"
++					 ::: "memory");	/* dsb sy */
++			pb_pl[0x7F0 / 4] = pa;	/* clean+inv by PA */
++			__asm__ volatile(".word 0xF57FF04F\n"
++					 ::: "memory");	/* dsb sy */
++			pb_pl[0x730 / 4] = 0;
++			while ((pb_pl[0x730 / 4] & 1) && --n)
++				;
 +		}
++		pb_bc_put(0xD0000004, 169);	/* sweep done */
 +	}
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +1965,30 @@
+@@ -1773,9 +1966,30 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1327,7 +1328,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +1998,7 @@
+@@ -1785,6 +1999,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
