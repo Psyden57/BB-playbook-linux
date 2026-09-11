@@ -335,15 +335,18 @@ static uint32_t l2_flush_range(uint32_t pa, uint32_t size)
     return mon_call(0x101, pa, size);
 }
 
-/* NS-side PL310 clean+invalidate by PA (0x768 + sync 0x730) — foreground
- * ops, proven safe from NS. Used to force DRAM truth for memory the
- * post-L2-disable path will read (stranded-dirty-line rule). */
+/* NS-side PL310 clean+invalidate by PA (0x7F0 = the L2C-310 op register,
+ * foreground + NS-writable, PROVEN on-device 2026-09-11: the l2canary
+ * ladder discarded a dirty L2 line and served the DRAM canary; 0x768,
+ * which this code used before, is not a real op register — no-op at
+ * best). Used to force DRAM truth for memory the post-L2-disable path
+ * will read (stranded-dirty-line rule). */
 static volatile uint32_t *pl310_ns;
 static void l2c_ns_clean_range(off64_t pa, uint32_t size)
 {
     while (size) {
         uint32_t chunk = size > 0x1000 ? 0x1000 : size;
-        pl310_ns[0x768 / 4] = (uint32_t)pa;
+        pl310_ns[0x7F0 / 4] = (uint32_t)pa;
         pl310_ns[0x730 / 4] = 0;
         while (pl310_ns[0x730 / 4] & 1)
             ;
@@ -703,7 +706,8 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
     /* PL310 config registers (control/aux/latency) are SECURE-FILTERED from
      * NS (SIGBUS/hang), and NS by-way clean+inv (0x7FC) is a BACKGROUND op
      * that deadlocked the machine twice (PL310 r3p2 erratum 727915 class).
-     * Only by-PA (0x768) foreground ops are safe from NS. So: map the PL310
+     * By-PA line ops (0x7F0/0x770) are foreground + NS-writable (proven
+     * 2026-09-11); the config registers are the filtered class. So: map the PL310
      * now, and AFTER the CPU1 hold let the TI monitor disable the L2
      * secure-side via SMC 0x105 (its internal clean sequence is
      * foreground/safe). Results go to breadcrumbs (console dead). */
@@ -906,6 +910,13 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
             printf("FAIL: DTB verify\n"); return 1;
         }
         bc_write(46);   /* heartbeat: DTB copy verified */
+        /* PlayBook W-40 (2026-09-11): the image-region CIPA sweep. The
+         * copy's own dirty L2 lines get forced to DRAM and the region's
+         * QNX-era stale lines are discarded — the decompressor and the
+         * C world then read only DRAM truth. 0x7F0 = clean+inv by PA,
+         * proven NS-safe (kexec/l2canary.c). */
+        l2c_ns_clean_range(phys, blob_off + padded + dlen);
+        bc_write(47);   /* heartbeat: image sweep done */
     }
     printf("zImage %zu B + DTB %zu B (appended) placed; dtb_phys=%08x\n",
            zlen, dlen, dtb_phys);
@@ -1092,7 +1103,7 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
      * after the disable (stranded-dirty-line rule). */
     bc_write(51);
     /* Pre-SMC DRAM-truth guarantee (the run-14 lesson): clean+inv by PA
-     * (NS 0x768/0x730, foreground-safe) the payload's globals (.data/.bss
+     * (NS 0x7F0/0x730, foreground-safe) the payload's globals (.data/.bss
      * around &bc) and stack (around a local) regions, so every value the
      * post-disable path reads comes from DRAM instead of lines stranded
      * dirty in the about-to-be-bypassed L2. mon_call itself touches zero

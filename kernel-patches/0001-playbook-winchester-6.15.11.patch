@@ -991,7 +991,7 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-04 20:21:03.108387469 +0000
++++ b/arch/arm/mm/mmu.c	2026-09-11 03:09:52.309102794 +0000
 @@ -758,18 +758,27 @@
  	return arm_pte_alloc(pmd, addr, prot, early_alloc);
  }
@@ -1239,17 +1239,64 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1908,9 @@
+@@ -1765,7 +1908,56 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
 +	PB_MMU_BC(134);			/* prepare_page_table done */
  	map_lowmem();
 +	PB_MMU_BC(133);			/* map_lowmem done */
++	/* PlayBook W-40 (2026-09-11, session 10): the per-line CIPA sweep.
++	 * W-38/39 evidence: the pgd's CACHED view is HEALTHY (bc[19]/bc[25]
++	 * = proper section descs read via the pgd) while the PTW's view of
++	 * the same lines is stale QNX-era poison (0xbfc1141e, identical
++	 * across 3 placements AND a 2MB allocator shift) — the write-back-
++	 * loss class. Cure, proven on-device (kexec/l2canary.c: NS PL310
++	 * +0x7F0 = clean+inv by PA works; +0x770 inv-only discards dirty
++	 * lines): for each 32-byte line of the pgd, DCCMVAC (L1->L2; the
++	 * cached view IS the healthy content) then CIPA by PA (L2->DRAM +
++	 * invalidate). The PTW then walks DRAM = map_lowmem's correct
++	 * descs, and the top-of-map poison lines become irrelevant. Runs
++	 * before any access through the top-of-map pmds (the svm memset /
++	 * CMA pte alloc). The PL310 is mapped here early — devicemaps_init
++	 * later re-maps the same VA/PFN (a same-desc rewrite, harmless). */
++	{
++		struct map_desc pb_l2_map = {
++			.virtual = 0xFEB42000,
++			.pfn = __phys_to_pfn(0x48242000),
++			.length = SECTION_SIZE,
++			.type = MT_DEVICE,
++		};
++		volatile unsigned long pb_i;
++
++		iotable_init(&pb_l2_map, 1);
++		{
++			volatile u32 *pl = (volatile u32 *)0xFEB42000;
++			volatile u8 *pgdva = (volatile u8 *)swapper_pg_dir;
++			pb_bc_put(0xD0000004, 168);	/* sweep entry */
++			for (pb_i = 0; pb_i < 16384; pb_i += 32) {
++				volatile void *va =
++					(volatile void *)(pgdva + pb_i);
++				u32 pa = __pa((unsigned long)pgdva + pb_i);
++				unsigned n = 100000;
++				__asm__ volatile("mcr p15, 0, %0, c7, c10, 1"
++						 :: "r"(va) : "memory");
++				__asm__ volatile(".word 0xF57FF04F\n"
++						 ::: "memory");	/* dsb sy */
++				pl[0x7F0 / 4] = pa;	/* clean+inv by PA */
++				__asm__ volatile(".word 0xF57FF04F\n"
++						 ::: "memory");	/* dsb sy */
++				pl[0x730 / 4] = 0;
++				while ((pl[0x730 / 4] & 1) && --n)
++					;
++			}
++			pb_bc_put(0xD0000004, 169);	/* sweep done */
++		}
++	}
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +1918,30 @@
+@@ -1773,9 +1965,30 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1280,7 +1327,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +1951,7 @@
+@@ -1785,6 +1998,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
@@ -1763,7 +1810,7 @@
  	omap4-xyboard-mz617.dtb
  dtb-$(CONFIG_SOC_AM33XX) += \
 
---- /dev/null	2026-09-03 12:17:21.613494170 +0000
+--- /dev/null	2026-09-11 01:48:42.845100314 +0000
 +++ b/arch/arm/boot/dts/ti/omap/omap4-winchester.dts	2026-09-04 12:02:36.388387867 +0000
 @@ -0,0 +1,120 @@
 +// SPDX-License-Identifier: GPL-2.0-only
@@ -1887,7 +1934,7 @@
 +	status = "disabled";
 +};
 
---- /dev/null	2026-09-03 12:17:21.613494170 +0000
+--- /dev/null	2026-09-11 01:48:42.845100314 +0000
 +++ b/arch/arm/include/debug/omap4bc.S	2026-09-02 20:18:39.913189588 +0000
 @@ -0,0 +1,116 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
