@@ -794,8 +794,8 @@
  	b	__fixup_a_pv_table
 
 --- a/arch/arm/kernel/setup.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/setup.c	2026-09-02 21:52:57.434630873 +0000
-@@ -1101,7 +1101,37 @@
++++ b/arch/arm/kernel/setup.c	2026-09-11 05:57:01.625101824 +0000
+@@ -1101,7 +1101,44 @@
  	if (__atags_pointer)
  		atags_vaddr = FDT_VIRT_BASE(__atags_pointer);
  
@@ -823,17 +823,24 @@
 +	pb_bc(130);			/* setup_processor done */
 +	/* PlayBook 2026-09-02: the ACTLR.SMP re-clear is REMOVED — SMP=0
 +	 * wedges sustained cached writes when the L2 is enabled (see the
-+	 * head.S __enable_mmu note). setup_processor sets SMP=1 and it STAYS. */
-+	if (0) {
-+		register unsigned int pb_a __asm__("r0"); \
-+		__asm__ volatile("mrc p15, 0, %0, c1, c0, 1" : "=r"(pb_a)); \
++	 * head.S __enable_mmu note). setup_processor sets SMP=1 and it STAYS.
++	 * W-48 (2026-09-11, session 10): RE-ACTIVATED — the W-43/44/45
++	 * evidence pins the boot's wedge class on ACTLR.SMP=1's broadcast
++	 * to the HELD CPU1 (the CMA flush's ISH dsb AND the non-ISH c8,c7
++	 * TLB ops both wedge; the encodings never mattered). The SMP=0
++	 * cached-write wedge is L2-ENABLED-specific and the payload now
++	 * disables the L2 via SMC 0x102 inside the proven --dmaquiet
++	 * shape (the W-46 fix), so this re-clear is paired with L2-off. */
++	{
++		register unsigned int pb_a __asm__("r0");
++		__asm__ volatile("mrc p15, 0, %0, c1, c0, 1" : "=r"(pb_a));
 +		pb_a &= ~(1u << 6); \
-+		__asm__ volatile("mcr p15, 0, %0, c1, c0, 1" : : "r"(pb_a)); \
++		__asm__ volatile("mcr p15, 0, %0, c1, c0, 1" : : "r"(pb_a));
 +	}
  	if (atags_vaddr) {
  		mdesc = setup_machine_fdt(atags_vaddr);
  		if (mdesc)
-@@ -1118,6 +1148,7 @@
+@@ -1118,6 +1155,7 @@
  			early_print("  r2[]=%*ph\n", 16, atags_vaddr);
  		dump_machine_table();
  	}
@@ -841,7 +848,7 @@
  
  	machine_desc = mdesc;
  	machine_name = mdesc->name;
-@@ -1134,8 +1165,10 @@
+@@ -1134,8 +1172,10 @@
  
  	early_fixmap_init();
  	early_ioremap_init();
@@ -852,7 +859,7 @@
  
  #ifdef CONFIG_MMU
  	early_mm_init(mdesc);
-@@ -1151,11 +1184,27 @@
+@@ -1151,11 +1191,27 @@
  	arm_memblock_init(mdesc);
  	/* Memory may have been removed so recalculate the bounds. */
  	adjust_lowmem_bounds();
