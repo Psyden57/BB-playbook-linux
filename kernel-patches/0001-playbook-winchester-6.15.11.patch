@@ -1132,7 +1132,7 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-11 23:28:32.875846107 +0000
++++ b/arch/arm/mm/mmu.c	2026-09-11 23:45:14.891846262 +0000
 @@ -700,6 +700,13 @@
  	pr_info("Memory policy: %sData cache %s\n",
  		ecc_mask ? "ECC enabled, " : "", cp->policy);
@@ -1395,7 +1395,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1916,121 @@
+@@ -1765,7 +1916,81 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1423,7 +1423,6 @@
 +	{
 +		u32 *pb_pgd = (u32 *)swapper_pg_dir;
 +		volatile u32 *pb_pl = (volatile u32 *)0xFEB42000;
-+		volatile unsigned long pb_i;
 +
 +		/* VA 0xFEB42000 -> PA 0x48242000, MT_DEVICE section, index
 +		 * 0xFEB in the pgd (VA >> 20); write + clean the line so the
@@ -1448,61 +1447,22 @@
 +			 * correct, not just a wedge dodge. The W-41
 +			 * self-verify runs only when the L2 is on. */
 +			if (pb_pl[0x100 / 4] & 1) {
-+			/* W-41 (2026-09-11): W-41's DRAM readback (memdump3
-+			 * a00077e0) shows the pgd's [0xdf8-0xdff] entries
-+			 * ALL ZERO in DRAM while the C world reads "section
-+			 * descs" — map_lowmem's cached writes for the top
-+			 * pmds NEVER reached DRAM (the write-back-loss
-+			 * class, now DRAM-proven). Self-verify: per line,
-+			 * save the cached view, DCCMVAC + CIPA, then RE-READ
-+			 * (L1 miss + L2 miss => served from DRAM); a
-+			 * mismatch = the clean did not deliver. Tally into
-+			 * bc[26] = 0xBEEF0000 | (mism << 8) | tmo. */
-+			/* W-41: sweep pgd[0xFEB]'s OWN line FIRST — the
-+			 * sweep's first PL310 access (the sync read at
-+			 * 0xFEB42730) triggers a TLB refill for VA 0xFEB,
-+			 * and the PTW then walks the [0xFEB] line. If it
-+			 * is still poison (the loop starts at line 0 and
-+			 * reaches 0xFA0 last), the walk wedges (the
-+			 * W-40e death at 133->sweep). DCCMVAC + CIPA this
-+			 * one line before any PL310 access. */
-+			{
-+				volatile void *va = (volatile void *)
-+					((u8 *)pb_pgd + 0xFA0);
-+				u32 pa = (0xc0004000u + 0xFA0u) - 0x20000000u;
-+				unsigned n = 100000;
-+				__asm__ volatile("mcr p15, 0, %0, c7, c10, 1"
-+						 :: "r"(va) : "memory");
-+				__asm__ volatile(".word 0xF57FF04F\n"
-+						 ::: "memory");	/* dsb sy */
-+				pb_pl[0x7F0 / 4] = pa;
-+				pb_pl[0x730 / 4] = 0;
-+				while ((pb_pl[0x730 / 4] & 1) && --n)
-+					;
-+				if (!n)
-+					pb_tmo++;
-+			}
-+			for (pb_i = 0; pb_i < 16384; pb_i += 32) {
-+				volatile void *va =
-+					(volatile void *)((u8 *)pb_pgd + pb_i);
-+				u32 pa = __pa((unsigned long)pb_pgd + pb_i);
-+				unsigned n = 100000;
-+				u32 pre = ((volatile u32 *)va)[0];
-+				__asm__ volatile("mcr p15, 0, %0, c7, c10, 1"
-+						 :: "r"(va) : "memory");
-+				__asm__ volatile(".word 0xF57FF04F\n"
-+						 ::: "memory");	/* dsb sy */
-+				pb_pl[0x7F0 / 4] = pa;	/* clean+inv by PA */
-+				__asm__ volatile(".word 0xF57FF04F\n"
-+						 ::: "memory");	/* dsb sy */
-+				pb_pl[0x730 / 4] = 0;
-+				while ((pb_pl[0x730 / 4] & 1) && --n)
-+					;
-+				if (!n)
-+					pb_tmo++;
-+				if (((volatile u32 *)va)[0] != pre)
-+					pb_mism++;
-+			}
++			/* PlayBook 2026-09-11 (session 11, W-79): the
++			 * 512-iteration NS CIPA loop (and the W-40e
++			 * [0xFEB]-line pre-CIPA) are REPLACED with ONE
++			 * secure-side range flush (SMC 0x101 = clean+inv by
++			 * PA, the payload-proven mon_call shape). Rationale:
++			 * the NS loop = ~4k device ops = the L2-ON device-op
++			 * cliff (~4-5k, the session-6 calibration) — the
++			 * W-78 run died at bc[1]=150 with the next device op
++			 * as the straw, AFTER the sweep had passed. The
++			 * monitor's 0x101 does the same per-line clean+inv
++			 * internally with a single SMC; the W-41 self-verify
++			 * is subsumed (the SMC is synchronous). */
++				extern noinline void pb_smc_flush(
++					unsigned long pa, unsigned long size);
++				pb_smc_flush(__pa((unsigned long)pb_pgd),
++					     16384);
 +			} /* the PL310-enabled guard */
 +			/* bc[26] = 0xBEEF0000 | (mism << 8) | sync timeouts
 +			 * — SURVIVES the later CMA-era markers (bc[19..25]).
@@ -1517,7 +1477,7 @@
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +2038,30 @@
+@@ -1773,9 +1998,30 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1548,7 +1508,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +2071,7 @@
+@@ -1785,6 +2031,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
