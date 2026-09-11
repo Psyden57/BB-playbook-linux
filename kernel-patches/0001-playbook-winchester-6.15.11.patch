@@ -104,7 +104,7 @@
  	return 0;
 
 --- a/arch/arm/kernel/head-common.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head-common.S	2026-09-11 16:45:22.703223413 +0000
++++ b/arch/arm/kernel/head-common.S	2026-09-11 16:53:55.647224323 +0000
 @@ -79,6 +79,20 @@
  	mov	r7, r1
  	mov	r8, r2
@@ -145,10 +145,20 @@
  
  	adr_l	r0, init_task			@ get swapper task_struct
  	set_current r0, r1
-@@ -114,6 +139,12 @@
+@@ -114,6 +139,22 @@
  	str	r8, [r2]			@ Save atags pointer
  	cmp	r3, #0
  	strne	r10, [r3]			@ Save control register values
++	/* PlayBook W-58 (2026-09-11, session 10): the .init.data stores are
++	 * CACHED and the L2 is OFF (--dmaquiet + the SMC 0x102) — the dirty
++	 * L1 lines are lost at the WDT2 reset (the write-back-loss class).
++	 * The atags pointer's store survives only by eviction luck: bc[26]
++	 * proved r2 = the DTB arrives here, bc[12] read it back as 0.
++	 * Clean the line: DCCMVAC = L1 -> PoC; with the L2 off that is
++	 * DRAM directly. */
++	ldr	r0, [r2]
++	mcr	p15, 0, r0, c7, c10, 1		@ DCCMVAC the .init.data line
++	dsb
 +	@ PlayBook: bc = 117 - plain store (the 0xD00 section is DEVICE-mapped;
 +	@ no DCCMVAC/CIPA/sync ritual - it wedged the L2-on boot, 2026-09-02).
 +	ldr	r0, =0xD0000004
