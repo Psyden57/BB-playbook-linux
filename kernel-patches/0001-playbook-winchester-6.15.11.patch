@@ -200,8 +200,8 @@
  #endif
 
 --- a/arch/arm/kernel/head.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head.S	2026-09-11 22:48:19.551846998 +0000
-@@ -98,6 +98,134 @@
++++ b/arch/arm/kernel/head.S	2026-09-11 23:00:39.363846278 +0000
+@@ -98,6 +98,113 @@
   THUMB(	.thumb			)	@ switch to Thumb now.
   THUMB(1:			)
  
@@ -227,20 +227,16 @@
 +	ldr	ip, =0x90000004
 +	mov	r0, #\val
 +	str	r0, [ip]
-+	dsb
-+	ldr	ip, =0x48242768		@ PL310 CLEAN_INV_LINE_PA
-+	ldr	r1, =0x90000000		@ bc line 0 (bc[0..7])
-+	str	r1, [ip]
-+	ldr	r1, =0x90000020		@ bc line 1 (bc[8..15])
-+	str	r1, [ip]
-+	ldr	ip, =0x48242730		@ PL310 SYNC
-+	mov	r0, #0x100000		@ bounded poll (pbmarkv pattern)
-+951:	ldr	r1, [ip]
-+	tst	r1, #1
-+	beq	952f
-+	subs	r0, r0, #1
-+	bne	951b
-+952:	dsb
++	@ PlayBook 2026-09-11 (session 11, W-77): the CIPA/sync machinery
++	@ REMOVED (the 2026-09-02 ritual-free shape restored). The era
++	@ analysis: the only boots that ever completed TLB ops (runs 23-32)
++	@ predate the W-6/W-7 CIPA-in-pbmark addition — every boot since
++	@ fires dead 0x768/0x730 line-ops into the DISABLED L2C at every
++	@ marker, and the first SCU/L2C-routed transaction (the CMA's
++	@ TLBIALL) wedges behind them (W-69..W-76 eliminated everything
++	@ else: the barriers, ACTLR, CPU1's state, the pgd content, the
++	@ descriptor cacheability, the SCTLR cache state). With SCTLR.C=0
++	@ (W-76) the plain store IS DRAM truth: no flush needed.
 +	@ WDT2 kick: TGR = any write reloads (progress = life)
 +	ldr	ip, =0x4A314030
 +	mov	r0, #1
@@ -259,22 +255,10 @@
 +	ldr	r0, =0xD0000004
 +	mov	r1, #\val
 +	str	r1, [r0]
-+	dsb	sy
-+	mcr	p15, 0, r0, c7, c10, 1		@ DCCMVAC bc line
-+	sub	r0, r0, #0x40000000		@ bc PA 0x90000000
-+	ldr	r1, =0xFEB42768
-+	str	r0, [r1]
-+	ldr	r1, =0xFEB42730
-+	mov	r0, #0
-+	str	r0, [r1]
-+	mov	r0, #0x100000
-+951:	ldr	r1, =0xFEB42730
-+	ldr	r1, [r1]
-+	tst	r1, #1
-+	beq	952f
-+	subs	r0, r0, #1
-+	bne	951b
-+952:	dsb
++	@ PlayBook 2026-09-11 (session 11, W-77): the CIPA/sync machinery
++	@ REMOVED (see pbmark). With SCTLR.C=0 the plain store IS DRAM
++	@ truth; the dead line-ops into the disabled L2C = the TLB-op
++	@ wedge's poison. Clobbers r0+r1 only.
 +	@ WDT2 kick: TGR = any write reloads (progress = life)
 +	ldr	r1, =0xFEC14030
 +	mov	r0, #1
@@ -297,13 +281,8 @@
 +	ldr	ip, =0x90000004
 +	mov	r3, #\val
 +	str	r3, [ip]
-+	dsb
-+	ldr	ip, =0x48242768		@ PL310 CLEAN_INV_LINE_PA
-+	ldr	r3, =0x90000000		@ bc line 0
-+	str	r3, [ip]
-+	ldr	r3, =0x90000020		@ bc line 1
-+	str	r3, [ip]
-+	dsb
++	@ PlayBook 2026-09-11 (session 11, W-77): the CIPA machinery REMOVED
++	@ (see pbmark). Plain store + WDT2 kick; clobbers r3+ip only.
 +	ldr	ip, =0x4A314030
 +	mov	r3, #1
 +	str	r3, [ip]
@@ -336,7 +315,7 @@
  #ifdef CONFIG_ARM_VIRT_EXT
  	bl	__hyp_stub_install
  #endif
-@@ -105,6 +233,38 @@
+@@ -105,6 +212,38 @@
  	safe_svcmode_maskall r9
  
  	mrc	p15, 0, r9, c0, c0		@ get processor id
@@ -375,7 +354,7 @@
  	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid
  	movs	r10, r5				@ invalid processor (r5=0)?
   THUMB( it	eq )		@ force fixup-able long branch encoding
-@@ -124,19 +284,163 @@
+@@ -124,19 +263,144 @@
  #else
  	ldr	r8, =PLAT_PHYS_OFFSET		@ always constant in this case
  #endif
@@ -482,29 +461,10 @@
 +	@ don't update what the C world's CACHED reads hit — W-21/W-22 read
 +	@ pv_off=0 with the fixup proven executed). CIPA the .data lines by
 +	@ PA so the C world's cached reads reach DRAM. Scratch r0/r3/ip.
-+	mov	r0, #0x48000000		@ r0 = 0x48242768 (CLEAN_INV_LINE_PA)
-+	orr	r0, r0, #0x240000
-+	orr	r0, r0, #0x700
-+	orr	r0, r0, #0x68
-+	adr_l	r3, __pv_phys_pfn_offset
-+	bic	r3, r3, #0x3f
-+	str	r3, [r0]
-+	adr_l	r3, __pv_offset
-+	bic	r3, r3, #0x3f
-+	str	r3, [r0]
-+	add	r3, r3, #0x40		@ next line (covers a straddle)
-+	str	r3, [r0]
-+	mov	ip, #0x48000000		@ ip = 0x48242730 (SYNC)
-+	orr	ip, ip, #0x240000
-+	orr	ip, ip, #0x700
-+	orr	ip, ip, #0x30
-+	mov	r0, #0x100000
-+977:	ldr	r3, [ip]
-+	tst	r3, #1
-+	beq	978f
-+	subs	r0, r0, #1
-+	bne	977b
-+978:	dsb
++	@ PlayBook 2026-09-11 (session 11, W-77): the CIPA + sync-poll
++	@ REMOVED — the same dead-line-op class as the pbmark machinery
++	@ (see pbmark), and with SCTLR.C=0 (W-76) the C world's reads are
++	@ uncached anyway: DRAM truth directly, no flush needed.
 +
 +	adr_l	r4, __pv_table_begin
 +	adr_l	r5, __pv_table_end
@@ -540,7 +500,7 @@
  
  	/*
  	 * The following calls CPU specific code in a position independent
-@@ -229,6 +533,12 @@
+@@ -229,6 +493,12 @@
  #endif
  
  	ldr	r7, [r10, #PROCINFO_MM_MMUFLAGS] @ mm_mmuflags
@@ -553,7 +513,7 @@
  
  	/*
  	 * Create identity mapping to cater for __enable_mmu.
-@@ -343,6 +653,99 @@
+@@ -343,6 +613,99 @@
  	str	r3, [r0], #4
  #endif
  
@@ -653,7 +613,7 @@
  #else /* CONFIG_DEBUG_ICEDCC || CONFIG_DEBUG_SEMIHOSTING */
  	/* we don't need any serial debugging mappings */
  	ldr	r7, [r10, #PROCINFO_IO_MMUFLAGS] @ io_mmuflags
-@@ -373,6 +776,7 @@
+@@ -373,6 +736,7 @@
  #ifdef CONFIG_ARM_LPAE
  	sub	r4, r4, #0x1000		@ point to the PGD table
  #endif
@@ -661,7 +621,7 @@
  	ret	lr
  ENDPROC(__create_page_tables)
  	.ltorg
-@@ -465,6 +869,13 @@
+@@ -465,6 +829,13 @@
   *  r13 = *virtual* address to jump to upon completion
   */
  __enable_mmu:
@@ -675,7 +635,7 @@
  #if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
  	orr	r0, r0, #CR_A
  #else
-@@ -479,9 +890,29 @@
+@@ -479,9 +850,29 @@
  #ifdef CONFIG_CPU_ICACHE_DISABLE
  	bic	r0, r0, #CR_I
  #endif
@@ -705,7 +665,7 @@
  	mov	r5, #DACR_INIT
  	mcr	p15, 0, r5, c3, c0, 0		@ load domain access register
  	mcr	p15, 0, r4, c2, c0, 0		@ load page table pointer
-@@ -506,12 +937,28 @@
+@@ -506,12 +897,28 @@
  	.align	5
  	.pushsection	.idmap.text, "ax"
  ENTRY(__turn_mmu_on)
@@ -1180,7 +1140,7 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-11 22:23:06.843847579 +0000
++++ b/arch/arm/mm/mmu.c	2026-09-11 23:02:05.483846796 +0000
 @@ -700,6 +700,27 @@
  	pr_info("Memory policy: %sData cache %s\n",
  		ecc_mask ? "ECC enabled, " : "", cp->policy);
@@ -1457,7 +1417,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1930,104 @@
+@@ -1765,7 +1930,121 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1497,6 +1457,19 @@
 +		{
 +			unsigned pb_tmo = 0;
 +			unsigned pb_mism = 0;
++			/* PlayBook 2026-09-11 (session 11, W-77): the CIPA
++			 * loops are GUARDED on the PL310 being ENABLED. With
++			 * the L2 off (--dmaquiet's mon_call(0x102)) every
++			 * 0x7F0/0x730 write = a dead line-op into a disabled
++			 * controller — the era analysis (the pbmark notes)
++			 * pins the TLB-op wedge on exactly this class: the
++			 * runs 23-32 (the only boots whose TLB ops ever
++			 * completed) fired ZERO PL310 line-ops. With the L2
++			 * off there is also nothing to sweep (no stale L2
++			 * lines can exist), so the skip = semantically
++			 * correct, not just a wedge dodge. The W-41
++			 * self-verify runs only when the L2 is on. */
++			if (pb_pl[0x100 / 4] & 1) {
 +			/* W-41 (2026-09-11): W-41's DRAM readback (memdump3
 +			 * a00077e0) shows the pgd's [0xdf8-0xdff] entries
 +			 * ALL ZERO in DRAM while the C world reads "section
@@ -1552,8 +1525,12 @@
 +				if (((volatile u32 *)va)[0] != pre)
 +					pb_mism++;
 +			}
++			} /* the PL310-enabled guard */
 +			/* bc[26] = 0xBEEF0000 | (mism << 8) | sync timeouts
-+			 * — SURVIVES the later CMA-era markers (bc[19..25]) */
++			 * — SURVIVES the later CMA-era markers (bc[19..25]).
++			 * With the L2 off the tally = the plain 0xBEEF0000
++			 * (the loops skipped, nothing to find) — its presence
++			 * = the sweep block itself ran. */
 +			pb_bc_put(0xD0000068,
 +				  0xBEEF0000u | (pb_mism << 8) | pb_tmo);
 +		}
@@ -1562,7 +1539,7 @@
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +2035,30 @@
+@@ -1773,9 +2052,30 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1593,7 +1570,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +2068,7 @@
+@@ -1785,6 +2085,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
@@ -1653,7 +1630,7 @@
  SYM_FUNC_END(v7wbi_flush_kern_tlb_range)
 
 --- a/init/main.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/init/main.c	2026-09-11 19:53:04.311224819 +0000
++++ b/init/main.c	2026-09-11 23:02:38.055846844 +0000
 @@ -86,6 +86,7 @@
  #include <linux/sched/clock.h>
  #include <linux/sched/task.h>
@@ -1902,7 +1879,7 @@
  
  	local_irq_disable();
  	early_boot_irqs_disabled = true;
-@@ -913,9 +1116,95 @@
+@@ -913,9 +1116,102 @@
  	 * enable them.
  	 */
  	boot_cpu_init();
@@ -1963,7 +1940,14 @@
 +			 * PL310+0x7F0 (proven by kexec/l2canary.c) —
 +			 * DRAM holds the truth, every later read = DRAM.
 +			 * The CIPA's clean step is safe: the L2 content =
-+			 * the just-written CORRECT value. */
++			 * the just-written CORRECT value.
++			 * PlayBook 2026-09-11 (session 11, W-77): the CIPA
++			 * loop is GUARDED on the PL310 being enabled — the
++			 * dead line-ops into a disabled L2C = the TLB-op
++			 * wedge's poison class (see the pbmark notes in
++			 * head.S). With SCTLR.C=0 (W-76) the stores above
++			 * are DRAM truth directly: nothing to flush. */
++			if (pb_pl[0x100 / 4] & 1)
 +			for (k = 0; k < 3; k++) {
 +				unsigned long line = ((va0 & ~0x1ful)
 +						      + k * 32);
@@ -1998,7 +1982,7 @@
  	/* Static keys and static calls are needed by LSMs */
  	jump_label_init();
  	static_call_init();
-@@ -1032,6 +1321,7 @@
+@@ -1032,6 +1328,7 @@
  	 * this. But we do want output early, in case something goes wrong.
  	 */
  	console_init();
@@ -2006,7 +1990,7 @@
  	if (panic_later)
  		panic("Too many boot %s vars at `%s'", panic_later,
  		      panic_param);
-@@ -1088,12 +1378,18 @@
+@@ -1088,12 +1385,18 @@
  	pidfs_init();
  	cpuset_init();
  	cgroup_init();
@@ -2025,7 +2009,7 @@
  
  	/* Do the rest non-__init'ed, we're now alive */
  	rest_init();
-@@ -1315,8 +1611,22 @@
+@@ -1315,8 +1618,22 @@
  		   NULL, ignore_unknown_bootoption);
  
  	trace_initcall_level(initcall_level_names[level]);
@@ -2049,7 +2033,7 @@
  }
  
  static void __init do_initcalls(void)
-@@ -1476,6 +1786,8 @@
+@@ -1476,6 +1793,8 @@
  	numa_default_policy();
  
  	rcu_end_inkernel_boot();
@@ -2058,7 +2042,7 @@
  
  	do_sysctl_args();
  
-@@ -1539,6 +1851,7 @@
+@@ -1539,6 +1858,7 @@
  {
  	/* Now the scheduler is fully set up and can do blocking allocations */
  	gfp_allowed_mask = __GFP_BITS_MASK;
@@ -2066,7 +2050,7 @@
  
  	/*
  	 * init can allocate pages on any node
-@@ -1565,6 +1878,7 @@
+@@ -1565,6 +1885,7 @@
  	page_alloc_init_late();
  
  	do_basic_setup();
