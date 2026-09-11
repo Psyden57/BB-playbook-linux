@@ -1,5 +1,14 @@
 Please read READFIRST/Psyden.txt first.
 
+**Session continuity note (2026-09-11): the entire project context lives
+in this git repo — no external memory service is needed.** A fresh session
+reads, in order: `READFIRST/Psyden.txt` →
+`SESSION-HANDOFF/BOOTSTRAP_SESSION_11.md` (the current handoff) →
+`newdocs/HANDOFF.md` + `DEVELOPMENT.md` + `SETUP.md` (the standing rules)
+→ `newdocs/PROJECT_STATE.md` → `newdocs/ARCHITECTURE.md` + `COMMANDS.md`
+→ `docs/README.md` (rules 1-17) → `docs/03_DEBUGGING_SESSIONS.md`
+(the run-by-run log). All of it is committed here.
+
 # PlayBook kexec — booting mainline Linux on the BlackBerry PlayBook from QNX
 
 Research project: **booting mainline Linux on the BlackBerry PlayBook (TI
