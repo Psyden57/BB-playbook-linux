@@ -991,7 +991,7 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-11 04:45:26.917102162 +0000
++++ b/arch/arm/mm/mmu.c	2026-09-11 04:59:17.217102626 +0000
 @@ -758,18 +758,27 @@
  	return arm_pte_alloc(pmd, addr, prot, early_alloc);
  }
@@ -1239,7 +1239,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1908,89 @@
+@@ -1765,7 +1908,104 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1278,6 +1278,17 @@
 +		pb_bc_put(0xD0000004, 168);	/* sweep entry */
 +		{
 +			unsigned pb_tmo = 0;
++			unsigned pb_mism = 0;
++			/* W-41 (2026-09-11): W-41's DRAM readback (memdump3
++			 * a00077e0) shows the pgd's [0xdf8-0xdff] entries
++			 * ALL ZERO in DRAM while the C world reads "section
++			 * descs" — map_lowmem's cached writes for the top
++			 * pmds NEVER reached DRAM (the write-back-loss
++			 * class, now DRAM-proven). Self-verify: per line,
++			 * save the cached view, DCCMVAC + CIPA, then RE-READ
++			 * (L1 miss + L2 miss => served from DRAM); a
++			 * mismatch = the clean did not deliver. Tally into
++			 * bc[26] = 0xBEEF0000 | (mism << 8) | tmo. */
 +			/* W-41: sweep pgd[0xFEB]'s OWN line FIRST — the
 +			 * sweep's first PL310 access (the sync read at
 +			 * 0xFEB42730) triggers a TLB refill for VA 0xFEB,
@@ -1307,6 +1318,7 @@
 +					(volatile void *)((u8 *)pb_pgd + pb_i);
 +				u32 pa = __pa((unsigned long)pb_pgd + pb_i);
 +				unsigned n = 100000;
++				u32 pre = ((volatile u32 *)va)[0];
 +				__asm__ volatile("mcr p15, 0, %0, c7, c10, 1"
 +						 :: "r"(va) : "memory");
 +				__asm__ volatile(".word 0xF57FF04F\n"
@@ -1319,17 +1331,20 @@
 +					;
 +				if (!n)
 +					pb_tmo++;
++				if (((volatile u32 *)va)[0] != pre)
++					pb_mism++;
 +			}
-+			/* bc[26] = 0xBEEF0000 | sync timeouts — SURVIVES the
-+			 * later CMA-era markers (they use bc[19..25]) */
-+			pb_bc_put(0xD0000068, 0xBEEF0000u | pb_tmo);
++			/* bc[26] = 0xBEEF0000 | (mism << 8) | sync timeouts
++			 * — SURVIVES the later CMA-era markers (bc[19..25]) */
++			pb_bc_put(0xD0000068,
++				  0xBEEF0000u | (pb_mism << 8) | pb_tmo);
 +		}
 +		pb_bc_put(0xD0000004, 169);	/* sweep done */
 +	}
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +1998,30 @@
+@@ -1773,9 +2013,30 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1360,7 +1375,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +2031,7 @@
+@@ -1785,6 +2046,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
