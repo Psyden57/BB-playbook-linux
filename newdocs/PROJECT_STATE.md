@@ -119,8 +119,15 @@ and SESSION-HANDOFF/BOOTSTRAP_SESSION_10.md.
   `procnto` = 0 SMCs). The monitor is the TI ROM monitor.
 - The documented service table (0x100 L2X0 DBG_CTRL, 0x102 L2X0 CTRL,
   0x101 L2 clean+inv by PA, 0x108 SCU_PWR/suspend, 0x109 L2X0 AUXCTRL,
-  0x113 L2X0 PREFETCH) is **complete for L2: there is NO tag/data-latency
-  service**.
+  0x113 L2X0 PREFETCH) — **ERRATUM 2026-09-11 (bootrom RE, TRM §27.5
+  Table 27-61): the claim "no tag/data-latency service exists" was
+  WRONG — 0x112 writes the PL310 Tag AND Data RAM Latency registers
+  (r0 = tag, r1 = data). The ROM itself never touches PL310 directly
+  (0 direct L2 constants in the dump); L2 work routes through these
+  services. 0x112 = untested on this HS unit (rejection risk like the
+  PPA 0x25/0x23 pair) but one mon_call + readback answers it. See
+  bootdumps-2026-09-11/BOOTROM-RE.md and
+  newdocs/audit-approach-2026-09-11.md.**
 - PPA probe (run PPA-1): 0x25 and 0x23 rejected (0xFF02), 0x26/0x27
   (devpm's suspend pair) accepted with no PL310 readback change.
   Secure-side L2 reconfiguration is **exhausted** as a fix path.
