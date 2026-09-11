@@ -1007,7 +1007,7 @@
  #endif
 
 --- a/arch/arm/mm/dma-mapping.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/dma-mapping.c	2026-09-11 21:17:00.975847047 +0000
++++ b/arch/arm/mm/dma-mapping.c	2026-09-11 21:30:21.219848168 +0000
 @@ -270,6 +270,8 @@
  void __init dma_contiguous_remap(void)
  {
@@ -1035,7 +1035,7 @@
  		map.length = end - start;
  		map.type = MT_MEMORY_DMA_READY;
  
-@@ -298,11 +311,41 @@
+@@ -298,11 +311,57 @@
  		for (addr = __phys_to_virt(start); addr < __phys_to_virt(end);
  		     addr += PMD_SIZE)
  			pmd_clear(pmd_off_k(addr));
@@ -1055,19 +1055,35 @@
 +		 * CPU1 = the wedge (bc[1] frozen at 145 = the pmd_clear
 +		 * marker, the TLBIALL never completed). Do it locally:
 +		 * TLBIALL + dsb nosh + isb. */
-+		/* PlayBook W-71 (2026-09-11, session 11): the W-70 run proved
-+		 * ACTLR.FW=0+SMP=0 does NOT cure this block (bc[3]=0x0, still
-+		 * bc[1]=145) — and across #137/#138/#139/#140 the death never
-+		 * moved despite three different barrier encodings (and #137
-+		 * even wedged at its ENTRY dsb, before any TLB op). The block
-+		 * ops wedge FLAKILY at this boot point. Bisect inside:
-+		 * bc[27] phases (0xE1 span, unused): 01 = post-TLBIALL,
-+		 * 02 = post-DSB, 03 = post-ISB; the put(146) follows. Each
-+		 * phase = a pb_bc_put (DRAM-truth guaranteed — the W-50
-+		 * lesson); if a phase-put wedges internally, the readback
-+		 * names the PREVIOUS op anyway. */
-+		asm volatile("mcr p15, 0, %0, c8, c7, 0" :: "r"(0) : "memory");
-+		pb_bc_put(0xD000006C, 0xE1000001u);	/* post-TLBIALL */
++		/* PlayBook W-72 (2026-09-11, session 11): the W-71 bisect:
++		 * bc[27] = the F5 residue = NO E1 phase landed = the wedge is
++		 * AT the TLBIALL mcr or at the first fetch/access after it
++		 * (the first post-TLBIALL access = a re-walk). Across
++		 * #137-#141 the wedge never moved with the barrier encoding
++		 * OR the ACTLR state (SMP=1+FW=1 / SMP=0+FW=1 / SMP=0+FW=0
++		 * all wedged) — the TLBIALL mcr = the only constant left.
++		 * THE A/B TEST: SKIP the TLBIALL this run. The stale-TLB
++		 * risk for the pmd_clear'd CMA VAs = old section descs for
++		 * the SAME PA (memory-type) — tolerable for one diagnostic
++		 * run. Outcomes: passes 146/147 = the TLBIALL is the
++		 * deterministic wedge; still wedges = the wedge is the boot
++		 * point itself, not the TLB op. Also: the pre-TLBIALL phase
++		 * (0xE1000004) + the pgd poison-pair dump into bc[28..31]
++		 * (0x90000070-0x7C, free DRAM before the ring2 header) —
++		 * the sweep is CONSISTENCY-only and [0xdfc/0xdfd] were never
++		 * proven rewritten (the #111 plan's rewrite half was never
++		 * implemented). */
++		{
++			u32 *pb_pgd = (u32 *)swapper_pg_dir;
++			pb_bc_put(0xD0000070, pb_pgd[0xdfa]);	/* bc[28] */
++			pb_bc_put(0xD0000074, pb_pgd[0xdfc]);	/* bc[29] */
++			pb_bc_put(0xD0000078, pb_pgd[0xdfd]);	/* bc[30] */
++			pb_bc_put(0xD000007C, pb_pgd[0xdfe]);	/* bc[31] */
++		}
++		pb_bc_put(0xD000006C, 0xE1000004u);	/* pre-TLBIALL (skipped op) */
++		/* PlayBook W-72: the TLBIALL mcr is COMMENTED OUT for this A/B:
++		 * asm volatile("mcr p15, 0, %0, c8, c7, 0" :: "r"(0) : "memory"); */
++		pb_bc_put(0xD000006C, 0xE1000001u);	/* post-(skipped)TLBIALL */
 +		asm volatile(".word 0xF57FF04F" ::: "memory");	/* dsb sy — PlayBook 2026-09-11 (session 11, W-70): the W-68 literal was f57ff062 = an ISB-class encoding with an invalid option, unpredictable on the A9 — almost certainly the W-69 death site (F5-span landed, 145 the last bc write). Restored to the true DSB SY; with ACTLR.FW+SMP cleared in start_kernel (the W-70 fix) it is CPU-local. */
 +		pb_bc_put(0xD000006C, 0xE1000002u);	/* post-DSB */
 +		asm volatile(".word 0xF57FF06F" ::: "memory");	/* isb */
