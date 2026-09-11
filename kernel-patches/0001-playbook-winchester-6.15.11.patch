@@ -794,8 +794,8 @@
  	b	__fixup_a_pv_table
 
 --- a/arch/arm/kernel/setup.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/setup.c	2026-09-11 15:53:47.347223948 +0000
-@@ -1101,7 +1101,47 @@
++++ b/arch/arm/kernel/setup.c	2026-09-11 16:00:31.747222854 +0000
+@@ -1101,9 +1101,51 @@
  	if (__atags_pointer)
  		atags_vaddr = FDT_VIRT_BASE(__atags_pointer);
  
@@ -841,9 +841,13 @@
 +	}
 +	pb_bc_put(0xD000006C, 0xF4000003u);		/* pre atags check */
  	if (atags_vaddr) {
++		pb_bc_put(0xD000006C, 0xF5000001u);	/* pre fdt call */
  		mdesc = setup_machine_fdt(atags_vaddr);
++		pb_bc_put(0xD000006C, 0xF5000002u);	/* post fdt call */
  		if (mdesc)
-@@ -1118,6 +1158,7 @@
+ 			memblock_reserve(__atags_pointer,
+ 					 fdt_totalsize(atags_vaddr));
+@@ -1118,6 +1160,7 @@
  			early_print("  r2[]=%*ph\n", 16, atags_vaddr);
  		dump_machine_table();
  	}
@@ -851,7 +855,7 @@
  
  	machine_desc = mdesc;
  	machine_name = mdesc->name;
-@@ -1134,8 +1175,10 @@
+@@ -1134,8 +1177,10 @@
  
  	early_fixmap_init();
  	early_ioremap_init();
@@ -862,7 +866,7 @@
  
  #ifdef CONFIG_MMU
  	early_mm_init(mdesc);
-@@ -1151,11 +1194,27 @@
+@@ -1151,11 +1196,27 @@
  	arm_memblock_init(mdesc);
  	/* Memory may have been removed so recalculate the bounds. */
  	adjust_lowmem_bounds();
