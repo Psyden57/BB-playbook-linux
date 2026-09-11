@@ -104,7 +104,7 @@
  	return 0;
 
 --- a/arch/arm/kernel/head-common.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head-common.S	2026-09-11 17:42:26.155073063 +0000
++++ b/arch/arm/kernel/head-common.S	2026-09-11 18:05:55.709546927 +0000
 @@ -79,6 +79,20 @@
  	mov	r7, r1
  	mov	r8, r2
@@ -126,7 +126,7 @@
  
  	adr	r4, __mmap_switched_data
  	mov	fp, #0
-@@ -103,10 +117,37 @@
+@@ -103,17 +117,72 @@
   THUMB(	mov	sp, r3 )
  	sub	r2, r1, r0
  	mov	r1, #0
@@ -157,15 +157,19 @@
 +	 * instead (str_va needs a tmp register — r1 is dead here). */
 +	ldr	r1, =__current
 +	str	r0, [r1]
-+
+ 
 +	ldr	r1, =0xD000006C
 +	ldr	r0, =0xF6000001
 +	str	r0, [r1]
 +	dsb
- 
++
++	ldr	r1, =0xD000006C
++	ldr	r0, =0xF6000002
++	str	r0, [r1]
++	dsb
  	ldmia	r4, {r0, r1, r2, r3}
  	str	r9, [r0]			@ Save processor ID
-@@ -114,6 +155,26 @@
+ 	str	r7, [r1]			@ Save machine type
  	str	r8, [r2]			@ Save atags pointer
  	cmp	r3, #0
  	strne	r10, [r3]			@ Save control register values
@@ -176,11 +180,15 @@
 +	 * proved r2 = the DTB arrives here, bc[12] read it back as 0.
 +	 * Clean the line: DCCMVAC = L1 -> PoC; with the L2 off that is
 +	 * DRAM directly. */
++	ldr	r1, =0xD000006C
++	ldr	r0, =0xF6000003
++	str	r0, [r1]
++	dsb
 +	ldr	r0, [r2]
 +	mcr	p15, 0, r0, c7, c10, 1		@ DCCMVAC the .init.data line
 +	dsb
 +	ldr	r1, =0xD000006C
-+	ldr	r0, =0xF6000002
++	ldr	r0, =0xF6000004
 +	str	r0, [r1]
 +	dsb
 +	@ PlayBook: bc = 117 - plain store (the 0xD00 section is DEVICE-mapped;
