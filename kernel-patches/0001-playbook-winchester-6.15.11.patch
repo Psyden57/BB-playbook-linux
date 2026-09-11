@@ -1007,7 +1007,7 @@
  #endif
 
 --- a/arch/arm/mm/dma-mapping.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/dma-mapping.c	2026-09-11 21:30:21.219848168 +0000
++++ b/arch/arm/mm/dma-mapping.c	2026-09-11 21:58:26.147847183 +0000
 @@ -270,6 +270,8 @@
  void __init dma_contiguous_remap(void)
  {
@@ -1035,7 +1035,7 @@
  		map.length = end - start;
  		map.type = MT_MEMORY_DMA_READY;
  
-@@ -298,11 +311,57 @@
+@@ -298,11 +311,63 @@
  		for (addr = __phys_to_virt(start); addr < __phys_to_virt(end);
  		     addr += PMD_SIZE)
  			pmd_clear(pmd_off_k(addr));
@@ -1081,9 +1081,15 @@
 +			pb_bc_put(0xD000007C, pb_pgd[0xdfe]);	/* bc[31] */
 +		}
 +		pb_bc_put(0xD000006C, 0xE1000004u);	/* pre-TLBIALL (skipped op) */
-+		/* PlayBook W-72: the TLBIALL mcr is COMMENTED OUT for this A/B:
-+		 * asm volatile("mcr p15, 0, %0, c8, c7, 0" :: "r"(0) : "memory"); */
-+		pb_bc_put(0xD000006C, 0xE1000001u);	/* post-(skipped)TLBIALL */
++		/* PlayBook W-73: the TLBIALL is BACK — the payload now PARKS
++		 * CPU1 (the --hello release mechanics: AUX_BOOT_1 -> a spin
++		 * blob in IRAM) instead of holding it in warm reset, so the
++		 * SCU's CPU1 port is alive and the TLB-op broadcasts
++		 * complete (the W-72 A/B proved the held-CPU1 TLB-op wedge).
++		 * The E1 phases stay: if anything still wedges, the readback
++		 * names the op. */
++		asm volatile("mcr p15, 0, %0, c8, c7, 0" :: "r"(0) : "memory");
++		pb_bc_put(0xD000006C, 0xE1000001u);	/* post-TLBIALL */
 +		asm volatile(".word 0xF57FF04F" ::: "memory");	/* dsb sy — PlayBook 2026-09-11 (session 11, W-70): the W-68 literal was f57ff062 = an ISB-class encoding with an invalid option, unpredictable on the A9 — almost certainly the W-69 death site (F5-span landed, 145 the last bc write). Restored to the true DSB SY; with ACTLR.FW+SMP cleared in start_kernel (the W-70 fix) it is CPU-local. */
 +		pb_bc_put(0xD000006C, 0xE1000002u);	/* post-DSB */
 +		asm volatile(".word 0xF57FF06F" ::: "memory");	/* isb */
