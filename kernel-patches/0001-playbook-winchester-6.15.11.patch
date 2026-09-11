@@ -148,8 +148,8 @@
  #endif
 
 --- a/arch/arm/kernel/head.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head.S	2026-09-04 12:28:44.980386446 +0000
-@@ -98,6 +98,125 @@
++++ b/arch/arm/kernel/head.S	2026-09-11 16:36:34.591223101 +0000
+@@ -98,6 +98,134 @@
   THUMB(	.thumb			)	@ switch to Thumb now.
   THUMB(1:			)
  
@@ -268,6 +268,15 @@
 +						@ printascii) — found via the ring
 +						@ (r1=0x20, r2=0 at setup_arch,
 +						@ 2026-09-02 run 16: mdesc=NULL)
++	/* PlayBook W-56 (2026-09-11): dump the INCOMING r1/r2 at stext via
++	 * MMU-off SO stores (DRAM truth) — bc[24] = r2 (dtb), bc[25] = r1
++	 * (machine id). The W-55 fix (the decompressor's __enter_kernel
++	 * recovering the appended DTB from the bc page) did not help:
++	 * r2 still arrives as 0 (bc[12]) — observe the value HERE, before
++	 * anything in the kernel's own path can touch it. */
++	ldr	r3, =0x90000060
++	str	r2, [r3]
++	str	r1, [r3, #4]
 +	b	9801f
 +	.ltorg
 +	.align	2
@@ -275,7 +284,7 @@
  #ifdef CONFIG_ARM_VIRT_EXT
  	bl	__hyp_stub_install
  #endif
-@@ -105,6 +224,38 @@
+@@ -105,6 +233,38 @@
  	safe_svcmode_maskall r9
  
  	mrc	p15, 0, r9, c0, c0		@ get processor id
@@ -314,7 +323,7 @@
  	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid
  	movs	r10, r5				@ invalid processor (r5=0)?
   THUMB( it	eq )		@ force fixup-able long branch encoding
-@@ -124,19 +275,163 @@
+@@ -124,19 +284,163 @@
  #else
  	ldr	r8, =PLAT_PHYS_OFFSET		@ always constant in this case
  #endif
@@ -479,7 +488,7 @@
  
  	/*
  	 * The following calls CPU specific code in a position independent
-@@ -229,6 +524,12 @@
+@@ -229,6 +533,12 @@
  #endif
  
  	ldr	r7, [r10, #PROCINFO_MM_MMUFLAGS] @ mm_mmuflags
@@ -492,7 +501,7 @@
  
  	/*
  	 * Create identity mapping to cater for __enable_mmu.
-@@ -343,6 +644,99 @@
+@@ -343,6 +653,99 @@
  	str	r3, [r0], #4
  #endif
  
@@ -592,7 +601,7 @@
  #else /* CONFIG_DEBUG_ICEDCC || CONFIG_DEBUG_SEMIHOSTING */
  	/* we don't need any serial debugging mappings */
  	ldr	r7, [r10, #PROCINFO_IO_MMUFLAGS] @ io_mmuflags
-@@ -373,6 +767,7 @@
+@@ -373,6 +776,7 @@
  #ifdef CONFIG_ARM_LPAE
  	sub	r4, r4, #0x1000		@ point to the PGD table
  #endif
@@ -600,7 +609,7 @@
  	ret	lr
  ENDPROC(__create_page_tables)
  	.ltorg
-@@ -465,6 +860,13 @@
+@@ -465,6 +869,13 @@
   *  r13 = *virtual* address to jump to upon completion
   */
  __enable_mmu:
@@ -614,7 +623,7 @@
  #if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
  	orr	r0, r0, #CR_A
  #else
-@@ -482,6 +884,13 @@
+@@ -482,6 +893,13 @@
  #ifdef CONFIG_ARM_LPAE
  	mcrr	p15, 0, r4, r5, c2		@ load TTBR0
  #else
@@ -628,7 +637,7 @@
  	mov	r5, #DACR_INIT
  	mcr	p15, 0, r5, c3, c0, 0		@ load domain access register
  	mcr	p15, 0, r4, c2, c0, 0		@ load page table pointer
-@@ -506,12 +915,28 @@
+@@ -506,12 +924,28 @@
  	.align	5
  	.pushsection	.idmap.text, "ax"
  ENTRY(__turn_mmu_on)
