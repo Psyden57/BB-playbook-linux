@@ -104,7 +104,7 @@
  	return 0;
 
 --- a/arch/arm/kernel/head-common.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head-common.S	2026-09-11 17:03:47.547223859 +0000
++++ b/arch/arm/kernel/head-common.S	2026-09-11 17:13:29.551422189 +0000
 @@ -79,6 +79,20 @@
  	mov	r7, r1
  	mov	r8, r2
@@ -126,7 +126,7 @@
  
  	adr	r4, __mmap_switched_data
  	mov	fp, #0
-@@ -103,10 +117,30 @@
+@@ -103,17 +117,58 @@
   THUMB(	mov	sp, r3 )
  	sub	r2, r1, r0
  	mov	r1, #0
@@ -143,21 +143,22 @@
  	bl	__memset			@ clear .bss
 +	pbmarkv	126			@ PlayBook: bss clear survived
  
++	@ PlayBook W-60: the death is immediately after the pbmarkv 126's
++	@ return (bc[27] = the F4000003 residue on two runs = the W-59 tail
++	@ markers never fired). Fine markers: bc[27] = 0xF6000001 post-
++	@ set_current, 0xF6000002 post-strs. r0/r1 dead here; r4 = the
++	@ __mmap_switched_data pointer must survive.
  	adr_l	r0, init_task			@ get swapper task_struct
  	set_current r0, r1
-+	/* PlayBook W-59: the death is in this tail (bc[1]=126 was the last
-+	 * landed marker; bc[12] = the DTB landed — the W-58 fix works).
-+	 * bc[27]: 0xF6000001 post-set_current, ...02 post-strs. */
-+	ldr	r0, =0xD000006C
-+	mov	r1, #0xF6000001
-+	str	r1, [r0]
-+	dsb
-+	adr_l	r0, init_task			@ re-load (marker clobbered r0)
-+	set_current r0, r1
  
++	ldr	r1, =0xD000006C
++	mov	r0, #0xF6000001
++	str	r0, [r1]
++	dsb
++
  	ldmia	r4, {r0, r1, r2, r3}
  	str	r9, [r0]			@ Save processor ID
-@@ -114,6 +148,26 @@
+ 	str	r7, [r1]			@ Save machine type
  	str	r8, [r2]			@ Save atags pointer
  	cmp	r3, #0
  	strne	r10, [r3]			@ Save control register values
@@ -171,15 +172,15 @@
 +	ldr	r0, [r2]
 +	mcr	p15, 0, r0, c7, c10, 1		@ DCCMVAC the .init.data line
 +	dsb
-+	ldr	r0, =0xD000006C
-+	mov	r1, #0xF6000002
-+	str	r1, [r0]
++	ldr	r1, =0xD000006C
++	mov	r0, #0xF6000002
++	str	r0, [r1]
 +	dsb
 +	@ PlayBook: bc = 117 - plain store (the 0xD00 section is DEVICE-mapped;
 +	@ no DCCMVAC/CIPA/sync ritual - it wedged the L2-on boot, 2026-09-02).
-+	ldr	r0, =0xD0000004
-+	mov	r1, #117
-+	str	r1, [r0]
++	ldr	r1, =0xD0000004
++	mov	r0, #117
++	str	r0, [r1]
 +	dsb
  #ifdef CONFIG_KASAN
  	bl	kasan_early_init
