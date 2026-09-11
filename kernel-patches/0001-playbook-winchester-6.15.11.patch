@@ -104,7 +104,7 @@
  	return 0;
 
 --- a/arch/arm/kernel/head-common.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head-common.S	2026-09-11 16:53:55.647224323 +0000
++++ b/arch/arm/kernel/head-common.S	2026-09-11 17:03:47.547223859 +0000
 @@ -79,6 +79,20 @@
  	mov	r7, r1
  	mov	r8, r2
@@ -126,7 +126,7 @@
  
  	adr	r4, __mmap_switched_data
  	mov	fp, #0
-@@ -103,7 +117,18 @@
+@@ -103,10 +117,30 @@
   THUMB(	mov	sp, r3 )
  	sub	r2, r1, r0
  	mov	r1, #0
@@ -145,7 +145,19 @@
  
  	adr_l	r0, init_task			@ get swapper task_struct
  	set_current r0, r1
-@@ -114,6 +139,22 @@
++	/* PlayBook W-59: the death is in this tail (bc[1]=126 was the last
++	 * landed marker; bc[12] = the DTB landed — the W-58 fix works).
++	 * bc[27]: 0xF6000001 post-set_current, ...02 post-strs. */
++	ldr	r0, =0xD000006C
++	mov	r1, #0xF6000001
++	str	r1, [r0]
++	dsb
++	adr_l	r0, init_task			@ re-load (marker clobbered r0)
++	set_current r0, r1
+ 
+ 	ldmia	r4, {r0, r1, r2, r3}
+ 	str	r9, [r0]			@ Save processor ID
+@@ -114,6 +148,26 @@
  	str	r8, [r2]			@ Save atags pointer
  	cmp	r3, #0
  	strne	r10, [r3]			@ Save control register values
@@ -158,6 +170,10 @@
 +	 * DRAM directly. */
 +	ldr	r0, [r2]
 +	mcr	p15, 0, r0, c7, c10, 1		@ DCCMVAC the .init.data line
++	dsb
++	ldr	r0, =0xD000006C
++	mov	r1, #0xF6000002
++	str	r1, [r0]
 +	dsb
 +	@ PlayBook: bc = 117 - plain store (the 0xD00 section is DEVICE-mapped;
 +	@ no DCCMVAC/CIPA/sync ritual - it wedged the L2-on boot, 2026-09-02).
