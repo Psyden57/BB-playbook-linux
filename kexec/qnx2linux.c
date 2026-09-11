@@ -602,10 +602,19 @@ static int buf_placement_bad(uint8_t *b, off64_t p, size_t size)
 
 static int g_l2on;      /* --l2on: keep the PL310 enabled through the jump */
 static int g_dmaquiet;  /* --dmaquiet: softreset MMC2 (eMMC DMA master) pre-jump */
+/* PlayBook W-47 (2026-09-11): the fresh-boot (post-battery-pull) QNX pool
+ * has NO 24 MB contiguous run at all (frag=129 on every hinted slot,
+ * protected=12 -> NONE, twice) — but the buffer only NEEDS ~9 MB on the
+ * no-probe path (kernel 5.6 MB + DTB 90 KB + pad; the cont/params live
+ * in IRAM). Size the buffer to fit: 12 MB when no probe is loaded. */
+#define T3_BUF_NOPROBE 0xC00000u    /* 12 MB — enough for zImage+DTB */
+static uint32_t g_bufsize = T3_BUF_SIZE;
 
 static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
 {
     size_t zlen, dlen, plen = 0, padded;
+    if (!probepath)
+        g_bufsize = T3_BUF_NOPROBE;   /* W-47: no probe => 12 MB buffer */
     uint8_t *zimg, *dtb, *probe = NULL;
     volatile uint8_t *iram;
     volatile uint32_t *tt, *rst, *gicd;
@@ -724,13 +733,13 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
     wdt2_kick();
 
     /* zImage (with appended DTB) + standalone DTB read */
-    zimg = readfile2(zpath, &zlen, T3_BUF_SIZE);
+    zimg = readfile2(zpath, &zlen, g_bufsize);
     dtb = readfile2(dtbpath, &dlen, 0x100000);
     bc_write(42);   /* heartbeat: files read */
     padded = (zlen + 7u) & ~(size_t)7u;
     /* W-3 worst case: the kernel may sit up to 2MB into the buffer
      * (kern_off, below) — size the check for that */
-    if (0x1FFFFFu + 0x8000u + padded + dlen + ZIMG_PAD_MAX > T3_BUF_SIZE) {
+    if (0x1FFFFFu + 0x8000u + padded + dlen + ZIMG_PAD_MAX > g_bufsize) {
         fprintf(stderr, "zImage+DTB too big: %zu+%zu\n", zlen, dlen);
         return 1;
     }
@@ -778,47 +787,47 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
             c_bank = 0, c_prot = 0, c_alias = 0;
         for (a = 0; a < 129 && !buf; a++) {
             off64_t off = 0xA0000000ll + (off64_t)a * 0x200000ll;
-            uint8_t *b = mmap(0, T3_BUF_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC,
+            uint8_t *b = mmap(0, g_bufsize, PROT_READ | PROT_WRITE | PROT_EXEC,
                               MAP_ANON | MAP_PHYS | MAP_SHARED, NOFD, off);
             off64_t p = 0;
             contig = 0;
             sweep++;
             if (b == MAP_FAILED) { c_mmap++; continue; }
-            if (mem_offset64(b, NOFD, T3_BUF_SIZE, &p, &contig) == -1 ||
-                contig < T3_BUF_SIZE) { c_frag++; munmap(b, T3_BUF_SIZE); continue; }
-            if (p != off) { c_moved++; munmap(b, T3_BUF_SIZE); continue; }
-            if (p + (off64_t)T3_BUF_SIZE > 0xC0000000ll ||
-                p + 0x10000000ll > 0xC0000000ll) { c_bank++; munmap(b, T3_BUF_SIZE); continue; }
+            if (mem_offset64(b, NOFD, g_bufsize, &p, &contig) == -1 ||
+                contig < g_bufsize) { c_frag++; munmap(b, g_bufsize); continue; }
+            if (p != off) { c_moved++; munmap(b, g_bufsize); continue; }
+            if (p + (off64_t)g_bufsize > 0xC0000000ll ||
+                p + 0x10000000ll > 0xC0000000ll) { c_bank++; munmap(b, g_bufsize); continue; }
             if (((uintptr_t)b & 0xFFFFFull) != ((uint32_t)p & 0xFFFFFull)) {
                 if (c_alias < 3)
                     printf("slot %08llx: VA/PA sub-1MB mismatch (va %p pa %llx)\n",
                            (unsigned long long)p, (void *)b, (unsigned long long)p);
-                c_alias++; munmap(b, T3_BUF_SIZE); continue;
+                c_alias++; munmap(b, g_bufsize); continue;
             }
-            if (buf_placement_bad(b, p, T3_BUF_SIZE)) { c_prot++; munmap(b, T3_BUF_SIZE); continue; }
+            if (buf_placement_bad(b, p, g_bufsize)) { c_prot++; munmap(b, g_bufsize); continue; }
             buf = b; phys = p;
         }
         if (!buf) {
             /* generic fallback: any address QNX will give (usually fails
              * the 2MB alignment, but costs nothing to try) */
             for (a = 0; a < 12 && !buf; a++) {
-                uint8_t *b = mmap(0, T3_BUF_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC,
+                uint8_t *b = mmap(0, g_bufsize, PROT_READ | PROT_WRITE | PROT_EXEC,
                                   MAP_ANON | MAP_PHYS | MAP_SHARED, NOFD, 0);
                 off64_t p = 0;
                 contig = 0;
                 if (b == MAP_FAILED) { c_mmap++; break; }
-                if (mem_offset64(b, NOFD, T3_BUF_SIZE, &p, &contig) == -1 ||
-                    contig < T3_BUF_SIZE) { c_frag++; munmap(b, T3_BUF_SIZE); continue; }
+                if (mem_offset64(b, NOFD, g_bufsize, &p, &contig) == -1 ||
+                    contig < g_bufsize) { c_frag++; munmap(b, g_bufsize); continue; }
                 /* alignment NOT required here: kern_off (below) places the
                  * kernel at a 2MB-aligned offset inside the buffer (W-3:
                  * QNX's free pool has no aligned 24MB run) */
                 if (p < 0xA0000000ll || p + 0x10000000ll > 0xC0000000ll) {
-                    c_bank++; munmap(b, T3_BUF_SIZE); continue;
+                    c_bank++; munmap(b, g_bufsize); continue;
                 }
                 if (((uintptr_t)b & 0xFFFFFull) != ((uint32_t)p & 0xFFFFFull)) {
-                    c_alias++; munmap(b, T3_BUF_SIZE); continue;
+                    c_alias++; munmap(b, g_bufsize); continue;
                 }
-                if (buf_placement_bad(b, p, T3_BUF_SIZE)) { c_prot++; munmap(b, T3_BUF_SIZE); continue; }
+                if (buf_placement_bad(b, p, g_bufsize)) { c_prot++; munmap(b, g_bufsize); continue; }
                 buf = b; phys = p;
             }
         }
@@ -834,7 +843,7 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         return 1;
     }
     printf("jump buffer v=%p phys=0x%llx size=%u contig=%llu\n", (void *)buf,
-           (unsigned long long)phys, T3_BUF_SIZE, (unsigned long long)contig);
+           (unsigned long long)phys, g_bufsize, (unsigned long long)contig);
     /* W-31: record the chosen placement BEFORE the memtest/copies — W-30
      * died between bc 31 and bc 39 (memtest/copy phase, box frozen) with
      * the placement unrecoverable (bc[3] is only written at bc 39). If a
@@ -857,7 +866,7 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
 
     /* Blob placed at buffer + blob_off: the kernel entry (kern_phys+0x8000)
      * must be (2MB-aligned + 0x8000) — head.S derives PHYS_OFFSET. */
-    nc = mapdev(phys, T3_BUF_SIZE);
+    nc = mapdev(phys, g_bufsize);
     {
         /* DRAM integrity sweep: single-bit flips in the buffer region
          * corrupt the kernel image/table at placement-dependent offsets —
@@ -867,9 +876,9 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         static const uint32_t pat[4] = { 0xA5A5A5A5u, 0x5A5A5A5Au,
                                          0xFFFFFFFFu, 0x00000000u };
         volatile uint32_t *nv = (volatile uint32_t *)nc;
-        size_t words = T3_BUF_SIZE / 4;
+        size_t words = g_bufsize / 4;
         int pi;
-        printf("memtest: sweeping %zu KB\n", T3_BUF_SIZE / 1024);
+        printf("memtest: sweeping %zu KB\n", g_bufsize / 1024);
         for (pi = 0; pi < 4; pi++) {
             size_t wi;
             for (wi = 0; wi < words; wi++) nv[wi] = pat[pi];
