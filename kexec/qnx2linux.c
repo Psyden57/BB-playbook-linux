@@ -794,6 +794,29 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
      * gives the kernel its own full window. */
     wdt2_kick();
 
+    /* PlayBook W-91 (session 13): the WHOLE-DRAM fossil sweep. W-90a
+     * nailed the mechanism (the L2 = a cross-run fossil record: W-88's
+     * kernel-era DTB-header line served W-90a's cached read at the same
+     * PA, across the WDT2 reset + QNX's reboot) and W-90c proved the
+     * dest+buffer sweeps do NOT cure the early C (the W-84 triad
+     * reproduced) — the fossils live everywhere the early C's memblock
+     * allocations land. ONE early clean+inv sweep of the whole DRAM
+     * window, QNX-safe (0x7F0 = clean-first: every QNX dirty line goes
+     * to DRAM before eviction; QNX keeps running through it; the
+     * payload's own stack/heap lines = cleaned, not lost), placed
+     * BEFORE the file reads so nothing we stage gets re-fossilized.
+     * ~1GB = 33.5M line ops at the W-90b-proven ~33M ops/s = ~1-2 s.
+     * Heartbeats: bc[29] = chunks, bc[30] = sync timeouts (rule 10
+     * bounded polls); bc_write(36) = survived. The bc-51 dest/buffer
+     * sweeps stay = belt-and-braces (the re-dirty window between here
+     * and the jump = QNX-current lines only). --l2on only (one
+     * variable). */
+    if (g_l2on) {
+        bc[30] = l2c_ns_line_range(0x7F0, 0x80000000ull, 0x40000000u,
+                                   &bc[29]);
+        bc_write(36);   /* heartbeat: the whole-DRAM sweep survived */
+    }
+
     /* zImage (with appended DTB) + standalone DTB read */
     zimg = readfile2(zpath, &zlen, g_bufsize);
     dtb = readfile2(dtbpath, &dlen, 0x100000);
