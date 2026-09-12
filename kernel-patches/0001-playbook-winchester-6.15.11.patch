@@ -823,8 +823,26 @@
  	b	__fixup_a_pv_table
 
 --- a/arch/arm/kernel/setup.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/setup.c	2026-09-11 19:53:13.871224682 +0000
-@@ -1100,10 +1100,74 @@
++++ b/arch/arm/kernel/setup.c	2026-09-12 00:32:53.591846337 +0000
+@@ -608,7 +608,16 @@
+ 	 * using percpu variable early, for example, lockdep will
+ 	 * access percpu variable inside lock_release
+ 	 */
+-	set_my_cpu_offset(0);
++	/* PlayBook 2026-09-11 (session 11, W-81): set_my_cpu_offset(0) =
++	 * mcr p15,0,r0,c13,c0,4 (TPIDRPRW) = the W-63 CP13-write wedge
++	 * class — the machine cannot execute CP13 TLS-register writes
++	 * post-jump (W-63 proved TPIDRURO; the W-78/79 runs died HERE
++	 * deterministically: bc[1]=150, the very next marker never landed).
++	 * SKIPPED: the boot CPU's percpu offset = 0 by definition and
++	 * QNX leaves TPIDRPRW = 0, so the write is a semantic no-op; the
++	 * percpu accesses read the register (mrc c13,c0,3 = proven fine,
++	 * W-38/39) and only the writes wedge. */
++	/* set_my_cpu_offset(0); */
+ 
+ 	pr_info("Booting Linux on physical CPU 0x%x\n", mpidr);
+ }
+@@ -1100,10 +1109,74 @@
  
  	if (__atags_pointer)
  		atags_vaddr = FDT_VIRT_BASE(__atags_pointer);
@@ -840,7 +858,7 @@
 +			atags_vaddr = FDT_VIRT_BASE(__atags_pointer);
 +		}
 +	}
-+
+ 
 +	/* PlayBook kexec: fine-grained bc markers in the 118..110 window.
 +	 * Triple-channel: bc[1] = full flush (DCCMVAC + PL310 CIPA + bounded
 +	 * sync poll); bc[2] = flush-free SO store (v|0x100, reaches DRAM only
@@ -860,7 +878,7 @@
 +	dsb(sy); /* PlayBook 2026-09-11 (session 11, W-70): restored (see \
 +pb_bc_put in main.c — the W-69 "nosh" never existed on the hardware). */ \
 +} while (0)
- 
++
 +	pb_bc(136);			/* setup_arch entered */
  	setup_processor();
 +	pb_bc(130);			/* setup_processor done */
@@ -899,7 +917,7 @@
  		if (mdesc)
  			memblock_reserve(__atags_pointer,
  					 fdt_totalsize(atags_vaddr));
-@@ -1118,6 +1182,7 @@
+@@ -1118,6 +1191,7 @@
  			early_print("  r2[]=%*ph\n", 16, atags_vaddr);
  		dump_machine_table();
  	}
@@ -907,7 +925,7 @@
  
  	machine_desc = mdesc;
  	machine_name = mdesc->name;
-@@ -1134,8 +1199,10 @@
+@@ -1134,8 +1208,10 @@
  
  	early_fixmap_init();
  	early_ioremap_init();
@@ -918,7 +936,7 @@
  
  #ifdef CONFIG_MMU
  	early_mm_init(mdesc);
-@@ -1151,11 +1218,27 @@
+@@ -1151,11 +1227,27 @@
  	arm_memblock_init(mdesc);
  	/* Memory may have been removed so recalculate the bounds. */
  	adjust_lowmem_bounds();
