@@ -2743,3 +2743,53 @@ LESSONS:
   prerequisite for any further L2-on work.
 - The 0xAA clean-machine baseline = a reliable freshness discriminator
   (any real marker = unmistakable against it).
+
+### Run W-86 (2026-09-12, session 12): kernel #154b (the ring BATCH flush)
+### + the payload's magenta pre-jump marker — ★ THE JUMP ITSELF DIED:
+### bc[1]=52 (the payload's last marker), enter_stub NEVER surfaced — no
+### stub echo, no probe, no kernel marker; the WDT2 expired 59 s later
+
+Pre-run: the --ledprobe run = the direct NS access to I2C4 SIGBUSed
+(fltno=5, the MMCHS secure-filter class; the box survived) => the
+kernel-side LED colors + the payload AUTOIDLE force-off are CLOSED;
+reverted. Kept: the ring flush (the PL310 = proven NS-accessible) +
+the payload's magenta via the QNX devctl.
+
+Run: PAYLOAD_MODE=--l2on ./jump.sh zImage, kernel #154b (5,229,193 B =
+#153 + the ring batch flush ONLY — pb_led fully removed), the payload =
+the W-84 fix + led_color_qnx(0x0A) (magenta) right before enter_stub.
+
+**THE LED TIMELINE (the user's video — the scheme WORKED):**
+- 00:05 blue = the payload running
+- 00:34 magenta (seen as "red also on") = the payload's last act, the
+  kernel owns the machine
+- 01:33 LEDs off = the WDT2 reset (EXACTLY 59 s after the jump)
+- 01:34 red = the reboot
+
+**THE READBACK (unambiguous — the clean-machine 0xAA baseline):**
+bc[1]=52 = the payload's bc_write(52) (right before enter_stub).
+bc[6]=0x2102 = the payload's L2-on marker (NOT the stub echo — the stub
+never ran). bc[10]=1 = the L2 ON (the discriminator ✓). bc[3]/bc[18]=
+0xa3400000 = the placement (clean, non-overlapping). bc[4]=0x111 (the
+l2on branch's latency readback). bc[16]/bc[17]=0/0 (the DISPC kill ✓).
+**bc[19..31] = PURE 0xAA FILLER — no kernel writes, no W-83 residue:
+the probe, the stub, and the kernel NEVER wrote a single breadcrumb.**
+bc[15]=0xed82a95e = the fresh nonce. mirror0 = 52 (the stub's 70 never
+landed). The ring = 0 (nothing wrote it).
+
+**VERDICT: the death = INSIDE enter_stub / the trampoline-to-stub
+handoff — the earliest death ever recorded post-jump.** W-84 (the same
+flow minus the magenta, placement 0xa2e00000) ran the full chain.
+Co-deltas: (a) the magenta devctl insert (the QNX i2c3 open/devctl/
+close between bc 52 and enter_stub), (b) the placement 0xa3400000 (vs
+0xa2e00000), (c) the L2-on flake class. NOT separable from one run.
+
+LESSON (positive): the magenta marker = the post-mortem gold — the
+LED timeline alone (blue → magenta at 00:34 → off at 01:33) told us
+the jump happened and nothing ever ran, before any readback. The
+59-second magenta freeze = "the machine died at the jump" in video.
+
+NEXT (W-87): re-run the SAME build — the determinism check. A different
+placement + a working jump = the flake/the placement; the same
+enter_stub death = the magenta insert is implicated (move the color
+write earlier, before bc 41's GICD-off, or drop it).
