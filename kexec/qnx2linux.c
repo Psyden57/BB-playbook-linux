@@ -393,6 +393,10 @@ static uint32_t l2c_ns_line_range(uint32_t op, off64_t pa, uint32_t size,
                                   volatile uint32_t *heartbeat)
 {
     uint32_t chunks = 0, timeouts = 0;
+    size &= ~0x1Fu;     /* rule 13, learned W-90b: a non-32-multiple size
+                         * underflows the tail chunk's `size -= 32` into
+                         * an infinite sweep (bc[27]=476782 chunks at the
+                         * WDT2 expiry — 1.95G device stores, no cliff) */
     while (size) {
         uint32_t i;
         unsigned n;
