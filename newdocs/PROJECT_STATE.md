@@ -35,32 +35,36 @@ leading candidate = the fossils on the memblock-ALLOCATED pages (the
 early C's first cached reads of allocations anywhere in the bank) and/or
 the L1 I-cache across runs.**
 
-**THE NEXT CURE (W-91, run 2026-09-12): the whole-DRAM early 0x7F0 CIPA
-sweep** (before the file reads): ~35 s (clean+inv ≈ 1 μs/op), QNX-safe,
-survived, and the boot reached **126 again (the same front as W-90a —
-2/3 valid runs; c = the W-84 triad outlier)**. BUT the 15,519 totalsize
-read SURVIVED the whole-DRAM sweep = **NOT an L2 fossil — the open
-anomaly**: the deployed artifact chain = python-verified correct
-(the deployed zImage = the host file exactly; the appended-DTB header =
-totalsize 87321 at exactly tree_zlen; the payload's memcmp verified the
-DRAM copy), yet setup.c:1209 read 15,519. Leading candidates: the kernel
-latching onto an OLD 15,519-B DTB copy still in DRAM (the sweep =
-cache-only!), the decompressor's ATAG-compat path (r8 = the stub's TTBR0
-= nonzero), a fixed-map mis-map. Session 14: fix the bc[12]/bc[14] slot
-collision (the W-52 __atags dump is destroyed by the parse-era C0DE
-markers), add the deployed-file pre-check, dump DRAM at __atags.
+**SESSION-13 CONTINUED (W-92/W-93 — THE "15,519 ANOMALY" = A HEX/DECIMAL
+MISREAD, DISSOLVED; THE DEEPEST L2-ON RUN EVER):** the PB-RES size
+"15519" = HEX (%llx) = 0x15519 = 87,321 = the DTB's correct totalsize —
+the "old 15,519-B DTB" never existed and the W-90a DTB-fossil evidence =
+void (see the W-93 erratum in docs/03; the +0x68 = the #156 tree zImage
+growing by the capture block itself). Kernel #157's capture (setup.c,
+the DTB header kernel-side into bc[20..23]; the mmu.c pmd-dump
+colliders removed) PROVED the kernel's DTB view = perfect: the magic
+0xedfe0dd0, the totalsize 87,321, sane offsets; the reserve = correct.
+**W-93 = bc[1]=156 = THE DEEPEST L2-ON RUN EVER** — past the CMA (126),
+past map_lowmem, into the svm-memset region (the W-38-era wall). The
+REAL anomaly = the create_mapping "in user region" WARN (map_lowmem saw
+a garbage region: PA 0 @ VA 0x20 in W-90a, PA 0x42800000 @ VA 0x62 in
+W-92 — placement-dependent) while PB-MEM showed mem=1 correct — the
+memblock.memory = corrupted between the print and map_lowmem, or the md
+= stale-viewed. THE NEXT CAPTURE: the memblock.memory array at
+map_lowmem's entry (the W-92 technique).
 
 **OBSERVABILITY (proven, keep on every run):** the ring batch flush (the
 L2-on console), the LED phase markers (blue = payload, magenta at bc 42 =
 ~15 s pre-jump), the sweep heartbeats (bc[19]/bc[26] = the dest chunk/
 timeouts, bc[27]/bc[28] = the buffer's, bc[29]/bc[30] = the whole-DRAM's),
-and bc_write(48)/bc_write(36) = sweeps-survived.
+bc_write(48)/bc_write(36) = sweeps-survived, and kernel #157's DTB
+capture (bc[20..23] — the mmu.c pmd-dump colliders = removed).
 
 The two L2 states: L2-off = the deterministic TLB-op wedge (the W-72..77
-era) but DRAM-truth stores; L2-on = the fossil lottery (the sweeps moved
-the front to the W-83-era 126 position in 2/3 runs — not yet 3/3
-deterministic). Neither is bootable; the cures in flight = the 15,519
-anomaly + the CPU1 release (the real fix, the bequest).
+era) but DRAM-truth stores; L2-on = the fossil lottery (partially tamed:
+the sweeps moved the front 126 → 156). Neither is bootable yet; the
+cures in flight = the map_lowmem region-loop capture + the CPU1 release
+(the real fix, the bequest).
 
 ## Where the boot stands (the session-12 detail, for context)
 

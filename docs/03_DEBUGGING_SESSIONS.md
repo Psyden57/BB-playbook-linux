@@ -3175,3 +3175,62 @@ the kernel REALLY sees an old DTB → chase the entry chain (+0x68); if
 (3) the decompressor's atags_to_fdt entry validation (r8 = the stub's
 TTBR0 = 0x40304000 = tt[0] = 0 = should return 1 = no folding — VERIFY
 in the source, not recalled).
+
+### ERRATUM 2026-09-12 (session 13, the W-93 debrief): THE "15,519 ANOMALY"
+### = A HEX/DECIMAL MISREAD BY THE ANALYST — THE DTB CHAIN WAS ALWAYS
+### CORRECT; THE W-90a "FOSSIL SMOKING GUN" (AS A DTB EVIDENCE) IS VOID
+
+PB-RES prints with %llx = HEX: "r[0]=...+15519" = size **0x15519 =
+87,321 DECIMAL = the DTB's real totalsize** — in EVERY run since W-84.
+I read "15519" as decimal for the whole session, invented an "old
+15,519-B DTB", derived the W-90a "fossil smoking gun" from it, and
+spent W-91 (the whole-DRAM sweep) and W-92 (the kernel-side capture)
+chasing it. Rule 13 cuts both ways: the print base = part of the
+arithmetic. (The +0x68 "displacement" in W-92 = the #156 tree zImage
+growing by 104 bytes from the capture block itself — _edata moved, the
+DTB followed; also my mis-comparison against the 17:57 tree_z.)
+
+WHAT SURVIVES: (a) the L2 = a cross-run fossil record (the l2canary
+proof + the W-90b 1.95G-op behavior) — the mechanism is real, but the
+DTB evidence for it = void; (b) the sweep machinery + the heartbeats;
+(c) the whole-DRAM sweep = safe and feasible (~35 s).
+
+### Run W-93 (2026-09-12, session 13): kernel #157 (the pmd-dump
+### colliders removed, the capture = the sole owner of bc[20..23]) —
+### ★★ THE DEEPEST L2-ON RUN EVER: bc[1]=156 — PAST THE CMA, PAST
+### map_lowmem, INTO THE SVM REGION (the W-38-era wall) — AND THE DTB
+### VIEW = PROVEN CORRECT KERNEL-SIDE
+
+Kernel #157 (5,226,657 B): mmu.c's four bc[20..23] pmd-dump writers
+removed (the W-38 stale-pgd forensics = obsolete since #110); the
+W-92 capture = the sole owner of 0xD0000050..5C. Patch regenerated +
+dry-run clean.
+
+Readback: **bc[1]=156 with the pair (bc[2]=0x17f)** — the front moved
+126 → 156 = past early_fixmap_shutdown (125), past the CMA (126), past
+map_lowmem/map_kernel, INTO the svm-memset region (the decision tree's
+"150-166" band = the W-38-era wall, never reached with the L2 on).
+bc[13]=0xbfbfffd4 (a pte pointer, deeper than the 0xdfbf7000 pair),
+the placement=0xa2000000 (2MB-ALIGNED → kern_off=0, kern_phys=
+0xa2000000), ring = 1165 chars (the log to the death).
+
+**THE CAPTURE (bc[20..23]) = THE KERNEL'S DTB VIEW AT setup.c:1209:**
+bc[20] = 0xedfe0dd0 (the magic, LE-read of BE d00dfeed ✓),
+**bc[21] = 0x19550100 = the raw bytes 00 01 55 19 = BE 0x00015519 =
+87,321 = THE CORRECT TOTALSIZE**, bc[22] = 0x38000000 (off_struct
+0x38 ✓), bc[23] = 0x5c4d0100 (off_strings 0x14d5c ✓). **THE KERNEL'S
+DTB = PERFECT.** The ring's r[0]=a24eeb88+15519(hex) = the reserve =
+{__atags, 87,321} = CORRECT. The DTB delivery + reserve chain =
+exonerated end-to-end.
+
+**THE REAL ANOMALY (now isolated): the create_mapping "in user region"
+WARN — map_lowmem's region loop saw a garbage region (W-90a: PA 0 @
+VA 0x20xxxxxx; W-92: PA 0x42800000 @ VA 0x62xxxxxx) while the PB-MEM
+print (earlier) showed mem=1 [a0000000, c0000000) = CORRECT. The
+memblock.memory = corrupted between the print and map_lowmem, OR the
+md construction = stale-viewed — placement-dependent garbage = the
+stale-view class. The WARN = non-fatal; the death = after it, in
+map_lowmem's mapping loop (the W-25/27 pmd/pte-alloc region). The
+front = 156 = INSIDE that loop's territory. THE NEXT CAPTURE: dump
+memblock.memory (m[i] per region) into the bc slots at map_lowmem's
+entry, same technique as the W-92 capture.
