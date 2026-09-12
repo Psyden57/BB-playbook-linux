@@ -151,3 +151,21 @@ invalidation BEFORE the C world starts reading:
   product.
 - NEW: nothing QNX-side after the GICD-off (the W-86/87 rule).
 - NEW: the kernel make = a clean shell (no qnx-env).
+
+## ADDENDUM (the session-12 debrief)
+
+- **OpenViking = DROPPED (2026-09-12)** — do not look for or write
+  viking:// references; the repo = the only context store (newdocs/ +
+  docs/ + SESSION-HANDOFF/ per newdocs/HANDOFF.md). The remaining
+  OpenViking mentions in the docs (the session-05 note, the docs/05
+  update) = historical/dated.
+- **The LED magenta timing correction**: the bc-32-era magenta (~1-3 s
+  before the jump) was NEVER seen by the user in W-88/89 (only blue);
+  the write = MOVED to bc 42 (mid-payload, ~15 s of visibility) — the
+  payload carries the fix; expect blue → magenta → off on every run.
+- **The session-end convention (the user's rule, now written down):
+  wrap a session ONLY when the context is at 40-60%** — do not wrap
+  early because a "clean narrative point" appears; there is always more
+  diagnostic value in continuing while the context lasts. W-90 (the
+  stale-line cure) = fully within a session's remaining budget when the
+  wrap urge hits — KEEP WORKING unless the user says stop.

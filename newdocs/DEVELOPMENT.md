@@ -50,6 +50,20 @@ Rules of the run (from docs/ + hard experience):
   (KNOWN_ISSUES #7 has the identified writers).
 - **NVRAM and RPMB are off-limits forever** (brick hazards — see README
   safety model and PLAYBOOK-REFERENCE.md §5/§8).
+- **NOTHING QNX-side (devctl/open/serial printf) after the GICD-off
+  (bc 41)** — the interrupt-driven drivers (e.g. the i2c3 devctl) block
+  forever on the masked completion IRQ; the payload freezes and only the
+  WDT2 recovers (the W-86/87 lesson, 2/2). The jump tail = register
+  writes and enter_stub only.
+- **The direct NS access to I2C4 (0x48350000) = SIGBUS** (the MMCHS
+  secure-filter class; the box survives but the access is closed) — the
+  LED = the QNX devctl path only (led_color_qnx); no kernel-side LED.
+- **The kernel make = a clean shell** (never source qnx-env.sh in that
+  shell): the QNX make 3.82 hijacks the build ("GNU Make >= 4.0
+  required") and a `&&`-chained mkkernel.sh then packs a STALE zImage.
+- **After ANY reboot (the battery pull AND the hard reset) /tmp is
+  wiped** — re-scp memdump3 before any readback. The post-battery-pull
+  DRAM = the uniform 0xAA filler = the freshness baseline.
 
 ## Building the payload
 

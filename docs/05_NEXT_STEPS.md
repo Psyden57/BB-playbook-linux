@@ -163,6 +163,7 @@ an initramfs-less panic. The panic text lands in the rings. Then the rootfs
 - Ask the user for LED timings on every run (they video-record the runs).
 
 ## Contact / Context
-Solo low-level ARM boot project. OpenViking memory has the full session
-records (`viking://resources/playbook-dev/...`) and the project state summary
-(`viking://user/default/memories/entities/project/playbook_linux_port.md`).
+Solo low-level ARM boot project. (UPDATE 2026-09-12: OpenViking was
+DROPPED as the memory service — the viking:// references below are
+historical. The full context = this repo: newdocs/ + docs/ +
+SESSION-HANDOFF/, per newdocs/HANDOFF.md's read order.)

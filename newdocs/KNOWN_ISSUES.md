@@ -1,5 +1,18 @@
 # Known Issues & Open Problems
 
+**SESSION-12 HEADER (2026-09-12): the fronts below are STALE — read
+SESSION-HANDOFF/BOOTSTRAP_SESSION_13.md first.** The current state = the
+L2-on STALE-VIEW LOTTERY (three boots W-84/88/89 = three death points;
+the decompressor-era L2 lines + per-run eviction luck; the session-9
+class verbatim) — the deterministic TLB-op framing (below) = superseded.
+The first task = W-90: the wide stale-line invalidation (the NS 0x770
+inv-only sweep) before the C world reads. NEW device rules this session:
+nothing QNX-side after the GICD-off (the interrupt-driven devctls block
+forever — the W-86/87 freeze); the direct NS access to I2C4 = SIGBUS
+(the MMCHS class). Both channels of the new observability (the ring
+batch flush + the LED magenta marker) = proven — see the session-12
+notes.
+
 **SESSION-11 HEADER (2026-09-11/12): the fronts listed below are STALE.**
 The current front = the first TLB op after the CMA (clear_fixmap,
 bc[1]=126→125) — the unified wedge family (the SCU-routed global ops with
