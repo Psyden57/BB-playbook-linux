@@ -2916,3 +2916,151 @@ L2 invalidate (the monitor-side 0x101 inv-by-PA sweep over the image +
 the pgd + the .data/.bss regions, or the NS 0x770 inv-by-PA ladder
 proven in the session-10 audit) applied BEFORE the C world starts
 reading. The W-32c/111 sweeps cover the pv and the pgd only.**
+
+### Run W-90a (2026-09-12, session 13): the payload's W-90 pre-jump L2
+### sweep, part 1 (the destination band only) — ★★ THE DEEPEST L2-ON RUN
+### EVER (bc[1]=126, past parse/devicemaps) AND THE FOSSIL MECHANISM NAILED
+### (the kernel read W-88's DTB header through an L2 line that survived the
+### WDT2 reset, the QNX reboot, AND our own NOCACHE writes)
+
+Pre-run: the bootstrap-13 first task = W-90, the wide stale-line cure.
+Payload change (987a7f8): l2c_ns_inv_range over [0xa0000000, 0xa1069000)
+per-line (32B) 0x7F0 CIPA, placed AFTER the pre-SMC CIPA block + the
+GICD-off (nothing can re-dirty; QNX frozen) and BEFORE enter_stub;
+--l2on only; clamped to the placement. Op = 0x7F0 CIPA, NOT the
+bootstrapped 0x770 inv-only: the band = QNX's own DRAM (scatter:
+0x9F/A4+ repurposed) and the payload's stack/heap PAs are unknown —
+inv-only discards dirty lines pre-jump; the clean-back is harmless
+(the range is overwritten post-jump; W-33 needs a post-sweep DRAM
+truth). USER APPROVED the deviation. Kernel #155 unchanged (rule:
+skips stay). Range math (python): Image 0x101ba50 -> dest end
+0xa1023a50 — 142KB PAST the W-35 guard end 0xa1000000 (latent hazard:
+a buffer at 0xa1000000 would put the zImage copy inside the
+decompressor's output range; not fixed — one variable); _end
+0xa10680c8 -> sweep end 0xa1069000 = 537,728 lines, 132 bounded-sync
+chunks. bc[19] = chunk heartbeat, bc[26] = sync timeouts,
+bc_write(48) = sweep survived. Rule-16 verified (inlined into do_t3).
+
+Readback: bc[1]=126 with the PB_MMU_BC(126) pair (bc[2]=0x17e) =
+dma_contiguous_remap done — the W-83 front. bc[4]=143 bc[5]=144
+(head.S ✓), bc[6]=0xe0000000 (the stub echo ✓), bc[7]/bc[8] = the
+probe L2 ON ✓, bc[11]=0xC0DE0010 AND bc[12]=0xC0DE0020 =
+parse_early_param PASSED (W-89's death point = cleared), bc[13]=
+0xdfbf7000 (a pte-table pointer ✓), bc[14]=0xff8ee9a8 (the FDT
+fixed-map ✓), bc[15] fresh. Extended: bc[18]=0xa2f00000 (the
+placement), DISPC 0/0 ✓, the pgd dump slots = healthy 0x041e section
+descs (NO 0xbfc1141e TABLE-pointer signature). RING1 = 1251 chars —
+the full W-88 log PLUS "PB-ADJ: lowmem_limit=bfe00000" (the #110
+shave print, never seen before) AND a map_lowmem-era
+"BUG: not creating mapping for 0x00000000 at 0x20[000000] in user
+region" (mmu.c:997 — a memblock region at PA 0, __va(0)=0x20000000)
+as the last (cut) line. Death = after 126, before the next bc[1]
+writer; ring = 0 chars past the BUG = died in map_lowmem's
+region loop (the W-25/27 death region) or the next TLB op.
+
+**THE FOSSIL SMOKING GUN (the session's headline):** PB-RES
+r[0]=a34ee9a8+15519 = the setup.c:1209 reserve = [__atags_pointer,
+fdt_totalsize). The deployed appended DTB = 87,321 B (python-verified
+header: totalsize=87321 = the file size), but the kernel read
+totalsize = **15,519 = EXACTLY the OLD DTB size of every previous
+run**. 0xa34ee9a8 = kern_phys+0x8000+tree_zlen = exactly
+tree_zlen(5,138,856) into this run's blob — and W-88's blob started at
+0xa3008000 with the SAME tree_zlen: **0xa34ee9a8 = where W-88's
+15,519-B DTB header sat**. The kernel's cached fixed-map read hit
+**W-88's kernel-era L2 line — which survived the WDT2 warm reset,
+QNX's reboot, and our payload's NOCACHE writes (NOCACHE creates no L2
+lines)**. THE L2 = A CROSS-RUN FOSSIL RECORD; the stale-view lottery =
+which fossil lines overlap the current run's PAs = per-run placement
+luck. The Frankenstein DTB (stale header + fresh content) explains the
+PA-0 memblock region. The old bc-47 "image sweep" (l2c_ns_clean_range)
+= ONE line per 4KB page = 0.8% coverage = never actually cleaned the
+buffer.
+
+**THE STALE-VIEW MECHANISM = NAILED. THE CURE = EVICT THE FOSSILS
+BEFORE THE KERNEL'S CACHED READS. The buffer region = the hole (the
+clamp excluded it; the kernel's fixed-map FDT reads + the
+decompressor's cached source reads hit it).**
+
+### Run W-90b (2026-09-12, session 13): the buffer sweep added
+### (l2c_ns_line_range: dest 0x7F0 + buffer 0x770 INV-ONLY + the
+### trampoline page 0x7F0) — ★ INVALID RUN: MY tail-underflow bug —
+### the buffer sweep = an infinite 1.95G-op loop; the heartbeats
+### pinned it to the chunk
+
+Payload change (536cffa): three sweeps (--l2on, in the jump tail,
+after clean_inval_l1_all + the GICD-off): 1. [0xa0000000, 0xa1069000)
+0x7F0 CIPA (unchanged); 2. [phys+0x1000, phys+used) **0x770 INV-ONLY**
+— the buffer's fossils can be DIRTY (previous kernels' cached writes)
+and 0x7F0's clean step would push them OVER the payload's
+NOCACHE-verified fresh DRAM copy (W-33, for real this time); QNX-safe:
+the buffer = QNX's FREE pool (no live dirty QNX lines). Covers the
+kernel's fixed-map FDT reads + the decompressor's cached source reads.
+3. [phys, phys+0x1000) 0x7F0 — the trampoline page: the payload's
+CACHED memcpy = dirty lines that must be cleaned to DRAM, never
+discarded (enter_stub re-reads them cached). used = blob_off+padded+
+dlen. bc[27]/bc[28] = the buffer heartbeat/timeouts.
+
+Readback: bc[1]=51 = died INSIDE the sweep block (between bc_write(51)
+and bc_write(48)); everything bc[6]+ = W-90a residue (the stub echo /
+probe / parse values — the stub never ran). bc[3]=0xa2400000 = the
+placement. Extended: **bc[19]=0x84=132 = the DEST sweep COMPLETED (0
+timeouts); bc[27]=476782 chunks = the buffer sweep STILL RUNNING at
+the WDT2 expiry** = the full 59 s window = 476782×4096 line ops ≈
+1.95G device stores. ROOT CAUSE (rule 13 humbled): used-0x1000 =
+0x71E9B1 — NOT a multiple of 32 — the tail chunk's `size -= 32`
+UNDERFLOWS into an infinite sweep. The dest sweep = 32-aligned
+(0x1069000) = why a/b's dest = always fine; I checked that alignment
+and not the buffer's.
+
+LESSONS: (a) the heartbeats worked exactly as designed — the wedge
+named to the chunk; (b) **1.95G device stores QNX-side = NO device-op
+cliff** — the bootstrap's "payload userland = unbounded" guess now
+PROVEN at 33M ops/s (~30ns/op); a whole-DRAM sweep = ~1 s = feasible;
+(c) the WDT2-vs-infinite-loop = distinguishable ONLY via the
+heartbeats — keep them on every sweep.
+
+### Run W-90c (2026-09-12, session 13): the underflow fixed (size &= ~31
+### in l2c_ns_line_range) — the sweeps 3/3 CLEAN, the jump chain ran —
+### ★ BUT THE BOOT DIED AT THE W-84 POINT ([144→145], 0x3E7, ring 0) =
+### THE LOTTERY IS NOT CURED BY THE DEST+BUFFER SWEEP; THE STALE
+### SOURCE = ELSEWHERE
+
+Payload change (1472b26): size &= ~0x1Fu at l2c_ns_line_range entry
+(rule-16 verified: bic #31 at entry).
+
+Readback: bc[1]=142, **bc[2]=0x3E7** (the W-6/W-35/W-84 wild-write
+signature ✓), the placement=0xa1d00000 (kern_off=0x100000),
+bc[4]=143 bc[5]=144 (the head.S fixup ✓), the stub echo + the probe
+L2 ON ✓ (deterministic values — residue-indistinguishable, but
+bc[10]=1 = the payload's FRESH CTRL readback ≠ W-90a's kernel-era
+0xde800000 → the payload's tail ran), bc[11]=0xC0DE0010 = W-90a
+residue (indistinguishable — parse's marker), bc[14]=0xff8ee9a8 =
+W-90a RESIDUE (this run's fixed-map ≠ — the placement differs).
+RING1 = 0 = died before the earlycon's first 64 chars flushed = the
+death = VERY early in the C world. **THE W-84 TRIAD REPRODUCED
+(bc[1]=142 + 0x3E7 + ring 0) WITH THE FULL SWEEP IN PLACE — the
+sweeps = 3/3 survived (48 landed — the boot passed them), the death =
+[144→145] = the early C BEFORE the first-64-chars = the .bss zeroing /
+the W-32c pv block / setup_arch's start.**
+
+**THE SERIES VERDICT (W-90a/b/c):**
+1. The sweep machinery = sound (3/3 sweep survival post-fix; the
+   heartbeats + bounded polls = rule-10 clean).
+2. The FOSSIL mechanism = NAILED (W-90a's DTB smoking gun) — the L2 =
+   a cross-run fossil record; the buffer + dest fossils = now evicted.
+3. **The lottery = NOT cured**: a (dest-only) = 126 = the deepest ever;
+   c (full sweep) = the W-84 death. The stale source = ELSEWHERE —
+   the bootstrap's contingency. Candidates: (a) fossils in the REST of
+   DRAM the early C touches via the linear map (the memblock array is
+   kernel-written, but the memblock ALLOCATIONS land on QNX-era/
+   previous-run-era pages — every alloc's first cached read = a fossil
+   candidate); (b) the L1 I-cache (the decompressor/head.S at the same
+   VAs across runs); (c) the W-32c-class decompressor-era divergence
+   (NOT fossils — self-inflicted, needs the W-32c block; unchanged).
+4. THE NEXT CURE (W-91, designed, not yet run): ONE EARLY WHOLE-DRAM
+   0x7F0 CIPA sweep (QNX-safe: clean = data-preserving; ~1-2 s at the
+   proven 33M ops/s for 1GB = 33.5M lines) placed BEFORE the file
+   reads (bc ~36-42), making the bc-51 dest/buffer sweeps
+   belt-and-braces. Evicts EVERY fossil machine-wide before the
+   payload's copies and the jump. The kernel's memblock-alloc first
+   reads = covered.

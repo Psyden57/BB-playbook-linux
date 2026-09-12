@@ -1,4 +1,4 @@
-# Project State (as of session 11, 2026-09-11)
+# Project State (as of session 13, 2026-09-12)
 
 This file tracks the *current technical state* precisely. Older docs
 (`docs/03`, `SESSION-HANDOFF/`) record how we got here; where they disagree
@@ -8,6 +8,52 @@ with this file, this file wins (and any unresolved disagreement is listed in
 with dated headers.
 
 ## Where the boot stands
+
+**SESSION-13 (2026-09-12, W-90a/b/c — THE FOSSIL MECHANISM NAILED): THE
+STALE-VIEW LOTTERY = THE L2 AS A CROSS-RUN FOSSIL RECORD.** W-90a (the
+payload's new per-line 0x7F0 CIPA sweep over the decompressor destination
+band [0xa0000000, 0xa1069000), placed in the jump tail after the GICD-off)
+= the deepest L2-on run ever: bc[1]=126, parse PASSED (bc[12] landed),
+ring 1251 chars — AND the smoking gun: the kernel read fdt_totalsize =
+15519 (W-88's DTB size) from the appended DTB whose real header = 87321
+(python-verified), because **W-88's kernel-era cached L2 line at that
+exact PA (blob+tree_zlen) survived the WDT2 reset, QNX's reboot, and our
+NOCACHE writes**. The L2 retains lines across runs; the "lottery" = which
+fossil lines overlap the current run's PAs (per-run placement luck). The
+old bc-47 "image sweep" = 1 line per 4KB = never cleaned anything.
+
+**W-90b/c added the buffer sweep (0x770 INV-ONLY — the buffer's fossils
+can be dirty and 0x7F0's clean would poison the payload's NOCACHE-verified
+fresh copy) + the trampoline page (0x7F0, clean-never-discard). W-90b =
+INVALID (my `size -= 32` tail underflow on a non-32-multiple size = an
+infinite 1.95G-op sweep; the bc[27]=476782 heartbeat pinned it; NOTE:
+1.95G device stores QNX-side = NO device-op cliff — the payload userland
+IS unbounded, ~33M ops/s). W-90c = the sweeps 3/3 clean BUT the boot died
+at the W-84 triad (bc[1]=142 + 0x3E7 + ring 0) = **THE LOTTERY IS NOT
+CURED by the dest+buffer sweep — the stale source = ELSEWHERE**: the
+leading candidate = the fossils on the memblock-ALLOCATED pages (the
+early C's first cached reads of allocations anywhere in the bank) and/or
+the L1 I-cache across runs.**
+
+**THE NEXT CURE (W-91, designed): one EARLY whole-DRAM 0x7F0 CIPA sweep**
+(before the file reads, bc ~36-42): QNX-safe (clean = data-preserving),
+~1-2 s for 1GB at the proven 33M ops/s, evicts EVERY fossil machine-wide
+before the payload's copies and the jump; the bc-51 sweeps = belt-and-
+braces. The heartbeats + bounded polls = load-bearing (W-90b's lesson).
+
+**OBSERVABILITY (proven, keep on every run):** the ring batch flush (the
+L2-on console), the LED phase markers (blue = payload, magenta at bc 42 =
+~15 s pre-jump), the sweep heartbeats (bc[19]/bc[26] = the dest chunk/
+timeouts, bc[27]/bc[28] = the buffer's), and bc_write(48) = all-sweeps-
+survived.
+
+The two L2 states: L2-off = the deterministic TLB-op wedge (the W-72..77
+era) but DRAM-truth stores; L2-on = the fossil lottery (partially cured —
+the dest+buffer sweep moved W-90a to 126 but W-90c still died early).
+Neither is bootable; the cure = the whole-DRAM sweep (W-91) or the CPU1
+release (the real fix, the bequest).
+
+## Where the boot stands (the session-12 detail, for context)
 
 **W-84 RESULT (2026-09-12, the first genuine L2-on run since W-46, kernel
 #153 unchanged): the boot REGRESSED — death between markers 144 and 145
