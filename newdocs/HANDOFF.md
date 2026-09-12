@@ -43,11 +43,13 @@ original conversation history.
 
 ## Current handoff state
 
-- Latest session notes: [session-notes/session-11.md](session-notes/session-11.md)
-- Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_12.md` — read it
-  first (it has the read order, the unified wedge family, the front =
-  the first TLB op after the CMA, the first task = W-84 the payload
-  archaeology bisect, and the bequest order)
-- Next action: W-84 — the era's qnx2linux.c (the git archaeology) paired
-  with the current kernel; run mode = **PAYLOAD_MODE=--l2on**
+- Latest session notes: [session-notes/session-12.md](session-notes/session-12.md)
+- Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_13.md` — read it
+  first (it has the read order, the --l2on erratum, the stale-view
+  lottery synthesis, the proven observability (the ring flush + the LED
+  markers), the first task = W-90 the wide stale-line cure, and the
+  bequest order)
+- Next action: W-90 — the payload's extended pre-jump inv-by-PA sweep
+  (the NS 0x770, inv-only, no clean-back) over the image + the pgd +
+  the data regions, then run --l2on
 - Local-only assets and why: [SETUP.md](SETUP.md) §6
