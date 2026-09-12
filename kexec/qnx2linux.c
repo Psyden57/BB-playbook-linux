@@ -367,6 +367,47 @@ static void l2c_ns_clean_range(off64_t pa, uint32_t size)
     }
 }
 
+/* PlayBook W-90 (session 13): the wide stale-line cure for the L2-on
+ * lottery (W-84/88/89 = three boots, three different early-C death
+ * points). Per-LINE eviction (32B, mainline's CACHE_LINE_SIZE — the old
+ * l2c_ns_clean_range does one op per 4KB page = 1 line in 128!), over
+ * [0xa0000000, 0xa1069000): the pgd PA 0xa0004000 (head.S writes it with
+ * C-off stores = DRAM truth, while the L2 retains pre-jump lines the
+ * PTW's reads hit — the W-38 pair mechanism, generalized), the
+ * decompressor destination [0xa0008000, 0xa1023a50) (Image 0x101ba50 —
+ * NOTE: 142KB PAST the W-35 guard end 0xa1000000) and .bss (_end
+ * 0xa10680c8 -> rounded 0xa1069000).
+ * OP = 0x7F0 CIPA (clean+inv), NOT the bootstrapped 0x770 inv-only:
+ * this band is QNX's own DRAM (the scatter test: QNX repurposes 0x9F+/
+ * A4+) and the payload's own stack/heap PAs are unknown — inv-only
+ * DISCARDS dirty lines = pre-jump corruption; the clean-back is
+ * harmless here because the whole range is overwritten post-jump (the
+ * W-33 poison class needs a post-sweep DRAM truth that doesn't exist
+ * yet). Bounded sync poll every 4096 lines (rule 10); bc[19] = the
+ * chunk heartbeat (names a mid-sweep wedge), return = sync timeouts. */
+static uint32_t l2c_ns_inv_range(off64_t pa, uint32_t size)
+{
+    uint32_t chunks = 0, timeouts = 0;
+    while (size) {
+        uint32_t i;
+        unsigned n;
+        for (i = 0; i < 4096 && size; i++) {
+            pl310_ns[0x7F0 / 4] = (uint32_t)pa;
+            pa += 32;
+            size -= 32;
+        }
+        n = 100000;
+        pl310_ns[0x730 / 4] = 0;
+        while ((pl310_ns[0x730 / 4] & 1) && --n)
+            ;
+        if (!n)
+            timeouts++;
+        if (bc)
+            bc[19] = ++chunks;
+    }
+    return timeouts;
+}
+
 extern void clean_inval_l1_all(void);
 extern char cont_start, cont_end;
 extern char tramp_pos_start, tramp_pos_end;
@@ -1186,6 +1227,23 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         /* stack slots for post-SMC code rewritten here so their lines are
          * dirty-in-L1 only if touched again before the disable (gpa/spa
          * live in registers through the mon_call — leaf-safe) */
+    }
+    {
+        /* PlayBook W-90 (session 13): the wide stale-line cure — see
+         * l2c_ns_inv_range above. --l2on only (ONE VARIABLE vs W-89;
+         * under the L2-off modes the SMC below bypasses the L2 anyway).
+         * Positioned AFTER clean_inval_l1_all + the GICD-off (no IRQ can
+         * re-dirty the region, no other thread runs) and BEFORE
+         * enter_stub — the last word on the region's L2 state. Clamp to
+         * the placement so the sweep can never touch the buffer itself
+         * (a 0xa1000000 placement would overlap the range tail). */
+        if (g_l2on) {
+            uint32_t end = 0xA1069000u;
+            if ((off64_t)end > phys)
+                end = (uint32_t)phys & ~0x1Fu;
+            bc[26] = l2c_ns_inv_range(0xA0000000ull, end - 0xA0000000u);
+            bc_write(48);   /* heartbeat: the sweep survived */
+        }
     }
     {
         /* --l2on (2026-09-02): SKIP the disable entirely. The l2test A/B
