@@ -2576,3 +2576,48 @@ the L2 on + SMP=y; harmless with !SMP's plain spinlocks).**
   runs 23-32 era (--t3, the old minimal flow) is the only era where TLB
   ops completed — the git-archaeology bisect (the era's payload + the
   current kernel) = the next session's opening move.
+
+## ★★★ ERRATUM (2026-09-12, session 12 pre-run): the W-78..W-83 runs were
+## NEVER "L2-on" — the --l2on mode has disabled the L2 since the W-46
+## rewrite (a692300) ★★★
+
+Found by session 12's payload archaeology, verified by the session-11
+agent against the tree and the git history:
+
+- Commit a692300 ("W-46 decoded", 2026-09-11) moved the L2-off
+  mon_call(0x102, 0, 0) INTO the if (g_l2on) branch of do_t3 (the marker
+  bc[6]=0x2103, bc[1]=0x3130). Since --dmaquiet = g_l2on=1 + g_dmaquiet=1,
+  the edit changed BOTH modes: **--l2on has disabled the L2 since W-46.**
+  The era behavior (--l2on = skip the SMC entirely, the 0x2102 "L2 kept
+  on" marker) was silently replaced. git log -L shows no later commit
+  touched the block.
+- **The on-device witness: probe.S's bc[8] = the post-jump PL310 CTRL
+  readback. The W-39 (pre-W-46) = bc[8]=1 (the L2 on). EVERY W-69..W-83
+  run = bc[8]=0 (the L2 off) — including all five "--l2on" runs.**
+- Consequently the session-11 "L2-state-dependent wedge family" framing
+  is UNSUPPORTED: the L2 was OFF in all 15 session-11 runs. The variable
+  that actually moved the front from 145 to 126/150 = **dropping the devb
+  slay** (--l2on = g_dmaquiet=0; the slay = the only payload-level delta
+  between the W-72..77 and the W-78..83 runs — the DISPC kill is
+  unconditional in both).
+- The corrected matrix (the CMA's TLBIALL / the first-printk):
+
+  | runs | slay | SMP | L2 (per bc[8]) | the CMA TLBIALL | the printk |
+  |------|------|-----|----------------|-----------------|------------|
+  | the W-69..77 | YES | y | OFF | WEDGE 6/6 | — |
+  | the W-78/79 | no | y | OFF | pass | WEDGE 2/2 |
+  | the W-80 | no | n | OFF | WEDGE | pass |
+  | the W-83 | no | n | OFF | skipped → 126 | pass |
+
+- The open puzzle: the TLB ops wedge under (the slay + SMP=y) AND under
+  (SMP=n, no slay) — but pass under (no-slay + SMP=y) and passed in the
+  runs 23-32 era (the L2 off, no slay, the old kernel #52+). NO single
+  variable explains it; the L2 state is exonerated by the runs 23-32
+  counter-evidence. The candidates = the slay's QNX-side effects, the
+  SMP=n's UP-build shifts, the kernel-patch deltas since #52.
+- The erratum also corrects the session-11 summary: "the last genuine
+  L2-on = the session-9-era --dmaquiet" = the W-38/39 (156/167), NOT 171
+  (the 171 = the runs 23-32, the L2 OFF, no slay).
+- **W-84's first move = restore the era --l2on semantics (skip the SMC
+  entirely, the 0x2102 marker, bc[10]=CTRL expect 1) and re-run** — the
+  first genuine L2-on run since W-46, on the current kernel.

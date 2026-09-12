@@ -14,7 +14,7 @@
 | W-75 | #145 | the C/B/S descriptor strip | 145; the strip live; the "poison pair" = valid descs (the W-37 misread) |
 | W-76 | #146 | the SCTLR C/I=0 | 145 — the cache state exonerated |
 | W-77 | #147 | the de-CIPA boot path | 145 — the dead-line-op theory falsified; the 13-min dark mystery (the W-73 breaker) |
-| W-78 | #148 | --l2on (the L2 ON) | ★ 150 — PAST the CMA; the TLB-op wedge = L2-off-specific |
+| W-78 | #148 | --l2on | ★ 150 — PAST the CMA. **ERRATUM (session 12): the L2 was OFF (--l2on disables it since the W-46, a692300; bc[8]=0 in all runs) — the real variable = dropping the devb slay. The "L2-off-specific" framing below = superseded.** |
 | W-79 | #149 | the SMC sweep (0x101) | 150 — deterministic; the culprit = the CP13 write |
 | W-80 | #150 | CONFIG_SMP=n | 145 (the TLBIALL back); the CONSOLE RETURNS (1165 chars) |
 | W-81 | #151 | SMP=y + the TPIDRPRW skip | 150 — the CP13 write not the (only) wedge |
@@ -22,6 +22,17 @@
 | W-83 | #153 | SMP=n + the TLBIALL skipped + the L2 on | ★ 126 — past the CMA AND the printk; the death = clear_fixmap |
 
 ## THE UNIFIED WEDGE FAMILY (the session's headline discovery)
+
+**ERRATUM (session 12, 2026-09-12): the L2 was OFF in ALL 15 session-11
+runs — the --l2on mode has disabled the L2 since the W-46 rewrite
+(a692300; the on-device witness = probe.S's bc[8] = the PL310 CTRL
+readback = 0 everywhere; the W-39's pre-W-46 bc[8]=1 = the L2 on). The
+"L2-on/L2-off" attribution below is WRONG: the variable that moved the
+front = dropping the devb slay. The correct matrix: the TLB ops wedge
+under (the slay + SMP=y) 6/6 and under (SMP=n, no slay) 2/2, but pass
+under (no-slay + SMP=y) 2/2 — no single variable explains it; the runs
+23-32 (the L2 off, no slay, the old kernel) completed the TLB ops to 171,
+so the L2 state is exonerated. See docs/03's erratum.**
 
 **The machine wedges on SCU-routed global ops with CPU1 held:**
 1. **The TLB maintenance ops** — deterministic with the L2 OFF (the

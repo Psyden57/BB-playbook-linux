@@ -10,15 +10,20 @@ with dated headers.
 ## Where the boot stands
 
 Mainline Linux 6.15.11 (omap2plus, non-LPAE, patched, **CONFIG_SMP=n as of
-W-80**) is jumped from QNX via the **zImage path**, **--l2on (the L2
-stays ON)** as of W-78:
+W-80**) is jumped from QNX via the **zImage path**, **--l2on** as the run
+mode. **ERRATUM (session 12): --l2on has DISABLED the L2 since the W-46
+rewrite (a692300) — every session-11 run ran with the L2 OFF (probe.S's
+bc[8] = the PL310 CTRL readback = 0 in all of them). The session-11
+"L2-state-dependent" framing is superseded: the variable that moved the
+front = dropping the devb slay. See the erratum at the end of the
+session-11 section in docs/03.**
 
 1. The zImage decompressor delivers the appended DTB natively; the setup.c
    FDT-recovery chain works end-to-end (the machine-model line prints).
 2. **THE CONSOLE IS ALIVE**: the earlycon ring carries the full early log
    (the machine model, the memory policy, the cma reservation, the PB
-   prints) — alive since the session-4 era, silenced by the session-10
-   L2-off era, restored by the W-78 L2-ON run.
+   prints) — alive since the session-4 era (#51), silenced somewhere in
+   the session-10/11 runs, back in the W-80/83 readbacks.
 3. **The CMA block passes**: the TLBIALL is SKIPPED (the W-72/W-83-proven
    pass) and the boot reaches dma_contiguous_remap-done (bc[1]=126).
 4. **THE WEDGE FAMILY (the session-11 discovery)**: the machine wedges on
@@ -47,9 +52,11 @@ stays ON)** as of W-78:
    runs 23-32 era (the old --t3 payload) is the only era where TLB ops
    ever completed; the era's payload + the current kernel = the next
    session's opening bisect (the git archaeology).
-6. The DMA masters are quiesced in --dmaquiet; **--l2on is the run mode
-   now** (the L2 stays on — --dmaquiet's L2-off = the deterministic TLB-op
-   wedge).
+6. The DMA masters: the devb slay = a WEDGE CORRELATE (the W-69..77
+   slay-era runs wedged 6/6 at the TLBIALL; the no-slay runs passed the
+   CMA) — **--l2on (no slay) is the run mode now**, but note the W-46
+   erratum: the mode has been disabling the L2 since a692300; W-84 =
+   restore the true keep-on semantics and re-run.
 7. Marker-number discipline: setup.c's pb_bc(130-136) pairs COLLIDE with
    mmu.c's PB_MMU_BC numbers — discriminate via the mirror channel (rule
    17 in docs/README). Extended forensics bc[16]-bc[27] + the W-72 pgd-dump

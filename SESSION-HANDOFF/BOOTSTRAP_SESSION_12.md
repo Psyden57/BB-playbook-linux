@@ -3,15 +3,26 @@
 ## THE ONE-PARAGRAPH STATE
 
 Session 11 ran W-69..W-83 (15 runs, 15 builds) and rewrote the wedge
-model. The console is ALIVE (the earlycon ring — restored by the L2-ON
-run; alive originally since the session-4 era). The CMA block passes
+model. The console is ALIVE (the earlycon ring). The CMA block passes
 (the TLBIALL skipped). The kernel = 6.15.11 with **CONFIG_SMP=n**, run
-with **--l2on**. THE UNIFIED WEDGE FAMILY: the machine wedges on
-SCU-routed global ops with CPU1 held — the TLB maintenance ops
-(deterministic with the L2 off, flaky with the L2 on) and the
-ldrex/strex exclusives (the spinlocks — deterministic with the L2 on +
-SMP=y, harmless with !SMP). The current front = **the first TLB op after
-the CMA (clear_fixmap in early_fixmap_shutdown), death bc[1]=126→125**.
+with **--l2on**. **SESSION-12 ERRATUM (verified before W-84): the
+--l2on mode has DISABLED the L2 since the W-46 rewrite (a692300) — every
+session-11 run ran with the L2 OFF (probe.S's bc[8] = the PL310 CTRL
+readback = 0 in all of them; the W-39's pre-W-46 bc[8]=1). The
+"L2-state-dependent wedge family" framing is superseded: the variable
+that moved the front = dropping the devb slay. The corrected matrix + the
+open puzzle = docs/03's erratum block. W-84 = restore the era --l2on
+semantics (skip the SMC, the 0x2102 marker) and re-run — the first
+genuine L2-on run since W-46.**
+
+The current front = **the first TLB op after the CMA (clear_fixmap in
+early_fixmap_shutdown, death bc[1]=126→125)** — the TLB ops wedge under
+(the slay + SMP=y) and under (SMP=n, no slay), but passed under
+(no-slay + SMP=y) and in the runs 23-32 era. The exclusives (the
+spinlocks) wedge under SMP=y (the first printk) and are harmless under
+SMP=n. The kernel to run first = **the current kexec/kernel/zImage
+(5,221,585 B packed, the SMP=n + the TLBIALL-skipped build)** — after
+the W-84 payload fix.
 The session-10 "dsb nosh" chain NEVER existed on the hardware (the rule-16
 audit: GNU as rejects the name; GCC's IAS silently emitted the same
 full-system mcr; the f57ff062 literal = an invalid ISB-class encoding).
