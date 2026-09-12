@@ -823,8 +823,40 @@
  	b	__fixup_a_pv_table
 
 --- a/arch/arm/kernel/setup.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/setup.c	2026-09-12 00:32:53.591846337 +0000
-@@ -608,7 +608,16 @@
++++ b/arch/arm/kernel/setup.c	2026-09-12 00:54:46.751848071 +0000
+@@ -599,18 +599,55 @@
+ 	u32 mpidr = is_smp() ? read_cpuid_mpidr() & MPIDR_HWID_BITMASK : 0;
+ 	u32 cpu = MPIDR_AFFINITY_LEVEL(mpidr, 0);
+ 
++	/* PlayBook 2026-09-11 (session 11, W-82): the 150->151 death
++	 * bisect. The window = this function + the pb_bc(151) macro; the
++	 * W-81 run proved the TPIDRPRW skip changed nothing, so the wedge
++	 * is elsewhere in here (the MPIDR reads, the loop, the FIRST
++	 * printk of the boot, or the 151 macro's kick/dsb). Phases:
++	 * E1000004 entry, 05 post-mpidr, 06 post-loop, 07 post-printk;
++	 * the readback names the last completed step. */
++	{
++		extern noinline void pb_bc_put(unsigned int addr,
++					       unsigned int v);
++		pb_bc_put(0xD000006C, 0xE1000004u);	/* entry */
++	}
++
+ 	cpu_logical_map(0) = cpu;
++	{
++		extern noinline void pb_bc_put(unsigned int addr,
++					       unsigned int v);
++		pb_bc_put(0xD000006C, 0xE1000005u);	/* post-mpidr */
++	}
+ 	for (i = 1; i < nr_cpu_ids; ++i)
+ 		cpu_logical_map(i) = i == cpu ? 0 : i;
++	{
++		extern noinline void pb_bc_put(unsigned int addr,
++					       unsigned int v);
++		pb_bc_put(0xD000006C, 0xE1000006u);	/* post-loop */
++	}
+ 
+ 	/*
+ 	 * clear __my_cpu_offset on boot CPU to avoid hang caused by
  	 * using percpu variable early, for example, lockdep will
  	 * access percpu variable inside lock_release
  	 */
@@ -841,8 +873,15 @@
 +	/* set_my_cpu_offset(0); */
  
  	pr_info("Booting Linux on physical CPU 0x%x\n", mpidr);
++	{
++		extern noinline void pb_bc_put(unsigned int addr,
++					       unsigned int v);
++		pb_bc_put(0xD000006C, 0xE1000007u);	/* post-printk */
++	}
  }
-@@ -1100,10 +1109,74 @@
+ 
+ struct mpidr_hash mpidr_hash;
+@@ -1100,10 +1137,74 @@
  
  	if (__atags_pointer)
  		atags_vaddr = FDT_VIRT_BASE(__atags_pointer);
@@ -917,7 +956,7 @@
  		if (mdesc)
  			memblock_reserve(__atags_pointer,
  					 fdt_totalsize(atags_vaddr));
-@@ -1118,6 +1191,7 @@
+@@ -1118,6 +1219,7 @@
  			early_print("  r2[]=%*ph\n", 16, atags_vaddr);
  		dump_machine_table();
  	}
@@ -925,7 +964,7 @@
  
  	machine_desc = mdesc;
  	machine_name = mdesc->name;
-@@ -1134,8 +1208,10 @@
+@@ -1134,8 +1236,10 @@
  
  	early_fixmap_init();
  	early_ioremap_init();
@@ -936,7 +975,7 @@
  
  #ifdef CONFIG_MMU
  	early_mm_init(mdesc);
-@@ -1151,11 +1227,27 @@
+@@ -1151,11 +1255,27 @@
  	arm_memblock_init(mdesc);
  	/* Memory may have been removed so recalculate the bounds. */
  	adjust_lowmem_bounds();
