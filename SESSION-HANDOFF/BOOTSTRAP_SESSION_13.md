@@ -64,9 +64,12 @@ via SMC, run with **--l2on**.
   reset = no fresh bc page; the recovery power-hold tramples the DRAM
   completely (W-85 = worse than the W-73 partial trample). The LED
   timeline + the ring = the only evidence channels for such runs.
-- The LED scheme: blue = the payload, MAGENTA = pre-GICD-off (the
-  kernel owns the machine; frozen magenta = died at/before the jump in
-  video). The user watches for it (it may read as "red also on").
+- The LED scheme: blue = the payload start, MAGENTA = the payload is
+  past the file reads (~15 s before the jump; set at bc 42, safely
+  before the GICD-off). **USER CORRECTION (the W-89 debrief): the
+  bc-32-era magenta (the ~1-3 s window) was NEVER seen in W-88/89 —
+  only blue; the write now sits at bc 42 for ~15 s of visibility.**
+  Frozen magenta in video = "died at/before the jump in video".
 - The memdump3 on-device binary = wiped by any reboot (the battery
   pull AND the hard reset) — re-scp from kexec/ before any readback.
 - The kernel-side make MUST run in a shell without qnx-env.sh (the

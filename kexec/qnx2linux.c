@@ -748,6 +748,13 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
     zimg = readfile2(zpath, &zlen, g_bufsize);
     dtb = readfile2(dtbpath, &dlen, 0x100000);
     bc_write(42);   /* heartbeat: files read */
+    /* PlayBook W-90 (session 12): the MAGENTA marker moved HERE (from
+     * bc 32) — the bc-32 window was ~1-3 s before the jump and the user
+     * never saw it in W-88/89 (only blue). Here = mid-payload (~15 s
+     * before the jump), still BEFORE the GICD-off (bc 41) — the devctl
+     * is safe (the W-86/87 rule). Blue → magenta = "the payload is
+     * past the file reads, jumping soon". */
+    led_color_qnx(0x0A);
     padded = (zlen + 7u) & ~(size_t)7u;
     /* W-3 worst case: the kernel may sit up to 2MB into the buffer
      * (kern_off, below) — size the check for that */
@@ -1137,15 +1144,11 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
      * device-register write. */
     { uint32_t g = wdt[0x30 / 4]; wdt[0x30 / 4] = ~g; }
     bc_write(32);
-    /* PlayBook W-87 (session 12): the MAGENTA marker = "the kernel owns
-     * the machine" — placed BEFORE the GICD-off ON PURPOSE: the QNX i2c
-     * devctl is interrupt-driven, and with the GICD masked the
-     * completion IRQ is never delivered — the devctl blocks forever
-     * (the W-86/87 deaths: the payload frozen inside led_color_qnx, the
-     * LED magenta on video because the I2C bytes had already gone out,
-     * bc[1]=52, the WDT2 expiring exactly 59 s later, 2/2 deterministic
-     * across both placements). Here the IRQs are still on. */
-    led_color_qnx(0x0A);
+    /* PlayBook W-87/90: the magenta write was here (before the GICD-off,
+     * the W-86/87 rule) but the bc-32 window = ~1-3 s before the jump —
+     * the user never saw it in W-88/89. MOVED to bc 42 (mid-payload,
+     * ~15 s of visibility). The GICD-off rule stands: NOTHING QNX-side
+     * past the next line. */
     /* GICD off BEFORE the SMC (proven-safe position): no IRQ can fire in
      * the post-disable window, and the GICD store never runs with the L2
      * off — that store hung in runs 14/15 (bc stores + PL310 reads work
