@@ -9,54 +9,51 @@ with dated headers.
 
 ## Where the boot stands
 
-Mainline Linux 6.15.11 (omap2plus, non-LPAE, patched for the PlayBook) is
-jumped from QNX via the **zImage path** (the L2 is turned OFF by the
-payload inside the proven --dmaquiet shape — mon_call(0x102), verified
-by bc[8]=0 in W-69):
+Mainline Linux 6.15.11 (omap2plus, non-LPAE, patched, **CONFIG_SMP=n as of
+W-80**) is jumped from QNX via the **zImage path**, **--l2on (the L2
+stays ON)** as of W-78:
 
-1. The zImage decompressor inflates the kernel to zreladdr 0xa0008000,
-   delivers the appended DTB natively (bc[20..23] markers), and the
-   payload's placement sweep reserves [0xa0000000, 0xa1000000).
-2. head.S runs (the inline pv fixup, markers 143/144), MMU-on completes,
-   and the boot reaches the C world with correct pv state (the W-32c
-   block, tries=0).
-3. **The setup.c FDT-recovery chain works end-to-end (W-69, bc[27]=
-   0xF5000002 "post fdt call")**: setup.c recovers the FDT pointer from
-   bc[20] when __atags_pointer=0 — the W-64 cure. The image-region CIPA
-   sweep self-verify is clean (bc[26]=0xBEEF0000, zero mismatches).
-4. **THE FRONT (session 11, W-72 A/B = PROVEN): ANY TLB maintenance op
-   post-jump wedges the machine.** The W-72 run SKIPPED the CMA block's
-   TLBIALL and the boot PASSED the entire CMA path (146/147/126) — the
-   death then moved to early_fixmap_shutdown (126→125, the next TLB-op
-   site, via clear_fixmap). TLBIALL, per-page TLBIMVA (W-43/67), and
-   clear_fixmap all wedge. The boot performs NO TLB op before the CMA
-   (head.S builds its tables MMU-off) — the CMA's = the first TLB op of
-   every boot. Known since session 1: stub3.S avoids the TLBIALL
-   ("wedged with CPU1 in reset"). Prime suspect = the SCU routing TLB-op
-   broadcasts to CPU1's dead port. RULED OUT with evidence: the barrier
-   domain/encoding (the session-10 "dsb nosh" chain NEVER existed on the
-   hardware — GNU as rejects the name, GCC's IAS silently emitted the
-   same full-system mcr; the f57ff062 literal = an ISB-class encoding
-   with an invalid option), and ACTLR.SMP/FW (all three states wedged;
-   FW=0+SMP=0 = the standing config).
-5. **The scuprobe (session 11)**: the NS write to the SCU CTRL
-   (0x48240000) = FILTERED (reads fine: CTRL=1 enabled, CFG=0x511).
-   The NS SCU-disable path = closed. **The next move = the CPU1-parking
-   investigation** (the bequest's SMP item, now load-bearing): neutralize
-   the SAR wake context (0x4A326B00, NS-writable per the session-1 RE),
-   release CPU1 (the inverse of the payload's proven RSTCTRL hold),
-   expect the ROM's fallback = the AUX_CORE_BOOT wfe-poll = CPU1 parked
-   alive = the SCU's CPU1 port lives = the TLB broadcasts complete.
-   Full shape + risks: newdocs/session-notes/session-11.md.
-6. The DMA masters are quiesced (--dmaquiet: devb slain, DISPC killed +
-   register-verified 0/0; WiFi SDIO never brought up). The L2 is OFF
-   (the payload's mon_call(0x102) inside --dmaquiet — bc[8]=0 verified
-   in W-69/70/71/72).
-7. Marker-number discipline: setup.c's pb_bc(130-136) pairs COLLIDE
-   with mmu.c's PB_MMU_BC numbers — discriminate via the mirror channel
-   (rule 17 in docs/README). Extended forensics slots bc[16]-bc[27],
-   plus bc[28..31] (0x90000070-7C, the W-72 pgd-dump slots — free DRAM
-   before the ring2 header) via `memdump3 90000040 0x40`.
+1. The zImage decompressor delivers the appended DTB natively; the setup.c
+   FDT-recovery chain works end-to-end (the machine-model line prints).
+2. **THE CONSOLE IS ALIVE**: the earlycon ring carries the full early log
+   (the machine model, the memory policy, the cma reservation, the PB
+   prints) — alive since the session-4 era, silenced by the session-10
+   L2-off era, restored by the W-78 L2-ON run.
+3. **The CMA block passes**: the TLBIALL is SKIPPED (the W-72/W-83-proven
+   pass) and the boot reaches dma_contiguous_remap-done (bc[1]=126).
+4. **THE WEDGE FAMILY (the session-11 discovery)**: the machine wedges on
+   SCU-routed global ops with CPU1 held — (a) the TLB maintenance ops
+   (deterministic with the L2 off; flaky with the L2 on), and (b) the
+   ldrex/strex exclusives (the spinlocks — deterministic with the L2 on +
+   SMP=y; the first printk was the kill site; harmless with !SMP's plain
+   spinlocks). RULED OUT with direct evidence: the barrier domain/encoding
+   (the session-10 "dsb nosh" chain never existed on the hardware — GNU as
+   rejects the name; GCC's IAS silently emitted the same full-system mcr;
+   the W-68 f57ff062 literal = an ISB-class encoding with an invalid
+   option), ACTLR.SMP/FW (all three states wedged), CPU1 parked vs held
+   for the TLB ops (the W-73 park failed AND broke the post-reset
+   recovery — the PRCM hold bit persists across warm resets and the
+   released CPU1 resurrects QNX via the SAR path; THE PARK IS FORBIDDEN
+   until the SAR neutralization + the kernel-side re-hold exist), the pgd
+   content (the W-74 zeroing), the descriptor cacheability (the W-75
+   strip — live and proven, and the "poison pair" = actually valid section
+   descs in both shapes: the W-37 reading was an attribute-bit misread),
+   the SCTLR cache state (the W-76 C/I=0), and the CP13 TLS writes (the
+   W-63 class — the W-81 skip changed nothing at 150; the set_my_cpu_offset
+   skip is KEPT as harmless).
+5. **The current front = the first TLB op after the CMA (clear_fixmap in
+   early_fixmap_shutdown)**, death bc[1]=126→125. The TLB ops need the
+   CPU1 release (the bequest's SMP bring-up) or a payload-flow fix — the
+   runs 23-32 era (the old --t3 payload) is the only era where TLB ops
+   ever completed; the era's payload + the current kernel = the next
+   session's opening bisect (the git archaeology).
+6. The DMA masters are quiesced in --dmaquiet; **--l2on is the run mode
+   now** (the L2 stays on — --dmaquiet's L2-off = the deterministic TLB-op
+   wedge).
+7. Marker-number discipline: setup.c's pb_bc(130-136) pairs COLLIDE with
+   mmu.c's PB_MMU_BC numbers — discriminate via the mirror channel (rule
+   17 in docs/README). Extended forensics bc[16]-bc[27] + the W-72 pgd-dump
+   slots bc[28..31] (0x90000070-7C) via `memdump3 90000040 0x40`.
 
 ## What was fixed, by session
 

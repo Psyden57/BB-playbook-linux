@@ -2428,3 +2428,151 @@ undocumented monitor service (0xF0 is unidentified; 0x103/0x107 = the
 bootrom's own CPU1-path sites); (c) the full SMP bring-up (the bequest).
 The TLB-op avoidance (stubbing the kernel's flushes) = NOT viable (the
 stale-translation corruption class).
+
+### Run W-73 (2026-09-11, session 11): build #143 (the CPU1 park) — the park
+### did NOT cure the TLBIALL and BROKE the post-reset recovery
+
+The payload's do_t3 flow PARKED CPU1 instead of holding it (the --hello
+release mechanics: hold, AUX_BOOT_1 -> a nop/spin blob at 0x40309A00, the
+AUX_BOOT_0 flag bits, release). Readback: bc[1]=145 STILL, bc[27]=
+0xE1000004 (the pre-TLBIALL phase landed, the TLBIALL wedged).
+
+**THE POST-RESET BREAKER: the WDT2 fired ~59s in, then the device went
+DARK for ~11 minutes (the screen off, NO LED, no SSH — the user verified
+SSH was unreachable). The PRCM CPU1-hold bit PERSISTS across warm resets
+by design — the released CPU1 re-entered the ROM's SAR path, the monitor
+verified QNX's old context as valid, and CPU1 RESURRECTED QNX mid-boot,
+colliding with CPU0's fresh boot = the hung post-reset state. The user's
+power-button hard reset finally cleared it.** THE PARK IS FORBIDDEN on
+this payload shape unless (a) the SAR context is neutralized first
+(0x4A326B00, NS-writable per the session-1 devpm RE) AND (b) the kernel
+re-holds CPU1 early in head.S. Reverted in #147.
+
+NOTE: the post-reset readback was PARTIALLY TRAMPLED (the magic = 0x...63,
+the nonce = the residue of a hung boot + another boot) — readbacks after
+a non-WDT2 recovery = lower confidence.
+
+### Runs W-74/W-75/W-76 (2026-09-11, session 11): builds #144/#145/#146 —
+### the poison-pair zeroing, the descriptor strip, and the SCTLR C/I=0 ALL
+### fail to cure the TLBIALL
+
+- **W-74 (#144)**: [0xdfc]/[0xdfd] (+[0xdfe]/[0xdff]) zeroed + the pgd's
+  last line DCCMVAC'd before the TLBIALL. bc[1]=145, bc[27]=0xE1000004.
+  NO CURE.
+- **W-75 (#145)**: the C/B/S strip over all 18 mem_types prot_sect (the
+  W-75 build's runtime loop). NO CURE. **BUT the dumps prove the strip is
+  live: [0xdfa/0xdfc/0xdfd] = 0xbfa01412/0xbfc01412/0xbfd01412 = the
+  uncached SHAPE — the "poison pair" reads as VALID SECTION DESCRIPTORS
+  in BOTH shapes. The W-37 "QNX-era table pointer 0xbfc1141e" reading was
+  an ATTRIBUTE-BIT MISREAD: 0x141e = the cached section shape, 0x1412 =
+  the uncached shape — the entries are map_lowmem-written valid descs for
+  PA 0xbfc/0xbfd00000 in every era.** (The user also observed this run's
+  boot faster — consistent with the uncached descriptors.)
+- **W-76 (#146)**: SCTLR C/I=0 (bic CR_C|CR_I in __enable_mmu, verified
+  in the shipped vmlinux: bic #4 + bic #0x1000). bc[1]=145 STILL. The
+  hardware cache state = exonerated too.
+
+### Run W-77 (2026-09-11, session 11): build #147 (the de-CIPA boot path) —
+### no cure, AND the 13-minute dark mystery
+
+The pbmark/pbmarkv/pbmark3 machinery de-CIPA'd (the plain store + the
+WDT2 kick only — the 2026-09-02 ritual-free shape restored), the W-23 pv
+CIPA block removed, the mmu.c sweep + the W-32c CIPA loops guarded on the
+PL310 being enabled. Timeline finding: the pbmark CIPA was added 2026-09-04
+(W-6/W-7) AFTER the runs 23-32 — the only boots whose TLB ops ever
+completed fired ZERO PL310 line-ops. THEORY: the dead line-ops into the
+disabled L2C poison the transaction path. Result: bc[1]=145 STILL — the
+theory falsified.
+
+**The 13-minute dark episode**: no red LED for 13 min post-jump (the user
+watched). Cause (assembled from the trampled readback): the WDT2 fired
+~2 min in (the red flash missed), QNX's post-reset boot HUNG (the W-73
+park's CPU1-resurrection breaker — see W-73), the device sat dark, the
+user's hard reset cleared it. LESSON: a dark-no-LED device = check the
+SSH FIRST before assuming a hang; and never combine the CPU1 release with
+the WDT2-post-mortem flow.
+
+### Run W-78 (2026-09-11, session 11): build #148 (--l2on, the L2 ON) — ★★★
+### PAST THE CMA ★★★ bc[1]=150 — the TLB-op wedge = L2-OFF-SPECIFIC
+
+PAYLOAD_MODE=--l2on (the L2 stays ON — the W-38/39 payload behavior).
+Readback: **bc[1]=150 = the start_kernel fine-ladder** — the TLBIALL,
+146/147/126/125/129/128/127 ALL LANDED. Death between 150 and 151.
+**The L2-OFF = the TLB-op wedge's variable: the W-38/39 L2-ON boots
+passed the CMA (156/167), every L2-OFF boot since the session-10 redesign
+wedged at the first TLB op.** The console ring = 0 (the earlycon = not
+yet registered at 150 — consistent).
+
+### Run W-79 (2026-09-11, session 11): build #149 (the SMC sweep) — the
+### same 150 death; the culprit found = the CP13 write in
+### smp_setup_processor_id
+
+The mmu.c sweep's 512-iteration NS CIPA loop replaced with ONE pb_smc_flush
+(SMC 0x101, clean+inv by PA range — the payload-proven shape). Readback:
+bc[1]=150 AGAIN — deterministic, NOT the device-op cliff. The 150->151
+window bisected to setup.c's REAL smp_setup_processor_id (not the weak
+empty one): **set_my_cpu_offset(0) = mcr p15,0,r0,c13,c0,4 (TPIDRPRW) =
+the W-63 CP13-write wedge class** (W-63 proved TPIDRURO wedges; the
+machine cannot execute CP13 TLS-register writes post-jump).
+
+### Run W-80 (2026-09-11, session 11): build #150 (CONFIG_SMP=n) — the
+### console RETURNS (the first full log since the L2-off era began) but
+### the TLBIALL wedge returns with it
+
+CONFIG_SMP=n (the zImage shrank ~350KB to 5,133,120 B; zero c13,c0,4 in
+vmlinux). Readback: bc[1]=145, **the ring = 1165 chars = THE FULL BOOT
+LOG: "Booting Linux on physical CPU 0x0", the machine model line (the FDT
+recovery ✓), earlycon0 enabled, PB-ADJ/PB-MEM/PB-RES, cma: Reserved 16
+MiB, the PB-CMA print cut mid-word** — the boot passed 150/151 (the !SMP
+percpu = no c13 ops) and died at the CMA's TLBIALL (the SMP=n build
+shifts). NOTE (the user's correction): the console has been alive since
+the session-4 era (#51, the runs 23-32) — W-80's log = the console
+RETURNING after the L2-off era silenced it, not a first.
+
+### Run W-81 (2026-09-11, session 11): build #151 (SMP=y + the TPIDRPRW
+### skip) — the death stays at 150 = the TPIDRPRW was NOT the (only) wedge
+
+SMP=y restored, setup.c's smp_setup_processor_id skips set_my_cpu_offset(0)
+(the semantic no-op: the boot CPU's percpu offset = 0 by definition; QNX
+leaves TPIDRPRW = 0; only the CP13 WRITES wedge, the mrc reads are proven
+fine). Readback: bc[1]=150 AGAIN. The 150->151 wedge has more in it.
+
+### Run W-82 (2026-09-11, session 11): build #152 (the window bisect) —
+### THE WEDGE IS INSIDE THE FIRST PRINTK
+
+The window phase-instrumented: E1000004 entry / 05 post-mpidr / 06
+post-loop / 07 post-printk. Readback: **bc[27]=0xE1000006 — post-loop
+landed, post-printk never = THE FIRST PRINTK OF THE BOOT WEDGES THE
+MACHINE.** The printk takes the logbuf spinlock = the FIRST ldrex/strex
+(exclusive monitor) of the boot = the SCU-routed global-op family (the
+same class as the TLB broadcasts). CONSISTENT: the W-80 (SMP=n, the UP
+spinlocks = plain load/store, no exclusives) PASSED the printk; the
+W-78/79/81 (SMP=y) wedged 3/3.
+
+### Run W-83 (2026-09-11, session 11): build #153 (SMP=n + the TLBIALL
+### skipped + the L2 on) — past the CMA AND the printk; the death =
+### clear_fixmap (the next TLB op)
+
+Readback: bc[1]=126 (dma_contiguous_remap done), the ring = 1165 (the
+console alive through PB-CMA). The death = early_fixmap_shutdown's
+clear_fixmap (the W-72's exact death point) = the next TLB op. **THE
+UNIFIED SESSION-11 WEDGE FAMILY: the machine wedges on SCU-routed global
+ops with CPU1 held — the TLB broadcasts (deterministic with the L2 off,
+flaky with the L2 on) AND the ldrex/strex exclusives (deterministic with
+the L2 on + SMP=y; harmless with !SMP's plain spinlocks).**
+
+## THE SESSION-11 STATE OF PLAY (the wrap-up summary)
+
+- The marker front: **the first TLB op after the CMA (clear_fixmap)**,
+  with the CMA block itself passing (the TLBIALL skipped).
+- The proven map: the L2-off = the TLB ops deterministically wedge; the
+  L2-on + SMP=y = the exclusives deterministically wedge (the printk);
+  the L2-on + SMP=n = past both, killed by the flaky TLB op.
+- The only real cure for the TLB ops = the CPU1 release (the SCU's CPU1
+  port alive) — the W-73 park attempt FAILED and is FORBIDDEN until the
+  SAR context neutralization + the kernel-side re-hold are in place; the
+  true fix = the SMP bring-up (the bequest).
+- The payload flow = the LAST untested variable for the TLB-op wedge: the
+  runs 23-32 era (--t3, the old minimal flow) is the only era where TLB
+  ops completed — the git-archaeology bisect (the era's payload + the
+  current kernel) = the next session's opening move.

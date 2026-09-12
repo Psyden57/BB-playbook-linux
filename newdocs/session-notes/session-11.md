@@ -1,92 +1,93 @@
-# Session 11 Notes (2026-09-11 — the W-69 rule-16 audit, the W-72 A/B, and
-# the TLB-op wedge model)
+# Session 11 Notes (2026-09-11 — the rule-16 audit, the L2-state discovery,
+# the exclusive-op wedge, the CP13 class, and the CMA finally passed)
 
-## THE RUN MAP (W-69 → W-72 + the scuprobe, kernel #139 → #142)
+## THE RUN MAP (W-69 → W-83, kernels #139 → #153, 15 runs, 15 builds)
 
-- **W-69 (kernel #139)**: bc[1]=145 STILL. But the rule-16 audit
-  (shipped-vmlinux) DISPROVED the session-10 "dsb nosh" chain (see
-  CONFIRMED below); the W-69 death = the f57ff062 literal itself.
-- **W-70 (kernel #140, the batch)**: bc[3]=0x0 (the ACTLR.FW+SMP clear
-  TOOK) yet bc[1]=145 STILL — the ACTLR theory died.
-- **W-71 (kernel #141, the in-block bisect)**: bc[27]=the F5 residue —
-  NO E1 phase landed = the wedge is AT the TLBIALL mcr or the first
-  fetch/access after it.
-- **W-72 (kernel #142, the A/B: TLBIALL SKIPPED)**: ★ **bc[1]=126 — the
-  boot PASSED the entire CMA block** (all four E1 phases, 146/147/126
-  landed). Death moved to early_fixmap_shutdown (126→125) = the NEXT
-  TLB-op site. **THE TLBIALL mcr = the deterministic machine wedge.**
-  The pgd dumps landed: bc[28]=0xbfa1141e (correct section), **bc[29]=
-  0xbfc1141e / bc[30]=0xbfd1141e = the QNX-era poison pair LIVE**,
-  bc[31]=0.
-- **scuprobe (in-QNX)**: SCU_CTRL=1 (enabled), CFG=0x511, PWRSTS=
-  0x03030300; the NS write to disable = **FILTERED** (still enabled).
-  The NS SCU path = closed. Box alive.
+| run | build | change | result |
+|-----|-------|--------|--------|
+| W-69 | #139 | (as inherited) | 145; the rule-16 audit found the "nosh" chain never existed + the f57ff062 literal = the death |
+| W-70 | #140 | the ACTLR ~0x41 clear (both sites) | bc[3]=0x0 took; 145 — ACTLR exonerated |
+| W-71 | #141 | the in-block phases | NO E1 phase = the wedge at the TLBIALL/the first re-walk |
+| W-72 | #142 | the TLBIALL SKIPPED (the A/B) | ★ 126 — the CMA block PASSES; the death = clear_fixmap; the pgd dumps |
+| W-73 | #143 | the CPU1 park | 145 + BROKE the post-reset recovery (the SAR resurrection) |
+| W-74 | #144 | the poison-pair zeroing | 145 |
+| W-75 | #145 | the C/B/S descriptor strip | 145; the strip live; the "poison pair" = valid descs (the W-37 misread) |
+| W-76 | #146 | the SCTLR C/I=0 | 145 — the cache state exonerated |
+| W-77 | #147 | the de-CIPA boot path | 145 — the dead-line-op theory falsified; the 13-min dark mystery (the W-73 breaker) |
+| W-78 | #148 | --l2on (the L2 ON) | ★ 150 — PAST the CMA; the TLB-op wedge = L2-off-specific |
+| W-79 | #149 | the SMC sweep (0x101) | 150 — deterministic; the culprit = the CP13 write |
+| W-80 | #150 | CONFIG_SMP=n | 145 (the TLBIALL back); the CONSOLE RETURNS (1165 chars) |
+| W-81 | #151 | SMP=y + the TPIDRPRW skip | 150 — the CP13 write not the (only) wedge |
+| W-82 | #152 | the window phases | bc[27]=E1000006 = THE FIRST PRINTK WEDGES (the logbuf spinlock = the first ldrex/strex) |
+| W-83 | #153 | SMP=n + the TLBIALL skipped + the L2 on | ★ 126 — past the CMA AND the printk; the death = clear_fixmap |
 
-## THE CONSOLIDATED MODEL (the session's unique knowledge)
+## THE UNIFIED WEDGE FAMILY (the session's headline discovery)
 
-**ANY TLB maintenance op post-jump wedges the machine.** TLBIALL (the
-W-72 A/B is PROOF), per-page TLBIMVA (W-43/W-67's loop), clear_fixmap
-(126→125). The boot does NO TLB op before the CMA block (head.S builds
-its tables MMU-off; pbmarkv = cache ops) — the CMA's TLBIALL = the
-FIRST TLB op of every boot = deterministic. **Known since session 1**:
-stub3.S avoids the TLBIALL ("wedged with CPU1 in reset; redundant") —
-the connection to the kernel's TLB ops was never made. Prime suspect =
-the SCU routing TLB-op broadcasts to CPU1's dead port.
+**The machine wedges on SCU-routed global ops with CPU1 held:**
+1. **The TLB maintenance ops** — deterministic with the L2 OFF (the
+   W-72..77 era), flaky with the L2 ON (the W-78/79 passed the TLBIALL,
+   the W-80/83 wedged at the TLB ops).
+2. **The ldrex/strex exclusives (the spinlocks)** — deterministic with the
+   L2 ON + SMP=y (the first printk = the logbuf lock = the kill site, 3/3);
+   harmless with !SMP's plain spinlocks (the W-80 passed the printk).
 
-What is now RULED OUT (all with direct evidence):
-- The barrier domain/encoding: `dsb nosh` never existed on the
-  hardware (GNU as rejects it; GCC's IAS silently emitted the same
-  full-system mcr); the f57ff062 literal = an ISB-class encoding with
-  an invalid option (UNPREDICTABLE on the A9). f57ff04f = the only
-  DSB encoding that ever shipped, and it's innocent (W-72 passed with
-  it in the block).
+## RULED OUT (with direct on-device evidence — never re-test)
+
+- The barrier domain/encoding: `dsb nosh` = an invalid GAS name; GCC's
+  integrated assembler SILENTLY accepted it and emitted the same
+  full-system mcr — the session-10 "nosh" chain never existed on the
+  hardware. The W-68 f57ff062 literal = an ISB-class encoding with an
+  invalid option (UNPREDICTABLE on the A9) = the W-69 death site.
+  Valid encodings (verified): DSB=f57ff04n (sy=F), DMB=f57ff05n,
+  ISB=f57ff06n; the class field = bits[7:4].
 - ACTLR.SMP (bit 6) and ACTLR.FW (bit 0): all three states wedged
-  (0x41 / 0x1 / 0x0). FW=0+SMP=0 is now the standing config (it costs
-  nothing and matches the single-core reality).
-- The DSB/ISB themselves: exonerated by position (W-71's phases).
+  (0x41/0x1/0x0). The ~0x41 clear is KEPT (harmless, matches maxcpus=1).
+- CPU1 parked vs held: the park failed to cure the TLB ops AND broke the
+  post-WDT2-reset recovery (the PRCM hold bit persists across resets;
+  the released CPU1 resurrects QNX via the SAR path = the 11-min dark
+  device). **THE PARK IS FORBIDDEN** until the SAR neutralization
+  (0x4A326B00, NS-writable) + the kernel-side re-hold exist.
+- The pgd content: the W-74 zeroing = no cure. AND the "poison pair"
+  [0xdfc/0xdfd] = actually VALID section descriptors in every era — the
+  W-37 "QNX-era table pointer" reading was an attribute-bit misread
+  (0x141e = the cached shape, 0x1412 = the uncached shape). The W-75
+  strip is live and proven via the bc[28..31] dumps.
+- The descriptor cacheability (the W-75 strip) and the SCTLR cache state
+  (the W-76 C/I=0): both exonerated.
+- The CP13 TLS writes: the W-63 class is real (the W-78/79 = 150 with the
+  write, the W-80 = passed without it) but the W-81 skip = still 150 = the
+  print-side wedge dominated. The set_my_cpu_offset skip is KEPT.
+- The NS SCU CTRL write: FILTERED (the scuprobe — reads fine, the write
+  survives silently, the enable bit unchanged). The box survived.
 
-## CONFIRMED (the toolchain fact worth keeping)
+## THE STATE OF PLAY AT THE WRAP
+
+- The run mode = **--l2on** (the L2 stays on; --dmaquiet's L2-off = the
+  deterministic TLB-op wedge).
+- The kernel = **CONFIG_SMP=n** (the UP spinlocks; maxcpus=1 was already
+  the de-facto shape; the SMP bring-up = the bequest).
+- The marker front = **the first TLB op after the CMA (clear_fixmap in
+  early_fixmap_shutdown)**, bc[1]=126→125.
+- The console = alive (the earlycon ring; the era's proven channel).
+- The payload flow = the LAST untested variable for the TLB-op wedge: the
+  runs 23-32 era (--t3, the old minimal flow) = the only era where TLB
+  ops ever completed. THE NEXT SESSION'S OPENING MOVE = the git
+  archaeology: the era's qnx2linux.c + the current kernel, then bisect
+  the payload deltas (the DISPC kill, the devb slay, the CIPA sweeps, the
+  memtest, the placement mechanics).
+- If the payload bisect fails: the real cure = the CPU1 release done
+  RIGHT (the SAR neutralization + the kernel-side re-hold + the park
+  blob), or the full SMP bring-up. The LED-progress encoding (the
+  user's idea) = a cheap add-on: the kernel already drives GPIO1_13
+  (the SETDATAOUT write at marker 111) — a per-phase/per-initcall
+  heartbeat = the video-visible death point for the unrecoverable runs.
+
+## TOOLCHAIN FACTS (keep)
 
 - `dsb nsh` = the valid v7 name (f57ff047); `dsb nosh` = invalid.
-- The v7 barrier encodings: class field = bits[7:4] (DSB=4, DMB=5,
-  ISB=6), option = bits[3:0]. f57ff04f/f57ff05f/f57ff06f = sy.
-- **GCC's integrated assembler SILENTLY accepts invalid barrier names
-  and emits the mcr c7,c10,4 (full-system) fallback** — rule 16 (the
-  shipped-binary verification) is the only defense; the build log
-  lies.
-
-## THE PGD POISON STATUS
-
-The pair [0xdfc/0xdfd] = 0xbfc1141e/0xbfd1141e = LIVE QNX-era TABLE
-descriptors (measured in-boot, W-72's bc[29]/bc[30]). The mmu.c sweep
-= CONSISTENCY-ONLY (pre != post) — the #111 plan's "re-write the
-section descs" half was NEVER implemented. With the 2MB shave nothing
-is allocated there, so the poison is harmless UNTIL something walks
-those sections — but the pair SHOULD be zeroed/rewritten in the same
-pass that fixes the TLB-op problem (the walks after any TLB
-invalidation re-read the pgd).
-
-## BEQUEST to session 12 (the CPU1-parking investigation)
-
-The TLB-op wedge makes the CPU1 release load-bearing. The shape:
-1. Payload-side: zero/neutralize the SAR wake context (0x4A326B00,
-   0x150 B — NS-writable per the session-1 devpm RE) so the ROM's
-   monitor-verify fails.
-2. Release CPU1 (the inverse of the payload's proven RSTCTRL hold
-   write — the same register family, 0x4824380C/0x4824340C).
-3. CPU1 re-enters the ROM's CPU1 path (0x40028134: cpunum, the wfe
-   loop, the AUX_CORE_BOOT flag) — with the SAR context invalid, the
-   expected fallback = parked in the ROM's poll loop = ALIVE = the
-   SCU's CPU1 port lives = the TLB broadcasts complete.
-4. The kernel then boots with CPU1 parked (maxcpus=1) — restore the
-   TLBIALL (the proper flush) and proceed.
-RISKS: the ROM's invalid-context behavior is UNVERIFIED (may not fall
-back to the poll); the RSTCTRL release write from NS is UNPROVEN (the
-hold is proven, the inverse is not); a wrong release = CPU1 resumes
-QNX mid-boot = the run's death (recoverable, evidence preserved).
-Cheap first probe: read the SAR context + the RSTCTRL registers from
-the payload (in-QNX, no jump) before any release attempt.
-ALTERNATIVES if the parking fails: (a) the undocumented monitor
-services (0xF0 unidentified; 0x103/0x107 = the ROM's own CPU1-path
-sites); (b) the full SMP bring-up (the kernel wakes CPU1 itself).
-
+- GCC's integrated assembler silently accepts invalid barrier names and
+  emits the mcr fallback — rule 16 (the shipped-binary verification) is
+  the only defense.
+- The A9 ACTLR: bit 6 = SMP ("coherent requests"), bit 0 = FW ("cache and
+  TLB maintenance broadcast") — the CMSIS-verified map.
+- memdump3 90000040 0x40 = the extended slots incl. bc[28..31].
