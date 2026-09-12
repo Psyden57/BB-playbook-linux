@@ -1199,7 +1199,7 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-12 17:08:48.275771773 +0000
++++ b/arch/arm/mm/mmu.c	2026-09-12 17:56:45.951770985 +0000
 @@ -700,6 +700,13 @@
  	pr_info("Memory policy: %sData cache %s\n",
  		ecc_mask ? "ECC enabled, " : "", cp->policy);
@@ -1447,11 +1447,22 @@
  
  	/*
  	 * Finally flush the caches and tlb to ensure that we're in a
-@@ -1457,10 +1605,13 @@
+@@ -1456,11 +1604,23 @@
+ 	 * any write-allocated cache lines in the vector page are written
  	 * back.  After this point, we can start to touch devices again.
  	 */
- 	local_flush_tlb_all();
-+	PB_MMU_BC(96);			/* local_flush_tlb_all done */
+-	local_flush_tlb_all();
++	/* PlayBook W-89 (session 12): local_flush_tlb_all SKIPPED — the W-88
++	 * death = exactly here ([98 → 96], the next TLB op after the CMA's
++	 * skipped TLBIALL and the passed clear_fixmap). The TLB-op wedge
++	 * family (the SCU-routed ops with CPU1 held). The stale-TLB risk =
++	 * the pre-existing entries for the VAs this function just mapped
++	 * (the vectors, the devices) — the same tolerable class as the CMA
++	 * skip: fresh mappings have no stale entries; only re-used VAs can
++	 * collide and none are re-used here for data the boot reads before
++	 * the next flush. */
++	/* local_flush_tlb_all(); */
++	PB_MMU_BC(96);			/* local_flush_tlb_all (skipped) done */
  	flush_cache_all();
 -
 +	PB_MMU_BC(97);			/* flush_cache_all done */
@@ -1462,7 +1473,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1916,81 @@
+@@ -1765,7 +1925,81 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1544,7 +1555,7 @@
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +1998,30 @@
+@@ -1773,9 +2007,30 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1575,7 +1586,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +2031,7 @@
+@@ -1785,6 +2040,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
