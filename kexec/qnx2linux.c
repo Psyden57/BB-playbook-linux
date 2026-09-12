@@ -104,7 +104,7 @@ static void *mapdev(uint64_t pa, size_t len)
 /* Pre-jump LED: set the FAN5702 to BLUE via QNX's /dev/i2c3 (the module is
  * clocked during the devctl; afterwards the probe toggles only the EN pin).
  * devctl shape RE'd from led-fan5702.so (see LED-RE.md). */
-static void led_blue_qnx(void)
+static void led_color_qnx(uint8_t color)
 {
     uint8_t buf[18];
     int fd = open("/dev/i2c3", O_RDWR);
@@ -115,10 +115,33 @@ static void led_blue_qnx(void)
     *(uint32_t *)(buf + 8) = 2;         /* stop */
     *(uint32_t *)(buf + 12) = 1;        /* restart */
     buf[16] = 0x10;                     /* GENERAL */
-    buf[17] = 0x08;                     /* BLUE (bit3) */
+    buf[17] = color;                    /* R=0x02 G=0x04 B=0x08 */
     if (devctl(fd, 0x80100505 /*SEND*/, buf, sizeof(buf), NULL) != 0)
-        perror("devctl(i2c3 led blue)");
+        perror("devctl(i2c3 led)");
     close(fd);
+}
+
+static void led_blue_qnx(void)
+{
+    led_color_qnx(0x08);
+}
+
+/* PlayBook W-86 (session 12): force I2C4's module AUTOIDLE off (SYSCONFIG
+ * bit 0, 16-bit accesses only — LED-RE.md §5). The UART3 lesson: a posted
+ * store to a dead (auto-idled) L4PER module stalls the store buffer. The
+ * kernel's pb_led() color writes must find I2C4 still clocked seconds
+ * after the jump, so kill the module-level auto-idle here (the PRCM
+ * CLKSTCTRL is secure-filtered — rule 2 — but the module SYSCONFIG is a
+ * plain device register; NS-writability verified by --ledprobe). */
+static void led_i2c4_noidle(void)
+{
+    volatile uint16_t *i2c4 = (volatile uint16_t *)mapdev(0x48350000ull, 0x200);
+    uint16_t sysc = i2c4[0x10 / 2];
+    printf("I2C4 SYSCONFIG=%04x\n", sysc);
+    i2c4[0x10 / 2] = (uint16_t)(sysc & ~1u);    /* AUTOIDLE = 0 */
+    sysc = i2c4[0x10 / 2];
+    printf("I2C4 SYSCONFIG now=%04x (%s)\n", sysc,
+           (sysc & 1) ? "AUTOIDLE-STUCK" : "AUTOIDLE-OFF");
 }
 
 /* Kick WDT2 (0x4A314000): write the complement of WTGR (+0x30) — the same
@@ -1192,6 +1215,16 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         }
     }
     bc_write(52);
+    /* PlayBook W-86 (session 12): the LED handoff. MAGENTA = "the kernel
+     * owns the machine now" (the frozen-color post-mortem scheme:
+     * magenta = the death before the C world's yellow, cyan = inside the
+     * CMA block, green = past the CMA — init/main.c pb_led). And kill
+     * I2C4's module auto-idle so the kernel's pb_led() finds the bus
+     * clocked (the UART3 dead-module stall class). Both QNX-side =
+     * clocked and safe; recorded in bc[10] (the stub-safe slot, this
+     * run's LED state: 0x0A = magenta). */
+    led_i2c4_noidle();
+    led_color_qnx(0x0A);
     enter_stub(0x40304000u,
                probepath ? 0x40309000u : kern_phys + 0x8000u,
                bcmir[0], 0x90000000u,
@@ -1519,6 +1552,42 @@ int main(int argc, char **argv)
      * eMMC-backed jump.log would block forever. A 64KB buffer holds the
      * whole run's output in RAM. */
     setvbuf(stdout, NULL, _IOFBF, 65536);
+    /* PlayBook W-86: --ledprobe — NO JUMP. Verify the direct NS access to
+     * I2C4 (0x48350000) before any run relies on it (the MMCHS class:
+     * some device regions SIGBUS from NS). Reads SYSCONFIG, forces
+     * AUTOIDLE=0, reads back, writes the GENERAL color byte direct
+     * (no devctl) = the full bare-metal LED recipe. A SIGSEGV here =
+     * the mode is closed (no reboot; the jump path untouched). */
+    if (argc > 1 && !strcmp(argv[1], "--ledprobe")) {
+        volatile uint16_t *i2c4;
+        setvbuf(stdout, NULL, _IONBF, 0);
+        if (ThreadCtl(_NTO_TCTL_IO_PRIV, 0) == -1)
+            perror("IO_PRIV");
+        bc = mapdev(BC_ADDR, 0x100);
+        bc[0] = BC_MAGIC; bc[1] = 60; bc[5] = BC_MAGIC2;
+        i2c4 = (volatile uint16_t *)mapdev(0x48350000ull, 0x200);
+        bc_write(61);
+        printf("I2C4 SYSCONFIG=%04x\n", i2c4[0x10 / 2]);
+        i2c4[0x10 / 2] = (uint16_t)(i2c4[0x10 / 2] & ~1u);  /* AUTOIDLE=0 */
+        printf("I2C4 SYSCONFIG now=%04x (%s)\n", i2c4[0x10 / 2],
+               (i2c4[0x10 / 2] & 1) ? "AUTOIDLE-STUCK" : "AUTOIDLE-OFF");
+        bc_write(62);
+        {   /* the LED-RE §5 bare-metal recipe: GENERAL (0x10) = 0x0E */
+            int t;
+            for (t = 10000; t && (i2c4[0x88 / 2] & (1 << 12)); t--) ;
+            i2c4[0x98 / 2] = 2;
+            i2c4[0xAC / 2] = 0x36;
+            i2c4[0x9C / 2] = 0x10;
+            i2c4[0xA4 / 2] = 0x8603;
+            for (t = 10000; t && !(i2c4[0x88 / 2] & (1 << 4)); t--) ;
+            i2c4[0x9C / 2] = 0x0E;          /* white = the direct-access proof */
+            for (t = 10000; t && !(i2c4[0x88 / 2] & (1 << 2)); t--) ;
+            i2c4[0x28 / 2] = i2c4[0x88 / 2];
+            printf("I2C4 direct write done (LED should be WHITE)\n");
+        }
+        bc_write(63);
+        return 0;
+    }
     if (argc > 1 && !strcmp(argv[1], "--ppa")) {
         return do_ppa();
     }

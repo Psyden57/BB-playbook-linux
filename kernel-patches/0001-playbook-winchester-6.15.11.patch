@@ -200,7 +200,7 @@
  #endif
 
 --- a/arch/arm/kernel/head.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head.S	2026-09-11 23:26:38.851846904 +0000
++++ b/arch/arm/kernel/head.S	2026-09-12 16:52:23.623773989 +0000
 @@ -98,6 +98,113 @@
   THUMB(	.thumb			)	@ switch to Thumb now.
   THUMB(1:			)
@@ -513,7 +513,7 @@
  
  	/*
  	 * Create identity mapping to cater for __enable_mmu.
-@@ -343,6 +613,99 @@
+@@ -343,6 +613,113 @@
  	str	r3, [r0], #4
  #endif
  
@@ -594,6 +594,20 @@
 +	orr	r3, r6, r3, lsl #12
 +	orr	r3, r3, #PMD_SECT_XN
 +	str	r3, [r0]
++	@ PlayBook W-86 (session 12): I2C4 section: VA 0xFEE00000 -> PA
++	@ 0x48300000 (I2C4 @ 0xFEE50000 = the FAN5702 RGB LED bus, LED-RE.md
++	@ §2/§5). pb_led() writes the per-phase color through it in the C
++	@ world — the FROZEN color = the death phase, video-visible in the
++	@ post-mortems whose DRAM evidence is lost (the W-85 dark-hang class).
++	@ 0x48000|0x300 = 0x48300 -> PA 0x48300000 (the 0xFEC #0x300 shape).
++	mov	r0, #0xF00		@ VA section 0xFEE00000
++	orr	r0, r0, #0xEE
++	add	r0, r4, r0, lsl #PMD_ENTRY_ORDER
++	mov	r3, #0x48000		@ PA 0x48300000 >> 12
++	orr	r3, r3, #0x300
++	orr	r3, r6, r3, lsl #12
++	orr	r3, r3, #PMD_SECT_XN
++	str	r3, [r0]
 +	@ vector page: VA 0x00000000 and 0xFFFF0000 -> PA 0x9FE00000 (4th
 +	@ mirror, no ring header; payload pre-loads abort handlers there).
 +	@ A post-M abort then lands in real handler code (writes 0xAB to
@@ -613,7 +627,7 @@
  #else /* CONFIG_DEBUG_ICEDCC || CONFIG_DEBUG_SEMIHOSTING */
  	/* we don't need any serial debugging mappings */
  	ldr	r7, [r10, #PROCINFO_IO_MMUFLAGS] @ io_mmuflags
-@@ -373,6 +736,7 @@
+@@ -373,6 +750,7 @@
  #ifdef CONFIG_ARM_LPAE
  	sub	r4, r4, #0x1000		@ point to the PGD table
  #endif
@@ -621,7 +635,7 @@
  	ret	lr
  ENDPROC(__create_page_tables)
  	.ltorg
-@@ -465,6 +829,13 @@
+@@ -465,6 +843,13 @@
   *  r13 = *virtual* address to jump to upon completion
   */
  __enable_mmu:
@@ -635,7 +649,7 @@
  #if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
  	orr	r0, r0, #CR_A
  #else
-@@ -479,9 +850,21 @@
+@@ -479,9 +864,21 @@
  #ifdef CONFIG_CPU_ICACHE_DISABLE
  	bic	r0, r0, #CR_I
  #endif
@@ -657,7 +671,7 @@
  	mov	r5, #DACR_INIT
  	mcr	p15, 0, r5, c3, c0, 0		@ load domain access register
  	mcr	p15, 0, r4, c2, c0, 0		@ load page table pointer
-@@ -506,12 +889,28 @@
+@@ -506,12 +903,28 @@
  	.align	5
  	.pushsection	.idmap.text, "ax"
  ENTRY(__turn_mmu_on)
@@ -1032,17 +1046,23 @@
  #endif
 
 --- a/arch/arm/mm/dma-mapping.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/dma-mapping.c	2026-09-12 01:16:37.095849345 +0000
-@@ -270,6 +270,8 @@
++++ b/arch/arm/mm/dma-mapping.c	2026-09-12 16:58:31.336918280 +0000
+@@ -270,6 +270,14 @@
  void __init dma_contiguous_remap(void)
  {
  	int i;
 +	noinline void pb_bc_put(unsigned int addr, unsigned int v);	/* PlayBook W-20 */
++	extern noinline void pb_led(unsigned int color);	/* PlayBook W-86 */
++
++	/* PlayBook W-86: CYAN (G+B) = inside the CMA block (the current
++	 * front). Frozen cyan = the death between the pmd_clear loop and
++	 * the next color (green = dma_contiguous_remap done). */
++	pb_led(0x0C);
 +
  	for (i = 0; i < dma_mmu_remap_num; i++) {
  		phys_addr_t start = dma_mmu_remap[i].base;
  		phys_addr_t end = start + dma_mmu_remap[i].size;
-@@ -283,6 +285,17 @@
+@@ -283,6 +291,17 @@
  
  		map.pfn = __phys_to_pfn(start);
  		map.virtual = __phys_to_virt(start);
@@ -1060,7 +1080,7 @@
  		map.length = end - start;
  		map.type = MT_MEMORY_DMA_READY;
  
-@@ -298,11 +311,92 @@
+@@ -298,11 +317,92 @@
  		for (addr = __phys_to_virt(start); addr < __phys_to_virt(end);
  		     addr += PMD_SIZE)
  			pmd_clear(pmd_off_k(addr));
@@ -1194,7 +1214,7 @@
  
 
 --- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-11 23:45:14.891846262 +0000
++++ b/arch/arm/mm/mmu.c	2026-09-12 16:58:46.367773226 +0000
 @@ -700,6 +700,13 @@
  	pr_info("Memory policy: %sData cache %s\n",
  		ecc_mask ? "ECC enabled, " : "", cp->policy);
@@ -1539,7 +1559,7 @@
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +1998,30 @@
+@@ -1773,9 +1998,38 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1563,6 +1583,14 @@
 +	memblock_set_current_limit(arm_lowmem_limit);
  	dma_contiguous_remap();
 +	PB_MMU_BC(126);			/* dma_contiguous_remap done */
++	/* PlayBook W-86: GREEN = past the CMA (dma_contiguous_remap done).
++	 * Frozen green = the death in early_fixmap_shutdown and beyond
++	 * (the W-83 front was exactly here: clear_fixmap = the first TLB
++	 * op after the CMA). */
++	{
++		extern noinline void pb_led(unsigned int color);
++		pb_led(0x04);
++	}
  	early_fixmap_shutdown();
 +	PB_MMU_BC(125);			/* early_fixmap_shutdown done */
  	devicemaps_init(mdesc);
@@ -1570,7 +1598,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +2031,7 @@
+@@ -1785,6 +2039,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
@@ -1579,58 +1607,8 @@
  	empty_zero_page = virt_to_page(zero_page);
  	__flush_dcache_folio(NULL, page_folio(empty_zero_page));
 
---- a/arch/arm/mm/tlb-v7.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/tlb-v7.S	2026-09-11 19:53:32.763224555 +0000
-@@ -69,22 +69,42 @@
-  *	- end   - end address (exclusive, may not be aligned)
-  */
- SYM_TYPED_FUNC_START(v7wbi_flush_kern_tlb_range)
--	dsb	ish
-+	/* PlayBook W-40c (session 10): the W-40c run died inside this
-+	 * flush (dma_contiguous_remap: pmd_clear done 145, TLB flush
-+	 * never completed 146). Phase markers -> bc[27] (0xD000006C):
-+	 * 0xF1000001 entry, 0xF1000002 after the loop's final dsb,
-+	 * 0xF1000003 after isb. The LAST flush's phase = what we read.
-+	 * W-43 (session 10, --t3 L2-OFF): died with bc[27]=1 = AT the
-+	 * entry `dsb ish` — the first Inner-Shareable barrier in the
-+	 * boot; CPU1 is HELD in warm reset and the ISH barrier waits for
-+	 * the dead core (the ACTLR.SMP wedge class, main.c's note).
-+	 * Flaky: W-40d/W-41 passed the same flush. FIX: `dsb sy` (the
-+	 * domain is irrelevant for a single-core boot); the W-43 evidence
-+	 * (the wedge reproduces L2-ON and L2-OFF) pins the CPU1-hold, not
-+	 * the L2. */
-+	ldr	r3, =0xD000006C
-+	mov	ip, #1
-+	str	ip, [r3]
-+	dsb	sy	/* PlayBook 2026-09-11 (session 11, W-70): restored. The W-66 "dsb nosh" = an invalid GAS barrier name — GCC's integrated assembler silently accepted it and emitted the SAME full-system mcr c7,c10,4 encoding (rule 16, W-69 audit). True NSH DSB = f57ff047, but with ACTLR.FW+SMP cleared (the W-70 start_kernel fix) the plain SY DSB is CPU-local. */
- 	mov	r0, r0, lsr #PAGE_SHIFT		@ align address
- 	mov	r1, r1, lsr #PAGE_SHIFT
- 	mov	r0, r0, lsl #PAGE_SHIFT
- 	mov	r1, r1, lsl #PAGE_SHIFT
- 1:
- #ifdef CONFIG_ARM_ERRATA_720789
--	ALT_SMP(mcr	p15, 0, r0, c8, c3, 3)	@ TLB invalidate U MVA all ASID (shareable)
-+	ALT_SMP(mcr	p15, 0, r0, c8, c7, 3)	@ PlayBook W-44: was c8,c3,3 (the IS/broadcast variant) — the loop's first invalidate broadcast-waits for the HELD CPU1 (bc[27]=1 = entry passed, death in the loop); non-ISH encoding for the single-core boot
- #else
--	ALT_SMP(mcr	p15, 0, r0, c8, c3, 1)	@ TLB invalidate U MVA (shareable)
-+	ALT_SMP(mcr	p15, 0, r0, c8, c7, 1)	@ PlayBook W-44: was c8,c3,1 (the IS variant) — same class
- #endif
- 	ALT_UP(mcr	p15, 0, r0, c8, c7, 1)	@ TLB invalidate U MVA
- 	add	r0, r0, #PAGE_SZ
- 	cmp	r0, r1
- 	blo	1b
--	dsb	ish
-+	dsb	sy	/* PlayBook 2026-09-11 (session 11, W-70): restored (see the entry note). */
-+	mov	ip, #2
-+	str	ip, [r3]
- 	isb
-+	mov	ip, #3
-+	str	ip, [r3]
- 	ret	lr
- SYM_FUNC_END(v7wbi_flush_kern_tlb_range)
-
 --- a/init/main.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/init/main.c	2026-09-11 23:02:38.055846844 +0000
++++ b/init/main.c	2026-09-12 16:56:18.087774495 +0000
 @@ -86,6 +86,7 @@
  #include <linux/sched/clock.h>
  #include <linux/sched/task.h>
@@ -1639,12 +1617,48 @@
  #include <linux/context_tracking.h>
  #include <linux/random.h>
  #include <linux/moduleloader.h>
-@@ -766,17 +767,36 @@
+@@ -766,17 +767,76 @@
  }
  
  /* Arch code calls this early on, or if not, just before other parsing. */
 +/* PlayBook kexec: L2-aware bc write (see definition below). */
 +noinline void pb_bc_put(unsigned int addr, unsigned int v);
++
++/* PlayBook W-86 (session 12): the per-phase LED color. The FAN5702 RGB
++ * driver sits on I2C4 (PA 0x48350000, reached via the head.S early-map
++ * section VA 0xFEE00000 -> PA 0x48300000, so 0xFEE50000 works in both
++ * the MMU-on and MMU-off worlds; LED-RE.md §2/§5). GENERAL @0x10:
++ * R=0x02 G=0x04 B=0x08, 16-bit register accesses ONLY (32-bit corrupts
++ * the register file). One call per coarse phase (~10 device ops, every
++ * poll bounded — rule 10; the payload has forced I2C4 SYSCONFIG
++ * AUTOIDLE=0 pre-jump so the module cannot be mid-idle — the UART3
++ * dead-module stall class). The FROZEN color in the post-mortem (LED
++ * or video, even in the W-85 dark-hang class where the DRAM evidence
++ * dies with the power-hold) = the death phase. */
++noinline void pb_led(unsigned int color)
++{
++	volatile unsigned short *i2c = (volatile unsigned short *)0xFEE50000;
++	int t;
++
++	/* wait !BB (bus busy = STAT bit 12) — bounded */
++	for (t = 10000; t && (i2c[0x88 / 2] & (1 << 12)); t--)
++		;
++	if (!t)
++		goto out;
++	i2c[0x98 / 2] = 2;		/* CNT = 2 bytes */
++	i2c[0xAC / 2] = 0x36;		/* SA = FAN5702 7-bit */
++	i2c[0x9C / 2] = 0x10;		/* DATA = GENERAL */
++	i2c[0xA4 / 2] = 0x8603;		/* EN|MST|TRX|STP|STT */
++	for (t = 10000; t && !(i2c[0x88 / 2] & (1 << 4)); t--)
++		;			/* XRDY */
++	if (!t)
++		goto out;
++	i2c[0x9C / 2] = (unsigned short)color;	/* DATA = the color byte */
++	for (t = 10000; t && !(i2c[0x88 / 2] & (1 << 2)); t--)
++		;			/* ARDY */
++out:
++	i2c[0x28 / 2] = i2c[0x88 / 2];	/* IRQSTATUS (w1c) = clear STAT */
++}
 +
  void __init parse_early_param(void)
  {
@@ -1655,6 +1669,10 @@
 +	/* PlayBook kexec: bc probe — parse_early_param entered (any call).
 +	 * pb_bc_put = L2-aware (flushed when the PL310 is enabled). */
 +	pb_bc_put(0xD000002C, 0xC0DE0010);			/* bc[11] */
++	/* PlayBook W-86: YELLOW (R+G) = the C world reached parse_early_param.
++	 * The payload's magenta = "the kernel jumped"; frozen yellow here =
++	 * the death between the C entry and the next color. */
++	pb_led(0x06);						/* yellow */
 +	if (done) {
 +		/* PlayBook kexec: bc[14] = the latch was ALREADY closed at
 +		 * this call — an earlier parse_early_param consumed it
@@ -1677,7 +1695,7 @@
  	done = 1;
  }
  
-@@ -892,18 +912,201 @@
+@@ -892,18 +952,201 @@
  #endif
  }
  
@@ -1879,7 +1897,7 @@
  
  	local_irq_disable();
  	early_boot_irqs_disabled = true;
-@@ -913,9 +1116,102 @@
+@@ -913,9 +1156,102 @@
  	 * enable them.
  	 */
  	boot_cpu_init();
@@ -1982,7 +2000,7 @@
  	/* Static keys and static calls are needed by LSMs */
  	jump_label_init();
  	static_call_init();
-@@ -1032,6 +1328,7 @@
+@@ -1032,6 +1368,7 @@
  	 * this. But we do want output early, in case something goes wrong.
  	 */
  	console_init();
@@ -1990,7 +2008,7 @@
  	if (panic_later)
  		panic("Too many boot %s vars at `%s'", panic_later,
  		      panic_param);
-@@ -1088,12 +1385,18 @@
+@@ -1088,12 +1425,18 @@
  	pidfs_init();
  	cpuset_init();
  	cgroup_init();
@@ -2009,7 +2027,7 @@
  
  	/* Do the rest non-__init'ed, we're now alive */
  	rest_init();
-@@ -1315,8 +1618,22 @@
+@@ -1315,8 +1658,22 @@
  		   NULL, ignore_unknown_bootoption);
  
  	trace_initcall_level(initcall_level_names[level]);
@@ -2033,7 +2051,7 @@
  }
  
  static void __init do_initcalls(void)
-@@ -1476,6 +1793,8 @@
+@@ -1476,6 +1833,8 @@
  	numa_default_policy();
  
  	rcu_end_inkernel_boot();
@@ -2042,7 +2060,7 @@
  
  	do_sysctl_args();
  
-@@ -1539,6 +1858,7 @@
+@@ -1539,6 +1898,7 @@
  {
  	/* Now the scheduler is fully set up and can do blocking allocations */
  	gfp_allowed_mask = __GFP_BITS_MASK;
@@ -2050,7 +2068,7 @@
  
  	/*
  	 * init can allocate pages on any node
-@@ -1565,6 +1885,7 @@
+@@ -1565,6 +1925,7 @@
  	page_alloc_init_late();
  
  	do_basic_setup();
@@ -2199,7 +2217,7 @@
  	omap4-xyboard-mz617.dtb
  dtb-$(CONFIG_SOC_AM33XX) += \
 
---- /dev/null	2026-09-11 20:16:38.068084800 +0000
+--- /dev/null	2026-09-12 12:49:55.837591900 +0000
 +++ b/arch/arm/boot/dts/ti/omap/omap4-winchester.dts	2026-09-04 12:02:36.388387867 +0000
 @@ -0,0 +1,120 @@
 +// SPDX-License-Identifier: GPL-2.0-only
@@ -2323,9 +2341,9 @@
 +	status = "disabled";
 +};
 
---- /dev/null	2026-09-11 20:16:38.068084800 +0000
-+++ b/arch/arm/include/debug/omap4bc.S	2026-09-02 20:18:39.913189588 +0000
-@@ -0,0 +1,116 @@
+--- /dev/null	2026-09-12 12:49:55.837591900 +0000
++++ b/arch/arm/include/debug/omap4bc.S	2026-09-12 16:52:08.119774182 +0000
+@@ -0,0 +1,144 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +/*
 + * omap4bc.S — DEBUG_LL for the BlackBerry PlayBook (OMAP4430 "winchester").
@@ -2430,11 +2448,39 @@
 +		ring_put r1, r2, r3		@ ring 2: 0x90000080
 +		sub	r1, r1, #0x8000000	@ -> 0x88000080
 +		ring_put r1, r2, r3		@ ring 1: 0x88000080
-+		@ --- PlayBook 2026-09-02: flush machinery REMOVED. The ring VAs
-+		@ are DEVICE-mapped (head.S ring-map block strips C/B/S into r6) in
-+		@ both the MMU-on and MMU-off cases, so every ring_put store is
-+		@ already DRAM-truth. The old DCCMVAC + NS-CIPA + sync-poll per
-+		@ char was ritual and wedged the L2-on boot.
++		@ --- PlayBook W-86 (session 12): the BATCH ring flush. The ring
++		@ stores are device-VA stores: with the L2 ON they allocate as
++		@ dirty PL310 lines and never reach DRAM (W-84: the ring read 0
++		@ while the bc markers survived — pb_bc_put DCCMVACs AND SMC-
++		@ flushes, the ring had nothing). The W-77 de-CIPA stays for the
++		@ L2-OFF state (the dead line-ops into the disabled L2C = the
++		@ W-77 poison class), so GUARD on the PL310 CTRL bit0: flush only
++		@ when the L2 is enabled. Every 64 chars: clean+inv ring1's page
++		@ window by PA (NS 0x7F0, the l2canary-proven op) + one bounded
++		@ 0x730 sync (rule 10). ~40 device ops / 64 chars = inside the
++		@ cliff. Clobbers r1/r2/r5 (pushed); r3 (UART base) untouched.
++		ldr	r5, [r1]		@ ring1 monotonic count (fresh)
++		tst	r5, #63			@ flush on every 64th char
++		bne	95f
++		cmp	r4, #1			@ MMU on?
++		ldreq	r5, =0xFEB42000		@ PL310 via the static VA
++		ldrne	r5, =0x48242000		@ MMU off -> PL310 PA
++		ldr	r2, [r5, #0x100]	@ PL310 CTRL
++		tst	r2, #1			@ the L2 enabled?
++		beq	95f			@ no -> device stores = DRAM truth
++		ldr	r1, =0x88000080		@ ring1 PA: count/index + chars
++		mov	r2, #36			@ lines 0x80..0x4FF (0x480 bytes)
++91:		str	r1, [r5, #0x7F0]	@ clean+inv line by PA
++		add	r1, r1, #32
++		subs	r2, r2, #1
++		bhi	91b
++		mov	r2, #1000		@ bounded sync poll (rule 10)
++92:		ldr	r1, [r5, #0x730]
++		tst	r1, #1
++		beq	95f
++		subs	r2, r2, #1
++		bhi	92b
++95:
 +		b	98f
 +
 +98:
