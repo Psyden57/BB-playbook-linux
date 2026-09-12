@@ -35,6 +35,12 @@ Rules of the run (from docs/ + hard experience):
 - **Verify fixes in the shipped binary, not the build log** — a rebuild has
   silently produced a stale packed image before (session 3, run 8); build
   size deltas are the fastest change-check.
+- **ALL hex arithmetic goes through python — no exceptions** (rule 13,
+  strengthened 2026-09-12): conversions, print-base interpretation
+  (%llx = hex — the session-13 "15,519 anomaly" = a hex print read as
+  decimal and it cost three runs), bc/ring decodes, alignment/range
+  checks, size deltas, header reads. If a number feeds a conclusion, a
+  tool computed it.
 - **Cross-check bc[1] against the ring count** before trusting a low
   marker — a bc *below* proven execution means the channel regressed, not
   the kernel.

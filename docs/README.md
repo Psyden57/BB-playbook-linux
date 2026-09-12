@@ -56,13 +56,23 @@ corrected them — the corrections are never silent (see
     4-byte group when decoding ring text.
 12. **NVRAM and RPMB are untouchable** (brick hazards — README safety model,
     PLAYBOOK-REFERENCE §5/§8).
-13. **Verify arithmetic with python, not in your head** — every hex
-    conversion, bc-chain closure (kern_off/load/padded/dtb_phys), size
-    delta and address calculation goes through a real computation; the
-    analyst produced three consecutive hex slips (one caused a false
-    84 KB "rebuild anomaly", one a false 512-byte "chain mismatch")
-    before adopting this rule. Mental hex is banned for anything that
-    feeds a conclusion.
+13. **Verify arithmetic with python, not in your head** — STRENGTHENED
+    2026-09-12 (session 13, after the "15,519 anomaly" cost three runs):
+    EVERY hex value that feeds a conclusion goes through python (or bc) —
+    no mental arithmetic, ever, not even "trivial" ones. This explicitly
+    includes: (a) every value read from a print — note the print's format
+    specifier (%x/%llx = HEX, %u/%d = DECIMAL) BEFORE interpreting the
+    value; a value's radix is part of the arithmetic and a decimal misread
+    of a hex print has the same standing as a wrong conversion; (b) every
+    bc/ring decode — via a decode script, never eyeballed; (c) every
+    size/offset/alignment/range comparison (a `size & 31` check, an A-B
+    diff, a "does X match Y" claim) — python-computed; (d) every
+    build-artifact comparison (a size delta, a header field read back
+    from a binary). The analyst's record: three consecutive hand slips in
+    session 7 (one caused a false 84 KB "rebuild anomaly"), and in
+    session 13 a hex print read as decimal produced a phantom "old DTB"
+    that drove three full runs (W-90a's fossil narrative, W-91's
+    whole-DRAM sweep, W-92's capture) before W-93's capture dissolved it.
 14. **Verify source claims with grep/read, never memory** — recalled
     code snippets have been fabricated before (omap-secure.c reserve,
     head-common.S fixup calls — neither exists). Every claim about what
