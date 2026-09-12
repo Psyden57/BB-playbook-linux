@@ -3064,3 +3064,66 @@ the W-32c pv block / setup_arch's start.**
    belt-and-braces. Evicts EVERY fossil machine-wide before the
    payload's copies and the jump. The kernel's memblock-alloc first
    reads = covered.
+
+### Run W-91 (2026-09-12, session 13): the WHOLE-DRAM early 0x7F0 CIPA sweep
+### ([0x80000000, 0xC0000000), before the file reads) — the sweep SURVIVED
+### (~35 s — clean+inv ≈ 1μs/op vs inv-only's 30ns; the late WDT2 kick
+### covered it), the boot REACHED 126 AGAIN — ★ BUT THE 15,519 TOTALSIZE
+### READ IS STILL THERE = NOT AN L2 FOSSIL = THE OPEN ANOMALY
+
+Payload change (4aea96b): l2c_ns_line_range(0x7F0, 0x80000000, 0x40000000)
+gated --l2on, placed after the bc-35 wdt2_kick and BEFORE the file reads;
+bc[29] = chunks, bc[30] = timeouts, bc_write(36) = survived. 8192 chunks
+= 33.5M line ops. Rule-16 verified.
+
+Timeline: t=10s poll = bc[1]=36 (the sweep landed); ssh gone at t=75 s
+(the sweep = ~35 s — 0x7F0 clean+inv on dirty lines = DRAM writes ≈ 1
+μs/op, 33× slower than W-90b's inv-only; the jump = survived on the late
+bc-51 WDT2 kick). jump.sh got cut during the reboot wait; the readback =
+manual.
+
+Readback: bc[1]=126 with the PB_MMU_BC(126) pair = the SAME front as
+W-90a. 143/144 ✓, the stub ✓, the probe L2 ON ✓, **bc[11]=0xC0DE0010 AND
+bc[12]=0xC0DE0020 = parse PASSED**, bc[13]=0xdfbf7000 (the pte pointer —
+the SAME value as W-90a = deterministic ✓), the placement=0xa2500000
+(kern_off=0x100000, kern_phys=0xa2600000). RING1 = 1165 chars = the full
+log to the death (the W-88 count).
+
+**THE 15,519 ANOMALY — NOW SHARPER:** PB-RES r[0]=a2aee9a8+15519. Python
+(rule 13): 0xa2aee9a8 = kern_phys+0x8000+5,138,856 = blob + THE HOST
+tree_zlen EXACTLY = the kernel's __atags = THE APPENDED DTB of the
+deployed zImage — and the deployed = verified: W-90b's fresh bc[2] =
+0x4FBEC1 = 5,226,177 = THE HOST kernel/zImage EXACTLY (my earlier
+"stale-deploy" reading = ANOTHER hand-hex slip, corrected), and the
+zImage's appended-DTB header = python-verified: magic 0xd00dfeed,
+totalsize = 87321 at exactly tree_zlen. So: the DRAM at __atags = the
+87,321-B DTB (the payload's memcmp-verified copy), the L2 = fully swept
+(this run!), and setup.c:1209 STILL read fdt_totalsize = 15,519.
+**THE L2-FOSSIL EXPLANATION = RULED OUT FOR THIS VALUE.** 15,519 = the
+old DTB's size, constant across every run since the DTB grew at 17:57.
+Remaining candidates: (a) the kernel's r2 ≠ the appended DTB (the FDT
+recovery chain picking an OLD DRAM copy — the sweep = cache-only, the
+old 15,519-B DTB copies from W-84..89's blobs are still in DRAM; but
+then r[0] should = that copy's PA, not the current blob+tree_zlen —
+UNLESS the recovery = a fixed-offset computation landing at the current
+blob's tail while the CONTENT read = stale in some other cache); (b) the
+decompressor's ATAG-compat path ran (r8 = the stub's TTBR0 = 0x40304000
+= nonzero = "an ATAG list around"!) and relocated/folded the DTB; (c) a
+fixed-map mis-mapping. NOT SETTLED THIS SESSION.
+
+**Also named: the bc[12] slot collision** — the W-52 diagnostic
+(pb_bc_put(0xD0000030) = __atags_pointer) and bc[14] (0xD0000038 = the
+fixed-map VA) are overwritten by the parse-era C0DE markers
+(bc[11]=0xC0DE0010, bc[12]=0xC0DE0020) — the __atags value is destroyed
+exactly when we need it (rule 17). Session 14 must move the W-52 dump to
+surviving slots and add: the deployed-file pre-check (/tmp/zImage size +
+its appended-DTB header), and a post-mortem memdump3 at __atags.
+
+**THE SERIES VERDICT (W-90a/b/c + W-91):** the sweep machinery = sound
+(4/4 sweep survival after the underflow fix; heartbeats + bounded polls
+proven); the front = 126 in 2/3 valid runs (a, W-91; c = the W-84 triad
+outlier) — the 126 front = the W-83-era first-post-CMA-TLB-op position =
+the deterministic-looking front, but NOT yet 3/3. The fossil mechanism =
+REAL (the L2 does retain lines across runs) but its causal role in the
+early-C deaths = now uncertain; the 15,519 anomaly = the sharpest lead.
+The CPU1 release (the bequest) = unchanged as the real TLB-op cure.

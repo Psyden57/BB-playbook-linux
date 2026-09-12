@@ -35,23 +35,32 @@ leading candidate = the fossils on the memblock-ALLOCATED pages (the
 early C's first cached reads of allocations anywhere in the bank) and/or
 the L1 I-cache across runs.**
 
-**THE NEXT CURE (W-91, designed): one EARLY whole-DRAM 0x7F0 CIPA sweep**
-(before the file reads, bc ~36-42): QNX-safe (clean = data-preserving),
-~1-2 s for 1GB at the proven 33M ops/s, evicts EVERY fossil machine-wide
-before the payload's copies and the jump; the bc-51 sweeps = belt-and-
-braces. The heartbeats + bounded polls = load-bearing (W-90b's lesson).
+**THE NEXT CURE (W-91, run 2026-09-12): the whole-DRAM early 0x7F0 CIPA
+sweep** (before the file reads): ~35 s (clean+inv ≈ 1 μs/op), QNX-safe,
+survived, and the boot reached **126 again (the same front as W-90a —
+2/3 valid runs; c = the W-84 triad outlier)**. BUT the 15,519 totalsize
+read SURVIVED the whole-DRAM sweep = **NOT an L2 fossil — the open
+anomaly**: the deployed artifact chain = python-verified correct
+(the deployed zImage = the host file exactly; the appended-DTB header =
+totalsize 87321 at exactly tree_zlen; the payload's memcmp verified the
+DRAM copy), yet setup.c:1209 read 15,519. Leading candidates: the kernel
+latching onto an OLD 15,519-B DTB copy still in DRAM (the sweep =
+cache-only!), the decompressor's ATAG-compat path (r8 = the stub's TTBR0
+= nonzero), a fixed-map mis-map. Session 14: fix the bc[12]/bc[14] slot
+collision (the W-52 __atags dump is destroyed by the parse-era C0DE
+markers), add the deployed-file pre-check, dump DRAM at __atags.
 
 **OBSERVABILITY (proven, keep on every run):** the ring batch flush (the
 L2-on console), the LED phase markers (blue = payload, magenta at bc 42 =
 ~15 s pre-jump), the sweep heartbeats (bc[19]/bc[26] = the dest chunk/
-timeouts, bc[27]/bc[28] = the buffer's), and bc_write(48) = all-sweeps-
-survived.
+timeouts, bc[27]/bc[28] = the buffer's, bc[29]/bc[30] = the whole-DRAM's),
+and bc_write(48)/bc_write(36) = sweeps-survived.
 
 The two L2 states: L2-off = the deterministic TLB-op wedge (the W-72..77
-era) but DRAM-truth stores; L2-on = the fossil lottery (partially cured —
-the dest+buffer sweep moved W-90a to 126 but W-90c still died early).
-Neither is bootable; the cure = the whole-DRAM sweep (W-91) or the CPU1
-release (the real fix, the bequest).
+era) but DRAM-truth stores; L2-on = the fossil lottery (the sweeps moved
+the front to the W-83-era 126 position in 2/3 runs — not yet 3/3
+deterministic). Neither is bootable; the cures in flight = the 15,519
+anomaly + the CPU1 release (the real fix, the bequest).
 
 ## Where the boot stands (the session-12 detail, for context)
 

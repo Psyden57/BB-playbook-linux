@@ -61,11 +61,37 @@ One EARLY whole-DRAM 0x7F0 CIPA sweep in the payload (before the file
 reads, bc ~36-42): [0x80000000, 0xC0000000) = 1GB = 33.5M lines ≈ 1-2 s.
 QNX-safe (clean = data-preserving — QNX keeps running through it). Evicts
 EVERY fossil machine-wide BEFORE the payload's copies and the jump. The
-bc-51 dest/buffer sweeps = belt-and-braces (keep). The heartbeats + the
-bounded polls = mandatory. THEN: the boot should either go deterministic
+bc-51 dest/buffer sweeps = belt-and-braces. The heartbeats + the bounded
+polls = mandatory. THEN: the boot should either go deterministic
 (3/3 past the early C → the 171 wall) or the poison = NOT fossils at all
 (the L1 I-cache candidate = the next A/B: the sweep + a deliberate L1
 flush strategy).
+
+## THE W-91 RUN (2026-09-12, the day's final run) — 126 AGAIN, AND THE
+## 15,519 ANOMALY SURVIVED THE WHOLE-DRAM SWEEP
+
+The sweep = ran (~35 s — clean+inv ≈ 1 μs/op = 33× slower than the W-90b
+inv-only runaway; the late bc-51 WDT2 kick covered it; the jump worked).
+The boot = **bc[1]=126 = the SAME front as W-90a**, parse passed (bc[11]
++ bc[12]), ring = 1165 chars (the full log). bc[13]=0xdfbf7000 = the
+SAME pte pointer as W-90a = deterministic. The front = 126 in 2/3 valid
+runs (c = the W-84 triad outlier).
+
+**THE HEADLINE TWIST: PB-RES r[0]=a2aee9a8+15519 — the kernel STILL read
+fdt_totalsize = 15,519 with a fully-swept L2 and a python-verified
+correct deployed artifact chain** (W-90b's bc[2] = 0x4FBEC1 = 5,226,177 =
+the host zImage exactly — my "stale deploy" reading = a hand-hex slip,
+corrected by python; the zImage's appended-DTB header = totalsize 87321
+at exactly tree_zlen; the payload's memcmp = verified). The L2-fossil
+explanation = RULED OUT for this value. The old 15,519-B DTB copies from
+W-84..89 = still in DRAM (the sweep = cache-only!) = the leading
+candidate for what the kernel's FDT recovery/entry chain actually
+latches onto, but r[0] = the CURRENT blob tail = unresolved. Session 14:
+(1) move the W-52 __atags dump out of bc[12]/bc[14] (the parse-era C0DE
+markers destroy them — rule 17 named), (2) the deployed-file pre-check,
+(3) memdump3 at __atags post-mortem, (4) the decompressor's ATAG-compat
+path (r8 = the stub's TTBR0 = nonzero = "an ATAG list around"!) = read
+the compat code before the next run.
 
 ## RULES RE-PROVEN / NEW
 
