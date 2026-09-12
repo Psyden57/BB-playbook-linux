@@ -3127,3 +3127,51 @@ the deterministic-looking front, but NOT yet 3/3. The fossil mechanism =
 REAL (the L2 does retain lines across runs) but its causal role in the
 early-C deaths = now uncertain; the 15,519 anomaly = the sharpest lead.
 The CPU1 release (the bequest) = unchanged as the real TLB-op cure.
+
+### Run W-92 (2026-09-12, session 13): kernel #156 (the setup.c W-92
+### DTB-header capture into bc[20..23]) — the capture was EATEN by the
+### mmu.c pmd dump (a third slot collision), BUT bc[14] delivered a NEW
+### lead: the kernel's __atags = the DTB start + 0x68
+
+Kernel #156 (5,226,281 B, +104 = the capture block): setup.c captures
+the DTB header AS THE KERNEL SEES IT (4 words) into bc[20..23]
+(0xD0000050..5C) right at the memblock_reserve. The patch file =
+fully REGENERATED from ~/kernel/pristine (17 files, 65 hunks,
+patch --dry-run clean — the hand-maintenance era ends).
+
+Readback: bc[1]=126 with the pair (the front = 126 in 3/4 valid runs
+now), parse passed, ring = 1251 chars. THE CAPTURE SLOTS = the pmd
+dump's values (bc[22]=0xbf80040e — note the attrs = 0x40e NOT 0x41e =
+a bit-level difference from the W-90a/91 dumps, unexplained) —
+**mmu.c's W-72-era pmd dump (0xD0000050..68, map_lowmem era) overwrites
+the capture before the death**. I picked the slots from the docs
+README's bc map, not from a grep of the kernel's actual writers — rule
+14 violation, the third slot collision this week (the W-54 dump, the
+W-52 dump, now the W-92 capture all share the pmd slots).
+
+**THE NEW LEAD: bc[14] = 0xff8eea10 — the FDT fixed-map VA's low 20
+bits = 0xEEA10 = the DTB start's (0xEE9A8) + 0x68.** W-90a and W-91's
+bc[14] = exactly the DTB start. The payload = unchanged; the +0x68 =
+new with #156, but the capture edit cannot move a DTB. AND: python
+(rule 13) shows NO word = 15,519 exists anywhere in the new 87,321-B
+DTB (LE or BE) — **the kernel's "totalsize" = NOT read from the new
+DTB at all** — with the W-91 L2-sweep result (the anomaly survived the
+whole-DRAM sweep), the 15,519 = an OLD-DTB remnant in DRAM (the sweep =
+cache-only; the old copies from W-84..89 persist) and/or the recovery
+chain latching at +0x68. The BUG line's garbage also changed with the
+placement ("for 0x42800000 at 0x62" vs W-90a's "0x00000000 at 0x20") =
+the downstream parse of a garbage/shifted FDT = confirmed.
+
+ALSO: the post-mortem memdump at the W-91 DTB PA = garbage = the QNX
+reboot tramples the free-pool region (the scatter band boundary) — the
+kernel's view = obtainable ONLY via the kernel-side capture.
+
+NEXT (W-93): (1) remove the obsolete mmu.c pmd dump (0xD0000050..68 —
+the W-38 stale-pgd forensics = solved since #110, the slots = free),
+leaving the capture as the sole owner; (2) rebuild, re-run, read
+bc[20..23]: if bc[21] (the totalsize word the kernel sees) = 15,519 →
+the kernel REALLY sees an old DTB → chase the entry chain (+0x68); if
+87,321 → the reserve's 15,519 = read from somewhere else entirely;
+(3) the decompressor's atags_to_fdt entry validation (r8 = the stub's
+TTBR0 = 0x40304000 = tt[0] = 0 = should return 1 = no folding — VERIFY
+in the source, not recalled).
