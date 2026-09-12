@@ -1083,7 +1083,7 @@
  		map.length = end - start;
  		map.type = MT_MEMORY_DMA_READY;
  
-@@ -298,11 +311,92 @@
+@@ -298,11 +311,87 @@
  		for (addr = __phys_to_virt(start); addr < __phys_to_virt(end);
  		     addr += PMD_SIZE)
  			pmd_clear(pmd_off_k(addr));
@@ -1116,18 +1116,13 @@
 +		 * run. Outcomes: passes 146/147 = the TLBIALL is the
 +		 * deterministic wedge; still wedges = the wedge is the boot
 +		 * point itself, not the TLB op. Also: the pre-TLBIALL phase
-+		 * (0xE1000004) + the pgd poison-pair dump into bc[28..31]
-+		 * (0x90000070-0x7C, free DRAM before the ring2 header) —
-+		 * the sweep is CONSISTENCY-only and [0xdfc/0xdfd] were never
-+		 * proven rewritten (the #111 plan's rewrite half was never
-+		 * implemented). */
-+		{
-+			u32 *pb_pgd = (u32 *)swapper_pg_dir;
-+			pb_bc_put(0xD0000070, pb_pgd[0xdfa]);	/* bc[28] */
-+			pb_bc_put(0xD0000074, pb_pgd[0xdfc]);	/* bc[29] */
-+			pb_bc_put(0xD0000078, pb_pgd[0xdfd]);	/* bc[30] */
-+			pb_bc_put(0xD000007C, pb_pgd[0xdfe]);	/* bc[31] */
-+		}
++		 * (0xE1000004). The pgd poison-pair dump (bc[28..31],
++		 * 0xD0000070..7C) REMOVED W-94 (session 13): the slots =
++		 * reclaimed for mmu.c's map_lowmem memblock.memory snapshot
++		 * (the create_mapping "in user region" garbage-region
++		 * capture); the stale-pgd forensics = obsolete (healthy
++		 * 0x41e shapes since #110, and the pair = zeroed at 354
++		 * below regardless). */
 +		pb_bc_put(0xD000006C, 0xE1000004u);	/* pre-TLBIALL (skipped op) */
 +		/* PlayBook W-74 (session 11): ZERO the poison pair BEFORE the
 +		 * TLBIALL. The W-72/73 dumps proved the QNX-era TABLE
@@ -1267,7 +1262,7 @@
  }
  
  /*
-@@ -1022,10 +1039,74 @@
+@@ -1022,10 +1039,70 @@
  	if (!nr)
  		return;
  
@@ -1315,16 +1310,12 @@
 +			 * 0xdf4 (inside the CMA VA range), bc[24] = VA
 +			 * 0xdf0. NO store to the svm this run (its PTW
 +			 * wedges); the diagnostics land first. */
-+			/* PlayBook W-92 (session 13): the four bc[20..23]
-+			 * dumps (0xD0000050..5C) REMOVED — they collide with
-+			 * setup.c's W-92 DTB-header capture (the 15,519
-+			 * anomaly) and the stale-pgd forensics = obsolete
-+			 * (healthy 0x41e shapes since #110). bc[24]/bc[25]
-+			 * (0x60/0x64) = kept (no collision). */
-+			pb_bc_put(0xD0000060,
-+				  pmd_val(*pmd_off_k(0xdf000000)));
-+			pb_bc_put(0xD0000064,			/* bc[25] */
-+				  pmd_val(*pmd_off_k(0xdfa00000)));
++			/* PlayBook W-92 (session 13): the six bc[24..31]
++			 * pmd/pgd dumps (0xD0000060..7C) REMOVED — they
++			 * collide with the W-94 memblock.memory capture and
++			 * the stale-pgd forensics = obsolete (healthy 0x41e
++			 * shapes since #110). The sweep-tally slot 0x68
++			 * (bc[26]) = KEPT (live). */
 +			pb_bc_put(0xD0000004, 167);	/* dumps done */
 +			p[0] = 0;
 +			pb_bc_put(0xD0000004, 167 | 0x400);	/* store 1 */
@@ -1343,7 +1334,7 @@
  
  		vm = &svm->vm;
  		vm->addr = (void *)(md->virtual & PAGE_MASK);
-@@ -1035,6 +1116,7 @@
+@@ -1035,6 +1112,7 @@
  		vm->flags |= VM_ARM_MTYPE(md->type);
  		vm->caller = iotable_init;
  		add_static_vm_early(svm++);
@@ -1351,7 +1342,7 @@
  	}
  }
  
-@@ -1147,6 +1229,21 @@
+@@ -1147,6 +1225,21 @@
  	map.length = PAGE_SIZE;
  	map.type = MT_DEVICE;
  	iotable_init(&map, 1);
@@ -1373,7 +1364,7 @@
  }
  #endif
  
-@@ -1250,6 +1347,27 @@
+@@ -1250,6 +1343,27 @@
  
  	arm_lowmem_limit = lowmem_limit;
  
@@ -1401,7 +1392,7 @@
  	high_memory = __va(arm_lowmem_limit - 1) + 1;
  
  	if (!memblock_limit)
-@@ -1363,6 +1481,20 @@
+@@ -1363,6 +1477,20 @@
   * Any other function or debugging method which may touch any device _will_
   * crash the kernel.
   */
@@ -1422,7 +1413,7 @@
  static void __init devicemaps_init(const struct machine_desc *mdesc)
  {
  	struct map_desc map;
-@@ -1375,12 +1507,20 @@
+@@ -1375,12 +1503,20 @@
  	vectors = early_alloc(PAGE_SIZE * 2);
  
  	early_trap_init(vectors);
@@ -1444,7 +1435,7 @@
  
  	if (__atags_pointer) {
  		/* create a read-only mapping of the device tree */
-@@ -1445,10 +1585,16 @@
+@@ -1445,10 +1581,16 @@
  		mdesc->map_io();
  	else
  		debug_ll_io_init();
@@ -1461,7 +1452,7 @@
  
  	/*
  	 * Finally flush the caches and tlb to ensure that we're in a
-@@ -1456,11 +1602,23 @@
+@@ -1456,11 +1598,23 @@
  	 * any write-allocated cache lines in the vector page are written
  	 * back.  After this point, we can start to touch devices again.
  	 */
@@ -1487,7 +1478,41 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1923,81 @@
+@@ -1479,6 +1633,33 @@
+ 	phys_addr_t start, end;
+ 	u64 i;
+ 
++	/* PlayBook W-94 (session 13): the memblock.memory snapshot AT
++	 * map_lowmem's entry. The create_mapping "in user region" WARN
++	 * (the front's neighbor) saw a garbage region (PA 0 @ VA 0x20 in
++	 * W-90a, PA 0x42800000 @ VA 0x62 in W-92 — placement-dependent)
++	 * while the PB-MEM print (arm_memblock_init's top, EARLIER)
++	 * showed mem=1 [a0000000, c0000000) = correct. The corruption
++	 * window = between the print and this loop. The capture (pb_bc_put
++	 * = L2-aware): bc[24] (0x60) = memory.cnt, bc[25] (0x64) =
++	 * m[0].base, bc[28] (0x70) = m[0].size, bc[29] (0x74) = m[1].base,
++	 * bc[30] (0x78) = m[1].size, bc[31] (0x7C) = reserved.cnt. The
++	 * slots = freed from the obsolete W-38-era pmd/pgd dumps. */
++	{
++		unsigned int pb_i;
++		pb_bc_put(0xD0000060, memblock.memory.cnt);
++		for (pb_i = 0; pb_i < 2 && pb_i < memblock.memory.cnt; pb_i++) {
++			static const unsigned int pb_bslot[2] = {
++				0xD0000064, 0xD0000074 };
++			static const unsigned int pb_sslot[2] = {
++				0xD0000070, 0xD0000078 };
++			pb_bc_put(pb_bslot[pb_i],
++				  (unsigned int)memblock.memory.regions[pb_i].base);
++			pb_bc_put(pb_sslot[pb_i],
++				  (unsigned int)memblock.memory.regions[pb_i].size);
++		}
++		pb_bc_put(0xD000007C, memblock.reserved.cnt);
++	}
++
+ 	/* Map all the lowmem memory banks. */
+ 	for_each_mem_range(i, &start, &end) {
+ 		struct map_desc map;
+@@ -1765,7 +1946,81 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1569,7 +1594,7 @@
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +2005,30 @@
+@@ -1773,9 +2028,30 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1600,7 +1625,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +2038,7 @@
+@@ -1785,6 +2061,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
