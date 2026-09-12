@@ -43,13 +43,13 @@ original conversation history.
 
 ## Current handoff state
 
-- Latest session notes: [session-notes/session-12.md](session-notes/session-12.md)
-- Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_13.md` — read it
-  first (it has the read order, the --l2on erratum, the stale-view
-  lottery synthesis, the proven observability (the ring flush + the LED
-  markers), the first task = W-90 the wide stale-line cure, and the
-  bequest order)
-- Next action: W-90 — the payload's extended pre-jump inv-by-PA sweep
-  (the NS 0x770, inv-only, no clean-back) over the image + the pgd +
-  the data regions, then run --l2on
+- Latest session notes: [session-notes/session-13.md](session-notes/session-13.md)
+- Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_14.md` — read it
+  first (it has the read order, the fossil-mechanism proof (the L2 =
+  a cross-run record), the sweep machinery + the two-op rule, the W-90b
+  underflow lesson, the W-91 whole-DRAM result, and the first task =
+  W-92: explain the 15,519 totalsize anomaly with the instrumented run)
+- Next action: W-92 — fix the bc[12]/bc[14] slot collision, the
+  deployed-file pre-check, the post-mortem memdump at __atags, and read
+  the decompressor's ATAG-compat path before the run
 - Local-only assets and why: [SETUP.md](SETUP.md) §6
