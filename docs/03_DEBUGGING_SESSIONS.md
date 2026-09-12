@@ -3234,3 +3234,54 @@ map_lowmem's mapping loop (the W-25/27 pmd/pte-alloc region). The
 front = 156 = INSIDE that loop's territory. THE NEXT CAPTURE: dump
 memblock.memory (m[i] per region) into the bc slots at map_lowmem's
 entry, same technique as the W-92 capture.
+
+### Run W-94 (2026-09-12, session 13): kernel #158 (the map_lowmem
+### memblock.memory capture) — ★★★ THE FRONT = 185: PAST THE 171 WALL
+### (taskstats/kmem_cache) INTO __kmem_cache_create_args — THE
+### SESSION-5-ERA WALL FALLEN, NEVER BEFORE WITH THE L2 ON — AND THE
+### memblock.memory = PROVEN HEALTHY (the garbage md = NOT the array)
+
+Kernel #158 (5,230,841 B): the memblock.memory snapshot at map_lowmem's
+entry (the W-92 technique) into the freed slots; the obsolete
+dma-mapping.c pgd dump (bc[28..31]) removed; the sweep-tally bc[26]
+kept.
+
+Readback: **bc[1]=185 with the pair (bc[2]=0x1b9) = the session-5-era
+marker INSIDE __kmem_cache_create_args (181-185 = the kmem_cache
+finer markers; 185 = the deepest of that era) — the boot PASSED 171
+(taskstats_init_early/kmem_cache_create = the L2-off-era wall) and
+died INSIDE the slab's create path.** NEW MARKERS NEVER SEEN:
+bc[10]=0xC0DE0002 = setup_early_printk RAN (the earlycon handler fully
+registered), bc[14]=0xC0DE0030 = the parse done-latch (main.c:793) =
+**parse_early_param was called a SECOND time and hit the latch** (the
+main.c comment: "If bc[14] reads 0xC0DE0030, find the early caller").
+bc[13]=0xbfbfff50 (a pte pointer), the placement=0xa2c00000.
+
+**THE CAPTURE (bc[24..31]) = THE MEMBLOCK.MEMORY AT map_lowmem'S ENTRY:
+bc[24]=1 (cnt ✓), bc[25]=0xa0000000 (m[0].base ✓), bc[28]=0x1fe00000
+(m[0].size = 512MB - 2MB = the #110 shave's trim, applied by
+adjust_lowmem_bounds' memblock_remove — the "Ignoring RAM" print sat in
+the ring's unflushed tail), bc[31]=8 (reserved.cnt = the normal
+accumulation). NO GARBAGE REGION — the memblock.memory = HEALTHY.**
+
+⇒ **THE create_mapping "in user region" garbage md (PA 0x42800000 @
+0x62 / PA 0 @ 0x20) = NOT from the memory array — the stale-view = on
+the map_desc/stack (or the iterator's internals), not memblock.** The
+WARN = non-fatal; the front's death = deeper, in the slab.
+
+**THE SERIES VERDICT (the sweep era, one day): 126 (W-90a) → 156
+(W-93) → 185 (W-94) — three runs, three record fronts, the L2-on boot
+= ALIVE AND ADVANCING. The sweeps = the effective cure for the
+stale-view lottery. The 171 wall = FALLEN. The new front = the slab's
+kmem_cache_create path (the session-5-era finer markers 181-185 =
+existing; the 0x3E7 wild write's era). The session-5 analysis
+(KNOWN_ISSUES #1's historical detail) = back on the board with the
+L2-on observability (the ring) attached.**
+
+NEXT (W-95): (a) the determinism check — repeat W-94 2× (the front =
+a moving target; the sweeps = the variable that moved it); (b) the
+ring's tail = decode the FULL log (1165 chars = the log TO the death =
+the kmem_cache path's prints = the first slab-era console evidence!);
+(c) the bc[14]=0xC0DE0030 second-parse caller = find it (main.c:793's
+instruction); (d) the W-32c-era skipping/zeroing decisions = re-audit
+against the new front.
