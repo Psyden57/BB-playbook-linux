@@ -1137,6 +1137,15 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
      * device-register write. */
     { uint32_t g = wdt[0x30 / 4]; wdt[0x30 / 4] = ~g; }
     bc_write(32);
+    /* PlayBook W-87 (session 12): the MAGENTA marker = "the kernel owns
+     * the machine" — placed BEFORE the GICD-off ON PURPOSE: the QNX i2c
+     * devctl is interrupt-driven, and with the GICD masked the
+     * completion IRQ is never delivered — the devctl blocks forever
+     * (the W-86/87 deaths: the payload frozen inside led_color_qnx, the
+     * LED magenta on video because the I2C bytes had already gone out,
+     * bc[1]=52, the WDT2 expiring exactly 59 s later, 2/2 deterministic
+     * across both placements). Here the IRQs are still on. */
+    led_color_qnx(0x0A);
     /* GICD off BEFORE the SMC (proven-safe position): no IRQ can fire in
      * the post-disable window, and the GICD store never runs with the L2
      * off — that store hung in runs 14/15 (bc stores + PL310 reads work
@@ -1204,13 +1213,11 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         }
     }
     bc_write(52);
-    /* PlayBook W-86 (session 12): MAGENTA = "the kernel owns the machine
-     * now". The QNX devctl path = proven safe (--ledprobe proved the
-     * DIRECT NS access to I2C4 SIGBUSes, so no direct register pokes:
-     * the AUTOIDLE force-off and the kernel-side colors are CLOSED).
-     * The frozen magenta in a post-mortem = the death before the C
-     * world (head.S); there is no kernel-side LED (the I2C4 filter). */
-    led_color_qnx(0x0A);
+    /* PlayBook W-86/87 LESSON: NOTHING QNX-side may run after the GICD
+     * went off (bc 41) — the interrupt-driven drivers block forever (the
+     * magenta devctl froze the payload here, 2/2). The LED color is set
+     * before the GICD-off now. NO kernel calls, NO printf, NO syscalls
+     * from here to enter_stub. */
     enter_stub(0x40304000u,
                probepath ? 0x40309000u : kern_phys + 0x8000u,
                bcmir[0], 0x90000000u,

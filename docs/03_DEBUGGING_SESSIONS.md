@@ -2793,3 +2793,35 @@ NEXT (W-87): re-run the SAME build — the determinism check. A different
 placement + a working jump = the flake/the placement; the same
 enter_stub death = the magenta insert is implicated (move the color
 write earlier, before bc 41's GICD-off, or drop it).
+
+### Run W-87 (2026-09-12, session 12): the W-86 build re-run (the
+### determinism check) — the IDENTICAL enter_stub death; the placement
+### theory dead; THE MECHANISM FOUND: the magenta devctl inside the
+### GICD-off window = the interrupt-driven i2c driver blocks forever
+
+Run: PAYLOAD_MODE=--l2on ./jump.sh zImage, the identical build. The
+readback: bc[1]=52 AGAIN, bc[6]=0x2102 (not the stub echo), bc[10]=1
+(the L2 on ✓), the placement = 0xa2d00000 (DIFFERENT from W-86's
+0xa3400000 — the placement theory is DEAD), the nonce fresh, no probe/
+stub/kernel writes. 2/2 deterministic.
+
+**THE MECHANISM (reconstructed from the code order):** the GICD is
+disabled at bc 41 (*gicd = 0), and the W-86 payload's magenta write
+(led_color_qnx = open /dev/i2c3 + devctl + close) sat BETWEEN bc 52 and
+enter_stub — INSIDE the no-IRQ window. The QNX i2c driver is
+interrupt-driven: the I2C transaction went out on the bus (the LED =
+magenta on video!) but the completion IRQ can never be delivered with
+the GICD masked — the devctl blocks FOREVER, the payload freezes inside
+led_color_qnx, enter_stub is never called, and the WDT2 expires exactly
+59 s later. Fits every datum: 2/2 determinism, both placements, the
+exact WDT2 window, the LED visibly changing, bc[1]=52.
+
+**THE RULE (the payload): NOTHING QNX-side (no devctl, no syscall) may
+run after the GICD-off (bc 41) — the interrupt-driven drivers block
+forever. The jump tail = register writes and enter_stub only.**
+
+THE FIX (the payload): led_color_qnx(0x0A) MOVED to before the GICD-off
+(right after bc 32) — the IRQs are still on, the devctl completes. The
+color = magenta for the last ~2-4 s of the payload (the pre-SMC CIPA +
+the l2 branch + bc 52). Rule-16 verified: exactly one led_color_qnx
+call in do_t3, at the new position.
