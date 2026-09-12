@@ -1,5 +1,5 @@
---- a/arch/arm/Kconfig.debug	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/Kconfig.debug	2026-08-30 21:38:26.498182616 +0000
+--- a/arch/arm/Kconfig.debug
++++ b/arch/arm/Kconfig.debug
 @@ -778,6 +778,17 @@
  		depends on ARCH_OMAP2PLUS
  		select DEBUG_OMAP2PLUS_UART
@@ -26,9 +26,8 @@
  	default "debug/sa1100.S" if DEBUG_SA1100
  	default "debug/palmchip.S" if DEBUG_UART_8250_PALMCHIP
  	default "debug/8250.S" if DEBUG_LL_UART_8250 || DEBUG_UART_8250
-
---- a/arch/arm/kernel/early_printk.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/early_printk.c	2026-09-02 21:52:24.418630911 +0000
+--- a/arch/arm/kernel/early_printk.c
++++ b/arch/arm/kernel/early_printk.c
 @@ -11,9 +11,43 @@
  #include <linux/string.h>
  
@@ -102,9 +101,8 @@
  	early_console = &early_console_dev;
  	register_console(&early_console_dev);
  	return 0;
-
---- a/arch/arm/kernel/head-common.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head-common.S	2026-09-11 18:14:40.843189900 +0000
+--- a/arch/arm/kernel/head-common.S
++++ b/arch/arm/kernel/head-common.S
 @@ -79,6 +79,20 @@
  	mov	r7, r1
  	mov	r8, r2
@@ -198,9 +196,8 @@
  #ifdef CONFIG_KASAN
  	bl	kasan_early_init
  #endif
-
---- a/arch/arm/kernel/head.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/head.S	2026-09-12 17:09:07.031771589 +0000
+--- a/arch/arm/kernel/head.S
++++ b/arch/arm/kernel/head.S
 @@ -98,6 +98,113 @@
   THUMB(	.thumb			)	@ switch to Thumb now.
   THUMB(1:			)
@@ -692,9 +689,8 @@
  	mov	r3, r13
  	ret	r3
  __turn_mmu_on_end:
-
---- a/arch/arm/kernel/phys2virt.S	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/phys2virt.S	2026-09-04 09:03:58.220388005 +0000
+--- a/arch/arm/kernel/phys2virt.S
++++ b/arch/arm/kernel/phys2virt.S
 @@ -29,6 +29,79 @@
   */
  	__HEAD
@@ -826,9 +822,8 @@
  	adr_l	r4, __pv_table_begin
  	adr_l	r5, __pv_table_end
  	b	__fixup_a_pv_table
-
---- a/arch/arm/kernel/setup.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/kernel/setup.c	2026-09-12 00:54:46.751848071 +0000
+--- a/arch/arm/kernel/setup.c
++++ b/arch/arm/kernel/setup.c
 @@ -599,18 +599,55 @@
  	u32 mpidr = is_smp() ? read_cpuid_mpidr() & MPIDR_HWID_BITMASK : 0;
  	u32 cpu = MPIDR_AFFINITY_LEVEL(mpidr, 0);
@@ -886,7 +881,7 @@
  }
  
  struct mpidr_hash mpidr_hash;
-@@ -1100,10 +1137,74 @@
+@@ -1100,13 +1137,98 @@
  
  	if (__atags_pointer)
  		atags_vaddr = FDT_VIRT_BASE(__atags_pointer);
@@ -902,7 +897,7 @@
 +			atags_vaddr = FDT_VIRT_BASE(__atags_pointer);
 +		}
 +	}
- 
++
 +	/* PlayBook kexec: fine-grained bc markers in the 118..110 window.
 +	 * Triple-channel: bc[1] = full flush (DCCMVAC + PL310 CIPA + bounded
 +	 * sync poll); bc[2] = flush-free SO store (v|0x100, reaches DRAM only
@@ -922,7 +917,7 @@
 +	dsb(sy); /* PlayBook 2026-09-11 (session 11, W-70): restored (see \
 +pb_bc_put in main.c — the W-69 "nosh" never existed on the hardware). */ \
 +} while (0)
-+
+ 
 +	pb_bc(136);			/* setup_arch entered */
  	setup_processor();
 +	pb_bc(130);			/* setup_processor done */
@@ -957,11 +952,36 @@
  	if (atags_vaddr) {
 +		pb_bc_put(0xD000006C, 0xF5000001u);	/* pre fdt call */
  		mdesc = setup_machine_fdt(atags_vaddr);
+-		if (mdesc)
 +		pb_bc_put(0xD000006C, 0xF5000002u);	/* post fdt call */
- 		if (mdesc)
++		if (mdesc) {
++			/* PlayBook W-92 (session 13): the 15,519-anomaly
++			 * capture — the DTB header AS THE KERNEL SEES IT,
++			 * into bc[20..23] (0xD0000050..5C). The W-72 pmd dump
++			 * overwrites them post-paging; the anomaly window =
++			 * pre-paging = visible on every front death. The W-54
++			 * decompressor dump (the same slots, MMU-off SO
++			 * stores) = already superseded (lost to the pmd dump
++			 * as well). bc[20] = the raw magic word (expect
++			 * d00dfeed big-endian-in-memory = 0xedfe0dd0 read
++			 * LE), bc[21] = the raw totalsize word (87,321 =
++			 * 0x00015549 BE-in-memory), bc[22]/bc[23] = the
++			 * header's off_mem_struct/strings words. r[0]/r[1]
++			 * (the PB-RES print) already carry __atags_pointer
++			 * and the fdt_totalsize the reserve uses. */
++			volatile unsigned int *dtbva =
++				(volatile unsigned int *)(void *)atags_vaddr;
++			pb_bc_put(0xD0000050, dtbva[0]);
++			pb_bc_put(0xD0000054, dtbva[1]);
++			pb_bc_put(0xD0000058, dtbva[2]);
++			pb_bc_put(0xD000005C, dtbva[3]);
  			memblock_reserve(__atags_pointer,
  					 fdt_totalsize(atags_vaddr));
-@@ -1118,6 +1219,7 @@
++		}
+ 	}
+ 	if (!mdesc)
+ 		mdesc = setup_machine_tags(atags_vaddr, __machine_arch_type);
+@@ -1118,6 +1240,7 @@
  			early_print("  r2[]=%*ph\n", 16, atags_vaddr);
  		dump_machine_table();
  	}
@@ -969,7 +989,7 @@
  
  	machine_desc = mdesc;
  	machine_name = mdesc->name;
-@@ -1134,8 +1236,10 @@
+@@ -1134,8 +1257,10 @@
  
  	early_fixmap_init();
  	early_ioremap_init();
@@ -980,7 +1000,7 @@
  
  #ifdef CONFIG_MMU
  	early_mm_init(mdesc);
-@@ -1151,11 +1255,27 @@
+@@ -1151,11 +1276,27 @@
  	arm_memblock_init(mdesc);
  	/* Memory may have been removed so recalculate the bounds. */
  	adjust_lowmem_bounds();
@@ -1008,9 +1028,8 @@
  	request_standard_resources(mdesc);
  
  	if (mdesc->restart) {
-
---- a/arch/arm/mach-omap2/omap4-common.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mach-omap2/omap4-common.c	2026-09-02 22:15:18.102630801 +0000
+--- a/arch/arm/mach-omap2/omap4-common.c
++++ b/arch/arm/mach-omap2/omap4-common.c
 @@ -156,6 +156,14 @@
  {
  	struct map_desc dram_io_desc[1];
@@ -1035,9 +1054,8 @@
  }
  
  #endif
-
---- a/arch/arm/mm/dma-mapping.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/dma-mapping.c	2026-09-12 17:08:40.319772148 +0000
+--- a/arch/arm/mm/dma-mapping.c
++++ b/arch/arm/mm/dma-mapping.c
 @@ -270,6 +270,8 @@
  void __init dma_contiguous_remap(void)
  {
@@ -1160,9 +1178,8 @@
  	}
  }
  #endif
-
---- a/arch/arm/mm/init.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/init.c	2026-09-02 20:49:32.046630869 +0000
+--- a/arch/arm/mm/init.c
++++ b/arch/arm/mm/init.c
 @@ -183,6 +183,33 @@
  
  void __init arm_memblock_init(const struct machine_desc *mdesc)
@@ -1197,9 +1214,8 @@
  	/* Register the kernel text, kernel data and initrd with memblock. */
  	memblock_reserve(__pa(KERNEL_START), KERNEL_END - KERNEL_START);
  
-
---- a/arch/arm/mm/mmu.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/mm/mmu.c	2026-09-12 17:56:45.951770985 +0000
+--- a/arch/arm/mm/mmu.c
++++ b/arch/arm/mm/mmu.c
 @@ -700,6 +700,13 @@
  	pr_info("Memory policy: %sData cache %s\n",
  		ecc_mask ? "ECC enabled, " : "", cp->policy);
@@ -1594,9 +1610,8 @@
  
  	empty_zero_page = virt_to_page(zero_page);
  	__flush_dcache_folio(NULL, page_folio(empty_zero_page));
-
---- a/init/main.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/init/main.c	2026-09-12 17:08:32.947772420 +0000
+--- a/init/main.c
++++ b/init/main.c
 @@ -86,6 +86,7 @@
  #include <linux/sched/clock.h>
  #include <linux/sched/task.h>
@@ -2031,9 +2046,8 @@
  
  	kunit_run_all_tests();
  
-
---- a/kernel/cgroup/cgroup.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/kernel/cgroup/cgroup.c	2026-09-01 16:13:39.677929703 +0000
+--- a/kernel/cgroup/cgroup.c
++++ b/kernel/cgroup/cgroup.c
 @@ -6106,23 +6106,32 @@
  	.show_path		= cgroup_show_path,
  };
@@ -2102,9 +2116,8 @@
  		if (ss->early_init)
  			cgroup_init_subsys(ss, true);
  	}
-
---- a/kernel/taskstats.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/kernel/taskstats.c	2026-09-02 11:08:27.166303958 +0000
+--- a/kernel/taskstats.c
++++ b/kernel/taskstats.c
 @@ -689,12 +689,15 @@
  void __init taskstats_init_early(void)
  {
@@ -2121,9 +2134,8 @@
  }
  
  static int __init taskstats_init(void)
-
---- a/mm/slab_common.c	2025-08-20 16:36:36.000000000 +0000
-+++ b/mm/slab_common.c	2026-09-02 11:49:25.762303339 +0000
+--- a/mm/slab_common.c
++++ b/mm/slab_common.c
 @@ -285,6 +285,7 @@
  	struct kmem_cache *s = NULL;
  	const char *cache_name;
@@ -2156,9 +2168,8 @@
  	if (IS_ERR(s)) {
  		err = PTR_ERR(s);
  		kfree_const(cache_name);
-
---- a/arch/arm/boot/dts/ti/omap/Makefile	2025-08-20 16:36:36.000000000 +0000
-+++ b/arch/arm/boot/dts/ti/omap/Makefile	2026-08-30 21:43:41.518183110 +0000
+--- a/arch/arm/boot/dts/ti/omap/Makefile
++++ b/arch/arm/boot/dts/ti/omap/Makefile
 @@ -76,10 +76,9 @@
  	omap4-panda.dtb \
  	omap4-panda-a4.dtb \
@@ -2171,9 +2182,8 @@
  	omap4-xyboard-mz609.dtb \
  	omap4-xyboard-mz617.dtb
  dtb-$(CONFIG_SOC_AM33XX) += \
-
---- /dev/null	2026-09-12 12:49:55.837591900 +0000
-+++ b/arch/arm/boot/dts/ti/omap/omap4-winchester.dts	2026-09-04 12:02:36.388387867 +0000
+--- /dev/null
++++ b/arch/arm/boot/dts/ti/omap/omap4-winchester.dts
 @@ -0,0 +1,120 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
@@ -2295,9 +2305,8 @@
 +&mmc5 {
 +	status = "disabled";
 +};
-
---- /dev/null	2026-09-12 12:49:55.837591900 +0000
-+++ b/arch/arm/include/debug/omap4bc.S	2026-09-12 16:52:08.119774182 +0000
+--- /dev/null
++++ b/arch/arm/include/debug/omap4bc.S
 @@ -0,0 +1,144 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +/*
@@ -2444,4 +2453,3 @@
 +		pop	{r1, r2, r3, r4, r5}
 +		.endm
 \ No newline at end of file
-
