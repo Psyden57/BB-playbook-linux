@@ -368,31 +368,36 @@ static void l2c_ns_clean_range(off64_t pa, uint32_t size)
 }
 
 /* PlayBook W-90 (session 13): the wide stale-line cure for the L2-on
- * lottery (W-84/88/89 = three boots, three different early-C death
- * points). Per-LINE eviction (32B, mainline's CACHE_LINE_SIZE — the old
- * l2c_ns_clean_range does one op per 4KB page = 1 line in 128!), over
- * [0xa0000000, 0xa1069000): the pgd PA 0xa0004000 (head.S writes it with
- * C-off stores = DRAM truth, while the L2 retains pre-jump lines the
- * PTW's reads hit — the W-38 pair mechanism, generalized), the
- * decompressor destination [0xa0008000, 0xa1023a50) (Image 0x101ba50 —
- * NOTE: 142KB PAST the W-35 guard end 0xa1000000) and .bss (_end
- * 0xa10680c8 -> rounded 0xa1069000).
- * OP = 0x7F0 CIPA (clean+inv), NOT the bootstrapped 0x770 inv-only:
- * this band is QNX's own DRAM (the scatter test: QNX repurposes 0x9F+/
- * A4+) and the payload's own stack/heap PAs are unknown — inv-only
- * DISCARDS dirty lines = pre-jump corruption; the clean-back is
- * harmless here because the whole range is overwritten post-jump (the
- * W-33 poison class needs a post-sweep DRAM truth that doesn't exist
- * yet). Bounded sync poll every 4096 lines (rule 10); bc[19] = the
- * chunk heartbeat (names a mid-sweep wedge), return = sync timeouts. */
-static uint32_t l2c_ns_inv_range(off64_t pa, uint32_t size)
+ * lottery. W-90a NAILED the mechanism: the L2 SURVIVES the WDT2 warm
+ * reset + QNX's reboot — this run's kernel cached-read the DTB header
+ * at 0xa34ee9a8 and got totalsize=15519 (= W-88's DTB, which sat at
+ * that exact PA: W-88's blob + tree_zlen) instead of the deployed
+ * 87321 — a previous run's CLEAN L2 line served as a FOSSIL. The
+ * lottery = which fossil lines overlap the current run's PAs (the
+ * per-run placement decides). Two region classes, two ops:
+ *  - op 0x7F0 CIPA for regions with NO fresh DRAM truth pre-jump (the
+ *    decompressor destination + pgd; QNX's live lowmem — the clean is
+ *    data-preserving for QNX and writes junk over junk),
+ *  - op 0x770 INV-ONLY for the jump buffer: DRAM = the payload's
+ *    NOCACHE-verified fresh copy; the fossils there can be DIRTY
+ *    (previous kernels' cached writes) and 0x7F0's clean step would
+ *    push them OVER the fresh copy (W-33, for real). QNX-safe: the
+ *    buffer = QNX's FREE pool (no live dirty QNX lines). The payload's
+ *    own cached-written trampoline page is EXCLUDED here (caller
+ *    cleans it with 0x7F0 separately).
+ * Per-LINE ops (32B, mainline's CACHE_LINE_SIZE — the old
+ * l2c_ns_clean_range does one op per 4KB = 1 line in 128!). Bounded
+ * sync poll every 4096 lines (rule 10); *heartbeat = the chunk count
+ * (names a mid-sweep wedge); return = sync timeouts. */
+static uint32_t l2c_ns_line_range(uint32_t op, off64_t pa, uint32_t size,
+                                  volatile uint32_t *heartbeat)
 {
     uint32_t chunks = 0, timeouts = 0;
     while (size) {
         uint32_t i;
         unsigned n;
         for (i = 0; i < 4096 && size; i++) {
-            pl310_ns[0x7F0 / 4] = (uint32_t)pa;
+            pl310_ns[op / 4] = (uint32_t)pa;
             pa += 32;
             size -= 32;
         }
@@ -402,8 +407,8 @@ static uint32_t l2c_ns_inv_range(off64_t pa, uint32_t size)
             ;
         if (!n)
             timeouts++;
-        if (bc)
-            bc[19] = ++chunks;
+        if (heartbeat)
+            *heartbeat = ++chunks;
     }
     return timeouts;
 }
@@ -1230,19 +1235,50 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
     }
     {
         /* PlayBook W-90 (session 13): the wide stale-line cure — see
-         * l2c_ns_inv_range above. --l2on only (ONE VARIABLE vs W-89;
+         * l2c_ns_line_range above. --l2on only (ONE VARIABLE vs W-89;
          * under the L2-off modes the SMC below bypasses the L2 anyway).
          * Positioned AFTER clean_inval_l1_all + the GICD-off (no IRQ can
-         * re-dirty the region, no other thread runs) and BEFORE
-         * enter_stub — the last word on the region's L2 state. Clamp to
-         * the placement so the sweep can never touch the buffer itself
-         * (a 0xa1000000 placement would overlap the range tail). */
+         * re-dirty anything, no other thread runs) and BEFORE
+         * enter_stub — the last word on the L2's fossil state. Three
+         * regions, two ops:
+         *  1. [0xa0000000, 0xa1069000) via 0x7F0 CIPA: the pgd PA
+         *     0xa0004000 (head.S writes it C-off = DRAM truth; PTW reads
+         *     must not hit fossils — the W-38 pair, generalized), the
+         *     decompressor destination (Image 0x101ba50 -> 0xa1023a50 —
+         *     142KB PAST the W-35 guard end!) and .bss (_end 0xa10680c8
+         *     -> rounded). Clamped to the placement so it can never
+         *     touch the buffer itself.
+         *  2. [phys+0x1000, phys+used) via 0x770 INV-ONLY: the jump
+         *     buffer's fossils (the kernel's fixed-map FDT reads and the
+         *     decompressor's cached source reads hit these — W-90a's
+         *     totalsize=15519 fossil). DRAM = the NOCACHE-verified fresh
+         *     copy; inv-only cannot poison it. Excludes the trampoline
+         *     page (the payload's cached memcpy = dirty lines that must
+         *     NOT be discarded).
+         *  3. [phys, phys+0x1000) via 0x7F0 CIPA: the trampoline page —
+         *     clean the payload's own dirty cached lines to DRAM so
+         *     enter_stub's cached re-read refetches the same bytes.
+         * used = blob_off+padded+dlen (the blob + the standalone DTB).
+         * bc[19]/bc[26] = dest heartbeat/timeouts; bc[27]/bc[28] =
+         * buffer heartbeat/timeouts (kernel-era writers overwrite them
+         * post-jump — they only matter for a mid-sweep wedge). */
         if (g_l2on) {
             uint32_t end = 0xA1069000u;
+            uint32_t used, to;
             if ((off64_t)end > phys)
                 end = (uint32_t)phys & ~0x1Fu;
-            bc[26] = l2c_ns_inv_range(0xA0000000ull, end - 0xA0000000u);
-            bc_write(48);   /* heartbeat: the sweep survived */
+            bc[26] = l2c_ns_line_range(0x7F0, 0xA0000000ull,
+                                       end - 0xA0000000u, &bc[19]);
+            used = blob_off + padded + dlen;
+            if (used > g_bufsize)
+                used = g_bufsize;
+            if (used > 0x1000u) {
+                to = l2c_ns_line_range(0x770, phys + 0x1000, used - 0x1000,
+                                       &bc[27]);
+                bc[28] = to;
+            }
+            l2c_ns_line_range(0x7F0, phys, 0x1000, NULL);
+            bc_write(48);   /* heartbeat: all sweeps survived */
         }
     }
     {
