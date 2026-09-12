@@ -20,9 +20,9 @@ $SSH "on -C 0 /tmp/memdump3 90000000 0x40"   # read the bc page
 options in `SSHARGS`. Payload mode is chosen by env: `PAYLOAD_MODE=--l2on`/
 `--dmaquiet`/`--t3`/`--probe`/`--ppa`/`--l2lat`; kernel image = argv[1]
 (`./jump.sh zImage` — **zImage is the preferred path**).
-`--dmaquiet` (= --l2on + `slay devb-mmcsd-winchester` after the last file
-read + the DISPC-kill readbacks) is the session-9 default for runs:
-**PAYLOAD_MODE=--dmaquiet ./jump.sh zImage**.
+**--l2on is the session-11 default** (the L2 stays ON — --dmaquiet's
+L2-off = the deterministic TLB-op wedge, see the session-11 notes):
+**PAYLOAD_MODE=--l2on ./jump.sh zImage**.
 
 ## The debug loop
 

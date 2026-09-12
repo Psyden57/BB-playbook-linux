@@ -43,10 +43,11 @@ original conversation history.
 
 ## Current handoff state
 
-- Latest session notes: [session-notes/session-09.md](session-notes/session-09.md)
-- Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_10.md` — read it
-  first (it has the read order, the per-file code state, the current
-  death, the first task = W-39, the open questions, and the dead-ends)
-- Next action: `PAYLOAD_MODE=--dmaquiet ./jump.sh zImage` (build #110,
-  the 2MB allocator shave + the middle-pair probe)
+- Latest session notes: [session-notes/session-11.md](session-notes/session-11.md)
+- Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_12.md` — read it
+  first (it has the read order, the unified wedge family, the front =
+  the first TLB op after the CMA, the first task = W-84 the payload
+  archaeology bisect, and the bequest order)
+- Next action: W-84 — the era's qnx2linux.c (the git archaeology) paired
+  with the current kernel; run mode = **PAYLOAD_MODE=--l2on**
 - Local-only assets and why: [SETUP.md](SETUP.md) §6

@@ -1,5 +1,16 @@
 # Known Issues & Open Problems
 
+**SESSION-11 HEADER (2026-09-11/12): the fronts listed below are STALE.**
+The current front = the first TLB op after the CMA (clear_fixmap,
+bc[1]=126→125) — the unified wedge family (the SCU-routed global ops with
+CPU1 held: the TLB ops + the ldrex/strex exclusives) supersedes the
+session-9/10 "stale pgd pair" / barrier-domain framing. The "stale pgd
+pair" (#4b) = an attribute-bit misread (the entries are valid section
+descriptors in every shape — see the session-11 notes). The authoritative
+state = newdocs/PROJECT_STATE.md + docs/03 W-69..W-83 +
+newdocs/session-notes/session-11.md. The items below = the historical
+context.
+
 Current as of session 9 (2026-09-04). Ordered by blocking priority.
 Session-9 updates are appended per issue; the session-7-era text stands
 for context. See docs/03 W-25..W-38 and
