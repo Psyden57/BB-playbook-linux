@@ -2699,3 +2699,47 @@ matrix changed with the W-84 fix: --l2on = L2on+no-slay (W-84),
 there either!), --t3 = L2off+no-slay. W-85 = PAYLOAD_MODE=--dmaquiet
 (the slay = the one variable vs W-84), ideally after a battery pull
 (DRAM+L2 wiped = a clean machine, no residue noise).
+
+### Run W-85 (2026-09-12, session 12): build #153 + --dmaquiet (L2on + slay,
+### after the battery pull / the clean-machine baseline) — ★ THE DARK-HANG:
+### no red LED ever, the machine hung THROUGH the WDT2 window; the
+### readback = fully trampled by the recovery power-hold — NO usable
+### on-device evidence; the timeline only
+
+Pre-run: the battery pull done (the DRAM verified clean: the bc page +
+the ring = the uniform 0xAA filler, no magic/nonce/canaries). memdump3
+re-deployed. Payload = the W-84 binary (unchanged); the kernel = #153
+(unchanged). THE ONE VARIABLE vs W-84 = the devb slay (--dmaquiet =
+L2on + slay after the W-84 fix — it no longer disables the L2).
+
+Timeline (jump.sh + the user's direct observation; THE VIDEO WAS LOST —
+the phone failed to record):
+- t=5s: bc[1]=0x23=35 (the payload armed — the fresh pool = fast)
+- t=25s: ssh gone = THE JUMP (the setup ~20s vs W-84's ~41s)
+- ~t=84s expected: the WDT2 window expires — NO red LED ever appeared
+- the device = dark, warm (the SoC powered), ping/SSH dead for 10+ min
+- recovery = the user's power-button hold; QNX booted; SSH back
+
+Readback attempt post-recovery: FULLY TRAMPLED (the magic = 0xcc424b23
+= bit-corrupted 0x4c424b43; every word = 0xAA-filler XOR-mixed residue;
+the ring + the mirrors = garbage). WORSE than the W-73 partial trample.
+The DRAM evidence = lost — the dark-hang denied the WDT2 reset that
+delivers the fresh bc page (the W-84 mechanism).
+
+**VERDICT: the dark-hang = NEW to the L2on+slay combination.** The
+L2on+no-slay run (W-84) = a normal WDT2 cycle (red LED, fresh bc page,
+the 144→145 death). The L2off+slay runs (W-72..77) = normal cycles
+(the TLBIALL wedge). L2on+slay (W-85) = the machine hung dark through
+the watchdog window — the wedge class that defeats even the recovery
+path. WHERE it wedged = unknown (no readback). The slay = NOT
+exonerated; it correlates with the deepest wedge yet observed.
+
+LESSONS:
+- An L2-on run that wedges dark = evidence-negative by construction
+  (no WDT2 reset = no fresh bc page; the only recovery = the trampling
+  power-hold). The console ring (currently flush-broken in the L2-on
+  state, the W-77 de-CIPA) = the ONLY channel that could carry evidence
+  out of a dark-hang — restoring its flush = the observability
+  prerequisite for any further L2-on work.
+- The 0xAA clean-machine baseline = a reliable freshness discriminator
+  (any real marker = unmistakable against it).
