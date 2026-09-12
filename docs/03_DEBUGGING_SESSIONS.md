@@ -2825,3 +2825,54 @@ THE FIX (the payload): led_color_qnx(0x0A) MOVED to before the GICD-off
 color = magenta for the last ~2-4 s of the payload (the pre-SMC CIPA +
 the l2 branch + bc 52). Rule-16 verified: exactly one led_color_qnx
 call in do_t3, at the new position.
+
+### Run W-88 (2026-09-12, session 12): the fixed payload (the magenta moved
+### before the GICD-off) + kernel #154b (the ring batch flush) — ★★★ THE
+### JUMP WORKED, THE RING FLUSH WORKED, AND THE BOOT PASSED THE W-83 FRONT
+### (125!) — the new front = [98 → 96] = local_flush_tlb_all inside
+### devicemaps_init = the NEXT TLB op ★★★
+
+Run: PAYLOAD_MODE=--l2on ./jump.sh zImage. The payload = the W-87 fix
+(led_color_qnx(0x0A) before the GICD-off). The kernel = #154b (the ring
+batch flush).
+
+**THE RING FLUSH = PROVEN: the ring = 1165 chars (0x48d) = THE FULL
+BOOT LOG, the first L2-on console readback since the W-77 de-CIPA.**
+Decoded (the word-reverse): "Booting Linux on physical CPU 0x0", the
+Linux version (#152 = the build date), the CPU rev, **"Machine model:
+BlackBerry PlayBook (winchester)"** (the FDT chain ✓), the earlycon0
+enabled, "Memory policy: Data cache writeback", PB-ADJ/PB-MEM
+(m[0]=a0000000+20000000 = the bank ✓), PB-RES r[0]=a38ef570+15519 (the
+DTB reserve = the appended DTB at _edata ✓), "cma: Reserved 16 MiB at
+0xbe800000", the PB-CMA print cut mid-word ("...size=0x01000000 v") =
+the LAST printk before devicemaps_init — the log = COMPLETE to the
+death point (1165 = the same count as the W-80/83 L2-off consoles = the
+same printk set ✓).
+
+**THE BC READBACK: bc[1]=0x62=98 with bc[2]=0x162=98|0x100 = the
+PB_MMU_BC(98) pair = "map_io / debug_ll done" — INSIDE devicemaps_init,
+which runs AFTER dma_contiguous_remap (126) AND early_fixmap_shutdown
+(125)!!! The boot PASSED the clear_fixmap TLB op (the W-83/W-84-era
+front = FALLEN — the L2-on TLB-op flakiness let it through this run).**
+bc[4]=143, bc[5]=144 (the head.S fixup ✓), bc[6]=0xe0000000 (the stub
+echo — the whole chain ran ✓), bc[7]=0x410000c4 + bc[8]=1 (the probe:
+THE L2 ON post-jump ✓), bc[11..12]=the C0DE markers (parse_early_param
+✓), bc[13]=0xbfbfff50 (a pte-table pointer = alloc_init_pte ✓),
+bc[14]=0xff8ef570 (the FDT fixed-map VA ✓), bc[3]=0 (the ACTLR
+post-clear ✓), the nonce fresh.
+
+**THE NEW FRONT = [98 → 96]: the next unexecuted step =
+local_flush_tlb_all() inside devicemaps_init = A TLB OP.** The unified
+SCU/TLB-op wedge family holds exactly: the L2-on boots pass SOME TLB
+ops (flaky — the TLBIALL skipped, clear_fixmap passed this run) and
+wedge at the NEXT one. The W-84 [144→145] death = the same class
+striking earlier. The real cure = the CPU1 release (the bequest).
+
+**THE W-86/87-CLASS REGRESSION = FULLY RESOLVED**: the payload fix (the
+magenta before the GICD-off) = the jump works 1/1. The new payload rule
+(nothing QNX-side after the GICD-off) = load-bearing.
+
+**THE OBSERVABILITY UPGRADE = PROVEN (both channels):** (a) the LED
+timeline = the jump point on video (the user's W-86 recording: blue →
+magenta → the exact-59s-off); (b) the ring flush = the boot log text
+through the death point in the L2-on state. Every future run = both.
