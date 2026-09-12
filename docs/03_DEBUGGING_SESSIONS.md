@@ -2621,3 +2621,81 @@ agent against the tree and the git history:
 - **W-84's first move = restore the era --l2on semantics (skip the SMC
   entirely, the 0x2102 marker, bc[10]=CTRL expect 1) and re-run** — the
   first genuine L2-on run since W-46, on the current kernel.
+
+### Run W-84 (2026-09-12, session 12): build #153 (kernel unchanged) + the
+### payload's era --l2on semantics RESTORED — ★ the first GENUINE L2-on run
+### since W-46 ★ — the boot REGRESSED: death between markers 144 and 145
+### (the early-C region), NOT past the CMA; bc[8]=1/bc[10]=1 = the L2 ON
+### CONFIRMED on-device
+
+Change: kexec/qnx2linux.c do_t3's if (g_l2on) branch restored to the era
+semantics (NO SMC; bc[6]=0x2102; bc[10]=pl310 CTRL readback expect 1;
+bc[4]=latency). The else branch (--t3's L2-off) untouched. Rule-16
+verified in the shipped binary: the g_l2on path = movw 0x2102 + the CTRL
+readback, NO smc between the branch and bc_write(52); the else path =
+movw 0x102; bl mon_call intact (disassembly at 804a804-804a85c).
+
+Run: PAYLOAD_MODE=--l2on ./jump.sh zImage, kernel = #153 UNCHANGED
+(zImage 5,221,585 B), hands-off, unfiltered output. Jump ~t=40s (ssh
+gone), WDT2 reboot, readbacks fresh.
+
+**THE DISCRIMINATOR LANDED: bc[10]=1 (the payload's pre-jump PL310 CTRL
+readback) AND bc[8]=1 (probe.S's post-jump CTRL readback) = THE L2 WAS
+GENUINELY ON — the first L2-on boot since W-46.** bc[9]=0x111 (the
+latency, as always). bc[6]=0xe0000000 = the stub echo (era-documented).
+
+Fresh markers (bc[0..5] are bc_arm-sanitized at arm-up = always fresh):
+**bc[1]=142, bc[2]=0x3E7 (the wild write — the W-6/W-35 signature),
+bc[3]=0xa2e00000 (the placement), bc[4]=143, bc[5]=144.** The kernel
+wrote 142→143→144 and died between 144 and 145. The death span =
+[head.S fixup done (144) → the CMA pmd_clear done (145)]: __mmap_switched
+→ start_kernel → setup_arch — the EARLY-C REGION the L2-off boots cross
+routinely (W-83 = 126).
+
+The FDT chain WORKED before the death: bc[12]=0xa3302cd8
+(__atags_pointer = the payload's standalone DTB phys; matches the
+placement+buffer layout) and bc[14]=0xff8ed7b8 = the fixed-map VA of
+0xa32ed7b8 = _edata = the bc[20]-recovered APPENDED DTB (0xff800000 |
+0xed7b8 — verified: 0xa32ed7b8 & 0xFFFFF = 0xed7b8). bc[20..23] = the
+decompressor's dump (fresh, consistent: _edata 0xa32ed7b8 = placement +
+0x4ed7b8 = the zImage size; magic 0xedfe0dd0; r8 = the payload DTB;
+r4 = 0xa0008000). bc[24]=r2@stext=0xa32ed7b8 (the appended DTB),
+bc[25]=0xffffffff (as in every FDT-path boot).
+
+**RING1 = 0 chars = UNINFORMATIVE this run — STRUCTURAL, not a death
+point:** the W-77 de-CIPA made the ring writes plain L1-dirty stores
+(no DCCMVAC); with the L2 ON they never reach DRAM and die at the WDT2
+reset. The console evidence is UNAVAILABLE in the L2-on state until the
+ring flush is restored (the pb_bc_put markers survive — they DCCMVAC to
+the L2, which retains across the warm reset).
+
+**Everything past bc[5] = W-83 RESIDUE (proven, not assumed):**
+bc[26]=0xBEEF0000 / bc[27]=0xE1000003 = W-83's sweep tally + post-ISB
+phase. bc[28..31] = 0xbfa0041e/0xbfc0041e/0xbfd0041e/0 = the pgd dumps
+in the **SMP=n desc shape**: the S bit (bit 16, PMD_SECT_S) is OR'd into
+MT_MEMORY_RWX.prot_sect ONLY from the SMP TTB flag (mmu.c:619 — verified
+in the tree); the SMP=n kernel's linear-map descs = 0x0041e, the SMP=y
+kernels' = 0x1141e (every recorded L2-off-era dump). W-83 = the SMP=n
+kernel that reached 126 (past the dump point) → W-83 wrote exactly these
+values. NOT fresh evidence.
+
+The placement 0xa2e00000 (bc[18] matches bc[3]) = clean: well outside
+the guarded inflation region [0xa0000000, 0xa1000000) — the W-35
+mechanism does NOT apply, yet the W-35 triad (142 + 0x3E7 + ring 0)
+reproduced. The ONE variable vs W-83 = the L2 state.
+
+**VERDICT: with the L2 genuinely ON, the same kernel that reached 126
+with the L2 OFF (W-83) dies EARLIER — in the early-C region (144→145).
+Neither predicted outcome (past the CMA / wedged at a TLB op) occurred;
+the L2 is NOT dead as a variable and NOT a cure — the two L2 states fail
+at DIFFERENT points with the same kernel. The wedge family stays
+SCU-routed-global-ops-with-CPU1-held; WHICH op fires first depends on
+the L2 state (L2-off → the first TLB op at clear_fixmap; L2-on → an
+early-C op before the CMA pmd_clear).**
+
+Next (W-85): the slay A/B under the L2-on — NOTE the payload's mode
+matrix changed with the W-84 fix: --l2on = L2on+no-slay (W-84),
+--dmaquiet = L2on+slay (the g_l2on branch no longer disables the L2
+there either!), --t3 = L2off+no-slay. W-85 = PAYLOAD_MODE=--dmaquiet
+(the slay = the one variable vs W-84), ideally after a battery pull
+(DRAM+L2 wiped = a clean machine, no residue noise).

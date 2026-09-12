@@ -9,6 +9,25 @@ with dated headers.
 
 ## Where the boot stands
 
+**W-84 RESULT (2026-09-12, the first genuine L2-on run since W-46, kernel
+#153 unchanged): the boot REGRESSED — death between markers 144 and 145
+(the early-C region), NOT past the CMA. The L2 was ON confirmed on-device
+(bc[8]=1 probe, bc[10]=1 payload). The FDT chain worked (bc[12]/bc[14]
+fresh). Ring1 = 0 = STRUCTURAL: the W-77 de-CIPA'd ring writes are
+L1-dirty and die at the reset with the L2 on — the console is
+UNAVAILABLE in the L2-on state until the ring flush is restored. The
+W-35 triad (142 + 0x3E7 + ring 0) reproduced with a CLEAN placement
+(0xa2e00000) — the L2 state = the variable. All bc[6]+ slots = proven
+W-83 residue (the pgd shapes 0x041e = the SMP=n desc shape, the S bit
+OR'd only from the SMP TTB flag — mmu.c:619).**
+
+The two L2 states fail at DIFFERENT points with the same kernel: L2-off →
+the first TLB op (clear_fixmap, 126→125); L2-on → an early-C op before
+the CMA pmd_clear (144→145). The wedge family = SCU-routed global ops
+with CPU1 held; which op fires first depends on the L2 state.
+
+## Where the boot stands (the session-11 detail, for context)
+
 Mainline Linux 6.15.11 (omap2plus, non-LPAE, patched, **CONFIG_SMP=n as of
 W-80**) is jumped from QNX via the **zImage path**, **--l2on** as the run
 mode. **ERRATUM (session 12): --l2on has DISABLED the L2 since the W-46
@@ -54,9 +73,11 @@ session-11 section in docs/03.**
    session's opening bisect (the git archaeology).
 6. The DMA masters: the devb slay = a WEDGE CORRELATE (the W-69..77
    slay-era runs wedged 6/6 at the TLBIALL; the no-slay runs passed the
-   CMA) — **--l2on (no slay) is the run mode now**, but note the W-46
-   erratum: the mode has been disabling the L2 since a692300; W-84 =
-   restore the true keep-on semantics and re-run.
+   CMA). **The payload mode matrix after the W-84 fix: --l2on = L2on +
+   no-slay; --dmaquiet = L2on + slay (it no longer disables the L2!);
+   --t3 = L2off + no-slay.** W-85 = the slay A/B under the L2-on
+   (--dmaquiet), ideally after a battery pull (DRAM+L2 wiped = a clean
+   machine, no residue noise).
 7. Marker-number discipline: setup.c's pb_bc(130-136) pairs COLLIDE with
    mmu.c's PB_MMU_BC numbers — discriminate via the mirror channel (rule
    17 in docs/README). Extended forensics bc[16]-bc[27] + the W-72 pgd-dump

@@ -1171,25 +1171,19 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
          * bypass. The kernel (CONFIG_CACHE_L2X0=n) inherits QNX's enabled
          * L2 as-is; the kernel-side L2X0 driver is the follow-up. */
         if (g_l2on) {
-            /* PlayBook W-46 (2026-09-11): the --t3 shape ERRORS in the
-             * decompressor ("invalid dtb and unrecognized machine ID,
-             * r1=0 r2=0") — the old direct-jump shape never passes the
-             * FDT pointer, so the L2-off combo must run through THIS
-             * (proven) --dmaquiet shape instead. Disable the L2 here:
-             * the same proven mon_call(0x102) C-flow shape as the else
-             * branch, then the identical minimal post-SMC writes.
-             * Rationale: the SMP=0 clear (kernel #119) must pair with
-             * the L2 off (the SMP=0 cached-write wedge is L2-enabled-
-             * specific), and the CPU1-held broadcast wedge class
-             * (W-43/44/45) disappears without the SCU in the picture. */
-            {
-            uint32_t st = mon_call(0x102, 0, 0);
-            bc[6] = 0x2103;             /* marker: L2 OFF via the dmaquiet flow */
-            bc[2] = pl310[0x100 / 4];   /* CTRL readback (expect 0) */
+            /* PlayBook W-84 (2026-09-12): the era --l2on semantics
+             * RESTORED. W-46's rewrite (a692300) put the L2-off
+             * mon_call(0x102) in here, silently disabling the L2 for
+             * --l2on too (every W-78..83 run ran L2-OFF — the
+             * docs/03 session-12 erratum). NO SMC in this branch:
+             * the L2 stays ON, and the stub-safe readbacks are the
+             * run's discriminator (bc[10] expect 1; probe.S's bc[8]
+             * post-jump expect 1). */
+            bc[6] = 0x2102;             /* marker: L2 kept on (may be
+                                           overwritten by the stub echo) */
+            bc[10] = pl310[0x100 / 4];  /* CTRL readback, stub-safe slot
+                                           (expect 1 = L2 ON) */
             bc[4] = pl310[0x10C / 4];   /* data-latency readback */
-            bc[1] = 0x3130;             /* pre-jump slot: SMC 0x102 status */
-            (void)st;
-            }
         } else {
         uint32_t st = mon_call(0x102, 0, 0);
         bc[6] = st;                     /* SMC return status */
