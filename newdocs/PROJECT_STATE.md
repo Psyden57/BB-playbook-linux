@@ -21,10 +21,33 @@ W-35 triad (142 + 0x3E7 + ring 0) reproduced with a CLEAN placement
 W-83 residue (the pgd shapes 0x041e = the SMP=n desc shape, the S bit
 OR'd only from the SMP TTB flag — mmu.c:619).**
 
-The two L2 states fail at DIFFERENT points with the same kernel: L2-off →
-the first TLB op (clear_fixmap, 126→125); L2-on → an early-C op before
-the CMA pmd_clear (144→145). The wedge family = SCU-routed global ops
-with CPU1 held; which op fires first depends on the L2 state.
+**W-89 + THE SESSION-12 SYNTHESIS (2026-09-12): THREE L2-on boots
+(W-84, W-88, W-89, kernel #153-#155) = THREE DIFFERENT death points —
+W-84 = the early C [144→145] (0x3E7 ✓), W-88 = [98 → 96]
+(local_flush_tlb_all in devicemaps_init, PASSED 125/the clear_fixmap
+TLB op on the way!), W-89 = mid-parse_early_param (0x3E7 ✓). The L2-on
+early C = THE SESSION-9 STALE-VIEW LOTTERY (decompressor-era L2 lines +
+per-run eviction luck), not a deterministic front. The W-88 deep run =
+the lucky draw. The TLB-op skips = marginal relief; the poison =
+upstream. THE NEXT CURE = the wide stale-line invalidation (the
+monitor 0x101 or the NS 0x770 inv-by-PA over the image + pgd + data
+regions) BEFORE the C world reads — the W-32c/111 sweeps cover the pv
+and the pgd only.**
+
+**OBSERVABILITY (proven W-86..W-88, both channels):** (a) the payload's
+LED phase markers — blue = the payload, MAGENTA = pre-GICD-off (the
+frozen color = "died at the jump" in video; NOTE: the i2c devctl is
+ILLEGAL after the GICD-off = the W-86/87 lesson); (b) the ring BATCH
+flush (every 64 chars, guarded on the L2 enabled, NS 0x7F0 + the
+bounded 0x730) = the console log survives in the L2-on state (W-88 =
+1165 chars, the full log to the death). The kernel-side LED colors =
+CLOSED (the --ledprobe: the direct NS I2C4 access = SIGBUS, the MMCHS
+class).
+
+The two L2 states: L2-off = the deterministic TLB-op wedge (the W-72..77
+era) but DRAM-truth stores; L2-on = the stale-view lottery (per-run
+random early-C deaths). Neither is bootable; the cure = the stale-line
+invalidation (L2-on) or the CPU1 release (the real fix, the bequest).
 
 ## Where the boot stands (the session-11 detail, for context)
 

@@ -2876,3 +2876,43 @@ magenta before the GICD-off) = the jump works 1/1. The new payload rule
 timeline = the jump point on video (the user's W-86 recording: blue →
 magenta → the exact-59s-off); (b) the ring flush = the boot log text
 through the death point in the L2-on state. Every future run = both.
+
+### Run W-89 (2026-09-12, session 12): kernel #155 (the local_flush_tlb_all
+### skip in devicemaps_init) — the boot died EARLIER than W-88, inside
+### parse_early_param: THREE L2-on boots = THREE different death points =
+### ★ THE L2-ON STATE = THE SESSION-9 STALE-VIEW LOTTERY, NOT A
+### DETERMINISTIC FRONT ★
+
+Run: PAYLOAD_MODE=--l2on ./jump.sh zImage. The readback: bc[1]=142, **bc[2]
+=0x3E7** (the W-6/W-35 wild write — the early-death signature), the
+placement=0xa3500000 (different again), 143/144 landed (head.S ✓),
+bc[6]=0xe0000000 (the stub echo ✓), bc[7]/bc[8]=0x410000c4/1 (the probe,
+THE L2 ON ✓), **bc[11]=0xC0DE0010 = parse_early_param ENTERED** but
+bc[10]=1 and bc[12]=0xa3b03ec8 = the payload/stub-era values UNWRITTEN —
+**the death = between parse's first and second breadcrumb = at the
+boot_command_line read.** The mirror0 = 70 ("jump started") ✓.
+
+**THE SYNTHESIS (W-84, W-88, W-89 — all L2-on, kernel #153-#155):**
+- W-84: died in the early C (the [144→145] span, pre-parse), 0x3E7 ✓
+- W-88: PASSED 125 (the clear_fixmap TLB op) and died at [98 → 96]
+  (local_flush_tlb_all in devicemaps_init), no 0x3E7
+- W-89: died mid-parse_early_param (EARLIER than W-88, WITH the skip in
+  place), 0x3E7 ✓
+**Three different death points with one kernel family = NOT a
+deterministic front. The L2-on early-C = the session-9 stale-view class
+verbatim: decompressor-era L2 lines surviving eviction per-run decide
+which cached read/walk gets poisoned. The W-88 deep run = the lucky
+draw; W-89 = the unlucky one. The "front" = a DISTRIBUTION, not a
+point.** The 0x3E7 wild write = correlated with the unlucky early
+deaths (W-84, W-89; absent in W-88) — a stale-class clue.
+
+The TLB-op skips (the CMA TLBIALL, clear_fixmap luck, the W-89
+local_flush_tlb_all skip) = marginal relief at best — the poison =
+upstream (the stale lines), not the ops themselves.
+
+**THE SESSION-12 CONCLUSION: the L2-on path needs the STALE-LINE CURE
+before any further wall-bisecting makes sense — a wide post-decompressor
+L2 invalidate (the monitor-side 0x101 inv-by-PA sweep over the image +
+the pgd + the .data/.bss regions, or the NS 0x770 inv-by-PA ladder
+proven in the session-10 audit) applied BEFORE the C world starts
+reading. The W-32c/111 sweeps cover the pv and the pgd only.**

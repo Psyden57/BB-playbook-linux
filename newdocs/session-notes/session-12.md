@@ -93,3 +93,37 @@ flush back, or a DCCMVAC-per-batch in the ring putchar.
   check all went through python.
 - Rule 14 (grep, don't recall) — the S-bit/SMP claim, the marker order
   in dma-mapping.c, and the era branch shape all verified in the tree.
+
+## THE W-85..W-89 ARC (the session-12 run map, post-restore)
+
+| run | build | change | result |
+|-----|-------|--------|--------|
+| W-85 | #153 | --dmaquiet (L2on+slay) after the battery pull | ★ the DARK-HANG: no red LED ever, hung THROUGH the WDT2; the readback = fully trampled; the timeline only |
+| W-86a | — | --ledprobe (no jump) | the direct NS I2C4 access = SIGBUS (the MMCHS class); the kernel-side LED = CLOSED |
+| W-86 | #154b | the ring flush + the magenta at bc 52 | ★ the jump ITSELF died: bc[1]=52, enter_stub never surfaced; the LED timeline = the diagnostic gold |
+| W-87 | #154b | the W-86 re-run | the identical death, a DIFFERENT placement → the MECHANISM: the magenta devctl inside the GICD-off window = the i2c driver blocks forever on the masked completion IRQ |
+| W-88 | #154b | the magenta moved before the GICD-off | ★★★ the jump worked + the RING FLUSH WORKED (1165 chars = the full boot log!) + the boot PASSED 125 (clear_fixmap); the death = [98 → 96] |
+| W-89 | #155 | the local_flush_tlb_all skip | died EARLIER (mid-parse_early_param, 0x3E7 ✓) → the lottery revealed |
+
+## THE SESSION-12 HEADLINES
+
+1. The --l2on erratum: the mode disabled the L2 since W-46 (a692300) —
+   the session-11 L2-model = superseded; every "L2-on" run W-78..83 =
+   L2-OFF (bc[8]=0).
+2. The first genuine L2-on runs = the STALE-VIEW LOTTERY: 3 boots = 3
+   death points (the early C, devicemaps_init, parse_early_param). The
+   W-88 deep run = the lucky draw. The cure = the wide stale-line
+   invalidation BEFORE the C world reads (the monitor 0x101 / the NS
+   0x770 inv-by-PA over the image + pgd + data regions).
+3. The observability = both channels proven: the ring batch flush (the
+   L2-on console = W-88's 1165 chars) + the LED phase markers (the
+   magenta = the jump point on video).
+4. NEW RULES: (a) nothing QNX-side after the GICD-off — the
+   interrupt-driven drivers (the i2c devctl) block forever on the masked
+   completion IRQ (the W-86/87 mechanism, 2/2 deterministic); (b) the
+   direct NS access to I2C4 (0x48350000) = SIGBUS (the MMCHS class) —
+   the kernel-side LED colors are hardware-impossible.
+5. The clean-machine (battery-pull) baseline = the readback freshness
+   discriminator (the 0xAA filler = unmistakable); a dark-hang run =
+   evidence-negative by construction (no WDT2 reset = the power-hold
+   tramples everything).
