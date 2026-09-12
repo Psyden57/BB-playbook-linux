@@ -1267,7 +1267,7 @@
  }
  
  /*
-@@ -1022,10 +1039,76 @@
+@@ -1022,10 +1039,74 @@
  	if (!nr)
  		return;
  
@@ -1315,14 +1315,12 @@
 +			 * 0xdf4 (inside the CMA VA range), bc[24] = VA
 +			 * 0xdf0. NO store to the svm this run (its PTW
 +			 * wedges); the diagnostics land first. */
-+			pb_bc_put(0xD0000050,
-+				  pmd_val(*pmd_off_k(0xdfc00000)));
-+			pb_bc_put(0xD0000054,
-+				  pmd_val(*pmd_off_k(0xdfe00000)));
-+			pb_bc_put(0xD0000058,
-+				  pmd_val(*pmd_off_k(0xdf800000)));
-+			pb_bc_put(0xD000005C,
-+				  pmd_val(*pmd_off_k(0xdf400000)));
++			/* PlayBook W-92 (session 13): the four bc[20..23]
++			 * dumps (0xD0000050..5C) REMOVED — they collide with
++			 * setup.c's W-92 DTB-header capture (the 15,519
++			 * anomaly) and the stale-pgd forensics = obsolete
++			 * (healthy 0x41e shapes since #110). bc[24]/bc[25]
++			 * (0x60/0x64) = kept (no collision). */
 +			pb_bc_put(0xD0000060,
 +				  pmd_val(*pmd_off_k(0xdf000000)));
 +			pb_bc_put(0xD0000064,			/* bc[25] */
@@ -1345,7 +1343,7 @@
  
  		vm = &svm->vm;
  		vm->addr = (void *)(md->virtual & PAGE_MASK);
-@@ -1035,6 +1118,7 @@
+@@ -1035,6 +1116,7 @@
  		vm->flags |= VM_ARM_MTYPE(md->type);
  		vm->caller = iotable_init;
  		add_static_vm_early(svm++);
@@ -1353,7 +1351,7 @@
  	}
  }
  
-@@ -1147,6 +1231,21 @@
+@@ -1147,6 +1229,21 @@
  	map.length = PAGE_SIZE;
  	map.type = MT_DEVICE;
  	iotable_init(&map, 1);
@@ -1375,7 +1373,7 @@
  }
  #endif
  
-@@ -1250,6 +1349,27 @@
+@@ -1250,6 +1347,27 @@
  
  	arm_lowmem_limit = lowmem_limit;
  
@@ -1403,7 +1401,7 @@
  	high_memory = __va(arm_lowmem_limit - 1) + 1;
  
  	if (!memblock_limit)
-@@ -1363,6 +1483,20 @@
+@@ -1363,6 +1481,20 @@
   * Any other function or debugging method which may touch any device _will_
   * crash the kernel.
   */
@@ -1424,7 +1422,7 @@
  static void __init devicemaps_init(const struct machine_desc *mdesc)
  {
  	struct map_desc map;
-@@ -1375,12 +1509,20 @@
+@@ -1375,12 +1507,20 @@
  	vectors = early_alloc(PAGE_SIZE * 2);
  
  	early_trap_init(vectors);
@@ -1446,7 +1444,7 @@
  
  	if (__atags_pointer) {
  		/* create a read-only mapping of the device tree */
-@@ -1445,10 +1587,16 @@
+@@ -1445,10 +1585,16 @@
  		mdesc->map_io();
  	else
  		debug_ll_io_init();
@@ -1463,7 +1461,7 @@
  
  	/*
  	 * Finally flush the caches and tlb to ensure that we're in a
-@@ -1456,11 +1604,23 @@
+@@ -1456,11 +1602,23 @@
  	 * any write-allocated cache lines in the vector page are written
  	 * back.  After this point, we can start to touch devices again.
  	 */
@@ -1489,7 +1487,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1765,7 +1925,81 @@
+@@ -1765,7 +1923,81 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1571,7 +1569,7 @@
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +2007,30 @@
+@@ -1773,9 +2005,30 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1602,7 +1600,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +2040,7 @@
+@@ -1785,6 +2038,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
