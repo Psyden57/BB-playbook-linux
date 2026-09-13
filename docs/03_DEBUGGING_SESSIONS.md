@@ -3326,3 +3326,40 @@ the PB-MEM print and map_lowmem); (3) the ring flush cadence (the
 batch-64 = too coarse past the CMA — the slab-era prints = lost);
 (4) the user's LED timeline for W-94b (the blue→magenta→off timings =
 the recorded run).
+
+### Run W-95 (2026-09-12, session 13): kernel #159 (the discriminator:
+### the cnt sampled before/after the loop, the sentinels in the m[1]
+### slots) — THE MEMBLOCK = EXONERATED (1 region, stable, both samples
+### = 1, the sentinels intact); W-94b's m[1] = {0x2000, 0} =
+### unreproduced; the front = 126 again = the lottery confirmed
+
+Kernel #159 (5,225,409 B): the capture restructured — bc[24] = the cnt
+sample #1, the sentinels 0x5A5AA5A5/0xA5A55A5A pre-written into the m[1]
+slots, the loop unchanged (the live cnt reads), bc[31] = the cnt sample
+#2 after the loop. Patch regenerated + dry-run clean.
+
+Readback: bc[1]=126 with the pair (the front = the cold/warm boundary —
+the machine = warm from W-94b only), the placement=0xa3000000 (2MB-
+ALIGNED → kern_off=0), ring = 1251 chars (the map_lowmem BUG line
+included). **THE CAPTURE: bc[24]=1, bc[31]=1 (BOTH cnt samples = 1 =
+the array NEVER moved), bc[29]=0x5A5AA5A5 and bc[30]=0xA5A55A5A = THE
+SENTINELS INTACT (the loop = correctly skipped m[1]), bc[25]=0xa0000000
++ bc[28]=0x1fe00000 = the healthy shaved region ✓, the DTB capture ✓
+(the magic + 87,321).**
+
+**VERDICT: the memblock.memory = EXONERATED — 1 region, stable at
+map_lowmem's entry, the DTB = perfect, the reserve = correct. W-94b's
+m[1] = {0x2000, 0} = UNREPRODUCED = the #158 compiler artifact or a
+one-off transient (the memblock-injector hunt = deprioritized — no
+repro). AND the front = 126 again: the fronts = 126, 156, 185, 126,
+126 across the sweep era = THE LOTTERY CONFIRMED — the 185-deep runs =
+the lucky/warm draws, not a deterministic state.**
+
+**THE SESSION-13 STRATEGIC PICTURE: the sweeps = the effective
+MITIGATION (the fronts advanced to 185 = past the 171 wall on the lucky
+draws), but the DETERMINISTIC cure = the CPU1 release (the bequest) —
+the unified wedge family (the SCU-routed global ops with CPU1 held) =
+the remaining wall, now with the L2-on boot reaching the slab era on
+the good draws. The session-5-era slab analysis (KNOWN_ISSUES #1's
+historical detail) = back on the board. The ring-flush cadence (the
+batch-64 = too coarse past the CMA) = the next observability fix.**
