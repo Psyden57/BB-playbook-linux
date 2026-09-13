@@ -3285,3 +3285,44 @@ the kmem_cache path's prints = the first slab-era console evidence!);
 (c) the bc[14]=0xC0DE0030 second-parse caller = find it (main.c:793's
 instruction); (d) the W-32c-era skipping/zeroing decisions = re-audit
 against the new front.
+
+### Run W-94b (2026-09-12, session 13): the CLEAN-MACHINE control (the
+### user's battery pull; the 0xAA baseline verified at t=5s) — ★ THE
+### FRONT REGRESSED TO 126: the day's 126→156→185 progression tracked
+### RESIDUE, not determinism — AND the capture may have caught the
+### memblock transiently 2-region with a garbage m[1] = {0x2000, 0}
+
+The user battery-pulled (the DRAM + the L2 = wiped; the t=5s readback =
+the 0xAA filler everywhere = the clean baseline ✓). Same kernel #158,
+same payload, --l2on. jump.sh timed out in the slow post-pull reboot
+wait; the readback = manual (~4 min of dead polling before QNX returned).
+
+Readback: **bc[1]=126 with the pair** (the W-90a/91/92 front), parse
+passed, the placement=0xa1e00000 (kern_off=0x200000), bc[13]=0xdfbf7000
+(the 126-front signature), the DTB capture ✓ (the magic + 87,321 ✓),
+the memblock capture: cnt=1, m[0]={0xa0000000, 0x1fe00000} (the shave ✓),
+reserved.cnt=8 — **IDENTICAL to W-94 = the memblock = deterministic-
+healthy... EXCEPT bc[29] (m[1].base) = 0x00002000 and bc[30] (m[1].size)
+= 0 — but the capture loop writes m[1] ONLY if cnt ≥ 2, and PB-MEM
+printed mem=1 earlier.** Two readings: (a) the memblock = TRANSIENTLY
+2-region with a garbage m[1] = {base 0x2000, size 0} at map_lowmem's
+entry — matching W-90a's "PA 0x00000000 at VA 0x20" WARN class (the
+region = ~PA 0!!) and solving the garbage-md source; (b) the compiler
+wrote the second iteration branchlessly reading regions[1] = whatever
+sits past regions[0]. DISCRIMINATOR for W-95: re-read memory.cnt into
+bc[29] AFTER the loop (the second cnt sample) — if the two cnt samples
+disagree, the array = moving.
+
+**THE CONTROL RESULT: clean = 126 vs dirty = 185 — the day's
+126→156→185 progression = PARTLY residue-warmth (the L2 retains the
+previous runs' kernel-era lines = a warm start for the deep sections),
+NOT deterministic skill.** The lottery = alive; the sweeps = tamed it
+only partially. The clean machine = the OLD cold front.
+
+NEXT (W-95): (1) the second-cnt discriminator + repeat on the WARM
+machine 2× — is the warm front (156/185) itself repeatable? (2) the
+m[1] = {0x2000, 0} injector hunt (memblock_add_range callers between
+the PB-MEM print and map_lowmem); (3) the ring flush cadence (the
+batch-64 = too coarse past the CMA — the slab-era prints = lost);
+(4) the user's LED timeline for W-94b (the blue→magenta→off timings =
+the recorded run).
