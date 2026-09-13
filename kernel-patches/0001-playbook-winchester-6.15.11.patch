@@ -1478,7 +1478,7 @@
  }
  
  static void __init kmap_init(void)
-@@ -1479,6 +1633,33 @@
+@@ -1479,6 +1633,42 @@
  	phys_addr_t start, end;
  	u64 i;
  
@@ -1489,13 +1489,22 @@
 +	 * while the PB-MEM print (arm_memblock_init's top, EARLIER)
 +	 * showed mem=1 [a0000000, c0000000) = correct. The corruption
 +	 * window = between the print and this loop. The capture (pb_bc_put
-+	 * = L2-aware): bc[24] (0x60) = memory.cnt, bc[25] (0x64) =
-+	 * m[0].base, bc[28] (0x70) = m[0].size, bc[29] (0x74) = m[1].base,
-+	 * bc[30] (0x78) = m[1].size, bc[31] (0x7C) = reserved.cnt. The
-+	 * slots = freed from the obsolete W-38-era pmd/pgd dumps. */
++	 * = L2-aware): bc[24] (0x60) = memory.cnt sample #1, bc[25] (0x64)
++	 * = m[0].base, bc[28] (0x70) = m[0].size, bc[29] (0x74) = the
++	 * SENTINEL 0x5A5AA5A5 or m[1].base if the loop's live cnt read
++	 * admitted a second iteration, bc[30] (0x78) = the SENTINEL
++	 * 0xA5A55A5A or m[1].size, bc[31] (0x7C) = memory.cnt sample #2
++	 * (AFTER the loop). W-94b's puzzle: bc[24]=1 yet m[1] was written
++	 * ({0x2000, 0}) — either the array moved between the two cnt reads
++	 * (the loop re-reads it live) or the compiler wrote m1 branchlessly
++	 * reading past cnt. The sentinels + the second sample separate all
++	 * three cases. The slots = freed from the obsolete W-38-era pmd/pgd
++	 * dumps; 0x68 (bc[26], the sweep tally) = kept. */
 +	{
 +		unsigned int pb_i;
 +		pb_bc_put(0xD0000060, memblock.memory.cnt);
++		pb_bc_put(0xD0000074, 0x5A5AA5A5u);	/* m1.base sentinel */
++		pb_bc_put(0xD0000078, 0xA5A55A5Au);	/* m1.size sentinel */
 +		for (pb_i = 0; pb_i < 2 && pb_i < memblock.memory.cnt; pb_i++) {
 +			static const unsigned int pb_bslot[2] = {
 +				0xD0000064, 0xD0000074 };
@@ -1506,13 +1515,13 @@
 +			pb_bc_put(pb_sslot[pb_i],
 +				  (unsigned int)memblock.memory.regions[pb_i].size);
 +		}
-+		pb_bc_put(0xD000007C, memblock.reserved.cnt);
++		pb_bc_put(0xD000007C, memblock.memory.cnt);
 +	}
 +
  	/* Map all the lowmem memory banks. */
  	for_each_mem_range(i, &start, &end) {
  		struct map_desc map;
-@@ -1765,7 +1946,81 @@
+@@ -1765,7 +1955,81 @@
  		 kernel_sec_start, kernel_sec_end);
  
  	prepare_page_table();
@@ -1594,7 +1603,7 @@
  	memblock_set_current_limit(arm_lowmem_limit);
  	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
  	/*
-@@ -1773,9 +2028,30 @@
+@@ -1773,9 +2037,30 @@
  	 * be used
  	 */
  	map_kernel();
@@ -1625,7 +1634,7 @@
  	kmap_init();
  	tcm_init();
  
-@@ -1785,6 +2061,7 @@
+@@ -1785,6 +2070,7 @@
  	zero_page = early_alloc(PAGE_SIZE);
  
  	bootmem_init();
