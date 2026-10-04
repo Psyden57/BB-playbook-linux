@@ -97,3 +97,38 @@ promoted lead (the ATAG-compat path, head-S ~384-460).**
 
 - Full records: docs/03 W-96; runs archived ~/agent-runs/w96-run{1,2,3}*.
 - LED timings: held on video by the user (ask when needed for the record).
+
+## W-96 LED TIMELINE (user video, run 1; runs 2/3 = "very similar",
+## footage lost to phone storage)
+
+| t | What | Interpretation |
+|---|------|----------------|
+| 00:00 | jump.sh launched | (the video's t0 = the command) |
+| 00:05 | BLUE | the payload's led_blue_qnx at bc~30 ⇒ deploy+slay ≈ 5 s on USB RNDIS |
+| 00:28 | MAGENTA | led_color_qnx(0x0A) at bc 42 — AFTER the whole-DRAM sweep + the file reads, BEFORE the placement search/memtest/copies |
+| 01:19 | OFF | the kernel era (post-jump the LED goes dark by design) |
+| 02:27 | RED | the WDT2 warm reset (reboot) |
+
+**THE ONE TENSION (record, not resolved): blue→magenta = 23 s. W-91's
+measured whole-DRAM sweep ≈ 35 s alone (CIPA ≈ 1 μs/op); + reads ≈ 2 s
+⇒ expected magenta ≈ +37, observed +23.** Two readings: (a) the sweep
+ran ~20 s (≈1.7× faster than W-91's measure — sync-time distributions
+run-to-run?), or (b) the sweep fork DIDN'T execute its full range
+(a logic path) — the payload's magenta/heartbeats can't discriminate
+post-hoc because the bc[29]/bc[30] heartbeat slots are re-used by the
+kernel-era capture before readback.
+
+**THE SECOND TENSION: off→red = 68 s — LONGER than one full WDT2
+window (~59 s from the last kick, which sits right before enter_stub).
+Off = the kernel-era LED event; the WDT2 was armed ~59 s pre-red IF
+the kick ran at the jump — the +9-ish s of slack either says the
+reboot-to-red LED path adds delay (bootrom/loader phase before red)
+or the last kick was earlier than assumed (the placement fought — the
+W-61 ladder incl. 2 s settles). NOT resolvable from LEDs alone;
+W-97's live-poll covers it: poll `memdump3 4a31402c 4` (the WDT2
+counter) alongside the heartbeat slots — the counter names the true
+jump moment and the remaining window at every poll.
+W-97's first instrument, consolidated: a live poller loop during the
+jump (bc-ext slots 90000060/0x20 + WDT2 counter + bc 90000000/8),
+t≈+10/+20/+30/+40/+50 s — settles sweep-rate, sweep-vs-skip, the jump
+moment, and the off→red slack in ONE run, no artifacts needed.**
