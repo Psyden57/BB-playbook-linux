@@ -3358,8 +3358,79 @@ the lucky/warm draws, not a deterministic state.**
 **THE SESSION-13 STRATEGIC PICTURE: the sweeps = the effective
 MITIGATION (the fronts advanced to 185 = past the 171 wall on the lucky
 draws), but the DETERMINISTIC cure = the CPU1 release (the bequest) —
-the unified wedge family (the SCU-routed global ops with CPU1 held) =
+the unified wedge family (the SCU-routed global ops with CPU1 held) = 
 the remaining wall, now with the L2-on boot reaching the slab era on
 the good draws. The session-5-era slab analysis (KNOWN_ISSUES #1's
 historical detail) = back on the board. The ring-flush cadence (the
 batch-64 = too coarse past the CMA) = the next observability fix.**
+
+### Run W-96 series (2026-10-04, session 14): the post-migration
+### determinism check — 3 runs, kernel #159 artifact UNCHANGED (rule 16:
+### packed zImage sha256 42bf3025… + DTB 87321 B verified pre-run), same
+### payload binary, PAYLOAD_MODE=--l2on — THE WARM MACHINE LIFTS THE
+### FRONT: 142 (cold) → 126 → 156
+
+Context: the workstation migrated to a CachyOS host + qemu Debian 13 VM
+(session-14 notes); the toolchains were re-verified first (arm-linux-gcc
+14.3 kernel build OK; QNX SDP gcc 4.7.3 payload build OK after
+libc6-i386 + zlib1g:i386). The device USB link = BerryShell-V4 (the
+agent-built qconn door keeper: auth/exec/hold; hold = 4 s heartbeats +
+auto re-handshake — it rode three WDT2 reboot cycles unattended). The
+fresh baseline (before run 1) = DECAYED DRAM (AA-heavy rot, ~3 weeks
+unpowered): no valid state anywhere — a genuinely COLD machine, no L2
+fossils. jump.sh's exact SSH options verified working through the new
+link before the runs.
+
+- **W-96 run 1 (COLD machine): bc[1]=142 + bc[2]=0x3E7 + ring 0 = THE
+  W-84 TRIAD reproduced exactly on a no-fossil machine.** placement
+  0xa2e00000 (2MB-aligned); L2 ON (bc[8]=1/bc[10]=1); nonce fresh. The
+  cold draw = the triad, confirming W-94b's control-read and the
+  lottery's structure (cold ≠ lucky).
+- **W-96 run 2 (warm): bc[1]=126** (the post-CMA front) parse PASSED
+  (bc[11]=0xC0DE0010/bc[12]=0xC0DE0020), bc[13]=0xdfbf7000 (the exact
+  126-front signature W-90a/91/92/95), **RING = 1165 chars — the full
+  boot log to the death**: banner (UTS-stamp "#157", built 2026-09-13
+  00:23 UTC on DESKTOP-E596NT4 = the Sep-12-packed artifact ✓ — NOTE:
+  the project build ledger's "kernel #159" counts PB-marker changes;
+  the banner's "#157" counts in-tree builds — DIFFERENT counters; do
+  not attempt to reconcile them) → PB-ADJ/PB-MEM/PB-RES
+  (r[0]=a34ee9a8+0x15519-HEX = totalsize 87,321 ✓ — the W-93 erratum
+  live again in the raw print) → CMA → PB-CMA → STOP. The log ends
+  exactly where marker 126 says (post-CMA, pre-devicemaps_init).
+  bc[26]-slot = 0xBEEF0000 = the kernel-side sweep tally formula:
+  mism=0, tmo=0 (mmu.c:2023). bc[28..31] sentinels intact, cnt=1/1, the
+  W-95 exonerated-memblock signature again. bc[14]=0xff8ee6a8 (the
+  atags-adjacent value class from W-93's anomaly — SAME value both
+  runs; placement-clustered).
+- **W-96 run 3 (warm): bc[1]=156 = THE W-93 FRONT REPRODUCED** —
+  past devicemaps_init's first TLB op (local_flush_tlb_all SKIPPED at
+  96) into alloc_init_pte. **SLOT ARCHAEOLOGY (rule 17's finer teeth):
+  marker 156 = written by pb_bc_put(0xD0000004) alone — no pair — so
+  bc[2]/mirror keep the PREVIOUS paired marker = 127 (parse done): the
+  run 3 readback (bc[1]=156, bc[2]=0x17F, mirror=0x27F) and W-93's are
+  the same SHAPE.** The pair-less-marker reading (bc[2] = stale pair
+  value from an earlier sibling, not a fresh writer) = now recorded as
+  the decoder rule.
+
+**THE SER RESULTS (the first controlled series on the known W-95 lens):
+cold = 142 triad; warm = 126 and 156 (lottery inside the sweep-tamed
+band). The sweep machinery works on warm machines consistently — every
+warm run reached ≥126 — but the depth still draws. The 156 = the
+known-good W-93 state; the run-2 126 = one wall shallower. AND the
+run-2/3 ring = 1165 chars both = the console ALIVE to the death in the
+L2-on warm runs (the batch-64 flush = proven past the CMA too).**
+
+NEXT (SESSION-14's LEADS, ranked):
+1. The atags/DTB-header archaeology (W-93's lead, promoted): the
+   ring's PB-RES r[0] = a34ee9a8 (+0x40 from dtb_phys a34ee968) while
+   the appended-DTB totalsize = CORRECT 0x15519 — the value is fine,
+   the POINTER = +0x40 = a per-run-constant delta. Read the
+   decompressor's ATAG-compat path (head-S ~384-460, r8 = the stub's
+   TTBR0 = nonzero = "an ATAG list around") BEFORE the next instrument.
+2. The ring-flush cadence (the batch-64 = too coarse past the CMA):
+   the 126/156-region prints = lost between batches — the observability
+   fix before any new capture.
+3. The sweep-region A/Bs (the 0x770-vs-0x7F0 two-op scheme, the whole-
+   DRAM early sweep ONE VARIABLE at a time) — after 1-2.
+4. The CPU1 release = still the strategic front (the bequest).
+

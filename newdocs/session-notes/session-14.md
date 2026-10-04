@@ -62,4 +62,38 @@ same procedure as W-95. Readbacks decoded with `~/agent-runs/decode_readback.py`
 (rule 13 — python, never eyeballed); capture the full ring window
 (`memdump3 88000080 0x4e0`) per run for the slab-era console text.
 Question to answer: does the front repeat at 126, or drift with warmth
-(the W-95 question, re-asked on a cold machine).
+(the W-94b question, re-asked on a cold machine).
+
+## W-96 RESULTS (the 3-run series, 2026-10-04)
+
+- **Run 1 (cold machine) = 142 + 0x3E7 + ring 0** — the W-84 triad on a
+  no-fossil machine. No run state survived the 3-week power-off (the
+  decayed-DRAM baseline above = the proof the machine was genuinely
+  cold). Cold ≠ lucky.
+- **Run 2 (warm) = 126** — parse passed, bc[13]=0xdfbf7000 (the
+  126-front signature), **the ring = 1165 chars = THE COMPLETE LOG TO
+  THE DEATH**: banner (UTS "#157" built 2026-09-13 00:23 UTC on
+  DESKTOP-E596NT4 = the Sep-12-packed artifact ✓; the project's
+  "kernel #159" ledger ≠ the UTS build counter — different counters,
+  do not reconcile) → PB-ADJ → PB-MEM (mem=1 res=1, m[0]=a0000000+
+  0x20000000) → PB-RES r[0]=a34ee9a8+0x15519 (HEX = 87,321 ✓ = the
+  correct totalsize — the pointer = dtb_phys + 0x40, the promoted
+  lead) → cma: 16 MiB @ 0xbe800000 → PB-ADJ (lowmem=bfe00000) →
+  PB-CMA (base/size/va/pv_off/pfn correct) → END. The log's end ==
+  marker 126's claim (the first post-CMA TLB op). Sweep tally
+  0xBEEF0000 (mism 0, tmo 0); bc[28..31] = sentinels intact + cnt 1/1.
+- **Run 3 (warm) = 156** — the W-93 front reproduced. Slot archaeology:
+  156's writer = pb_bc_put(0xD0000004) ONLY (no pair) → bc[2]/mirror
+  keep the previous PAIRED marker = 127 → the readback shape
+  (156, 0x17F, 0x27F) = exactly W-93's. A pair-less marker leaves
+  bc[2] standing (the decoder rule — rule 17's finer teeth).
+  placement 0xa2400000; ring 1165 again (same log shape); tally clean.
+
+**VERDICT: cold = the triad, deterministic; warm = every run ≥126 (the
+sweep floor holds on warm machines), depth draws 126..156 (lottery,
+alive but tamed). The ring ending EXACTLY where the marker says = the
+strongest marker↔log agreement yet. The +0x40 pointer delta = the
+promoted lead (the ATAG-compat path, head-S ~384-460).**
+
+- Full records: docs/03 W-96; runs archived ~/agent-runs/w96-run{1,2,3}*.
+- LED timings: held on video by the user (ask when needed for the record).

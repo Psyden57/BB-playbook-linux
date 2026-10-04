@@ -1,4 +1,4 @@
-# Project State (as of session 13, 2026-09-12)
+# Project State (as of session 14, 2026-10-04)
 
 This file tracks the *current technical state* precisely. Older docs
 (`docs/03`, `SESSION-HANDOFF/`) record how we got here; where they disagree
@@ -8,6 +8,36 @@ with this file, this file wins (and any unresolved disagreement is listed in
 with dated headers.
 
 ## Where the boot stands
+
+**SESSION-14 (2026-10-04, the first runs after the workstation migration):
+W-96 = the 3-run determinism series on kernel #159 (the packed artifact,
+UNCHANGED — sha256-verified before the runs) with PAYLOAD_MODE=--l2on.
+RESULTS: run 1 (COLD machine — 3 weeks unpowered, DRAM decayed to AA-rot,
+no valid L2 fossils) = 142 + 0x3E7 + ring 0 = THE W-84 TRIAD exactly;
+run 2 (warm) = 126 with the FULL RING (1165 chars: banner → PB-ADJ/MEM/RES
+→ CMA → PB-CMA → stop, the log ends exactly where 126 says); run 3 (warm)
+= 156 (the W-93 front reproduced; bc[2]/mirror = 127 |1|2 via the 156
+writer's pair-less shape — rule 17 archaeology, see docs/03 W-96).
+⇒ COLD = the triad; WARM = consistently ≥126 but the depth draws
+(126/156 observed) — the sweep machinery = a consistent floor-lifter on
+warm machines, the wound lottery persists between 126 and 156.**
+
+**OBSERVABILITY: the console ring was ALIVE THROUGH THE CMA for the first
+time in the warm runs (1165 chars, ends at PB-CMA — matching marker 126),
+the BerryShell-V4 door keeper rode all three WDT2 cycles + reboots
+unattended, and jump.sh's exact SSH option set works through the new
+RNDIS path (qemu VM + USB-passthrough).** Fresh baseline before run 1 =
+decayed DRAM (cold) — archived in ~/agent-runs/w96-baseline/.
+
+**NEXT (leads after W-96):** (1) the atags archaeology — PB-RES r[0] =
+dtb_phys + 0x40 with the CORRECT totalsize 0x15519 (= 87,321); the
+pointer delta = a per-run constant; read the decompressor's ATAG-compat
+path (head-S ~384-460, r8 = the stub's TTBR0) before the next instrument;
+(2) the ring-flush cadence past the CMA (the batch-64 = too coarse in the
+126/156 region); (3) the sweep A/Bs, one variable at a time; (4) the CPU1
+release (the bequest) = the strategic front.
+
+## Where the boot stands (the session-13 detail, for context)
 
 **SESSION-13 (2026-09-12, W-90a/b/c — THE FOSSIL MECHANISM NAILED): THE
 STALE-VIEW LOTTERY = THE L2 AS A CROSS-RUN FOSSIL RECORD.** W-90a (the
