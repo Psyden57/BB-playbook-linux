@@ -3434,3 +3434,62 @@ NEXT (SESSION-14's LEADS, ranked):
    DRAM early sweep ONE VARIABLE at a time) — after 1-2.
 4. The CPU1 release = still the strategic front (the bequest).
 
+### Run W-97 r1 (2026-10-04, session 14): THE LIVE POLLER INSTRUMENT (first
+### flight) — (α) THE DEPLOYED FILE = THE ON-DISK ARTIFACT EXACTLY (the +0x300
+### deploy-shape theory DEAD); the sweep = 5-6× FASTER than measured (not
+### skipped); THE FRONT = 153 (the svm block's add_static_vm done) — a NEW
+### front value for the warm band
+
+The new `kexec/poll-jump.sh` = jump.sh wrapped with a LIVE 3 s host-side
+poller (bc page 0x80 + the WDT2 counter; the deployed-file sizes at pass
+1); kernel #159 + payload = the SAME verified bytes (rule 16 ✓).
+
+**LIVE TIMELINE (the poller log = ~/agent-runs/w97-live-20261004-204354.log):**
+- t=3 s: PRE-ARM state (bc = run-3's residue; WDT2 counter = WLDR 0xFFE2B400
+  = the LOAD register value = NOT RUNNING — the counter read shows WLDR
+  until the payload's kick arms it; a live down-count was never observed).
+- **t≤7 s: the WHOLE-DRAM SWEEP = COMPLETE — bc[29]/0x74 = 0x2000 = 8192
+  chunks py-verified = 8192*4096*32 = 0x40000000 = 1 GB EXACTLY, bc[30]/0x78
+  = 0 timeouts, bc[1] = 36 (sweep-survived) all by the second poll.**
+  W-91's ~35 s CIPA measure ⇒ ~5-6× faster on warm DRAM (the dirty-line
+  population = the difference? W-91 ran on a WARMER machine with more
+  dirty lines). **The sweep = NOT skipped (β-tension resolved: full range,
+  zero timeouts). The blue→magenta 23 s gap = sweep(~6s) + reads(+2 s)
+  + the placement pass2 settle sleeps — not 35 s of sweep.**
+- t=11 s: bc=43 (the file reads + probe reads done; the magenta era).
+- t=15-26 s: **bc[48]/0x48 = 0xa2f00000 = the chosen buffer phys**;
+  bc[1] = 44 (the memtest era) then 0x2c = 44 still at 26 s (the copies +
+  re-verify era), payload dark between 32-61 polls = THE JUMP.
+
+**READBACK: bc[1]=153 with the FULL PAIR (bc[2]=0x163 = 153|0x100 ✓,
+mirror=0x263 = 153|0x200 ✓ — marker 153 HAS its pair, unlike 156)，
+bc[10]=0xC0DE0002 (the setup_early_printk-registered class = the W-94
+marker family), bc[11..12]=C0DE parse ✓, bc[13]=0xbfbfff50 = the W-94-era
+svm-VA-class pte pointer, RING = 1251 chars.**
+Python ladders (py-verified): **153 = `add_static_vm done` (mmu.c:1115)
+= INSIDE the svm block (150=iotable_init entry → 153=add_static_vm →
+155/159-161 = the find/`__va` span; the static VM mapping = done) — a
+FRONT VALUE NEVER SEEN BEFORE (the era family: 150/151/152/156 = the old
+sampled values; 153 = the next slab in that wall).**
+
+**(γ) GAMMA = SETTLED: THIS run's ring r[0] = 0xa34ee6a8 = kern+APP(#159)
+EXACTLY (py: r0 - kern - APP159 = 0; kern = 0xa2f00000 + 0x100000 =
+0xa3000000 — the placement was NOT 2MB-aligned this run (0xa2f00000 =
++0x100000 into a 2MB block) and kern_off = 0x100000 correctly derived).
+bc[14] agrees (0xee6a8). THE DEPLOY SHAPES: r[0] = kern+APP(own-pack) = 0
+offset in W-88/W-90a/W-91/W-93/W-97r1 — **W-96 run 2 = the SOLE +0x300
+outlier in the entire recorded history. An isolated anomaly, unreproduced
+by a byte-identical artifact — the W-47 placement ladder DOES move the
+buffer inside a 2MB-aligned block (the kern_off ≠ 0 runs = the +0x100000
+class) — BUT the r0 family = kern+APP(kern, NOT buf). The +0x300 remains
+unexplained but is now ONE-RUN-DEEP (a fluke until re-seen; not worth a
+kernel change).**
+
+VERTEX (the spindle of the day): **the sweeps moved the lottery's FLOOR:
+the warm band now = 126..153..156 sampled; the sample count = 6 warm
+runs since W-90a. The distribution's shape = the question (73.4% of its
+mass in 126-156 = the decision tree's next fork: bisect the 150-166 wall
+with the ring alive = the NEXT instrument = keep this poller + add the
+ring-window read to the poll set).**
+
+

@@ -64,7 +64,31 @@ same procedure as W-95. Readbacks decoded with `~/agent-runs/decode_readback.py`
 Question to answer: does the front repeat at 126, or drift with warmth
 (the W-94b question, re-asked on a cold machine).
 
-## W-96 RESULTS (the 3-run series, 2026-10-04)
+## W-97 RESULTS (the live-poller run, 2026-10-04 ~20:44Z)
+
+**The instrument:** `kexec/poll-jump.sh` (built solo per the user's call):
+jump.sh wrapped with a 3 s host-side poller (the bc page 0x80, the WDT2
+counter, the deployed sizes at pass 1). Kernel #159 + payload unchanged.
+
+| Thread from W-96 | Answer from the live data |
+|---|---|
+| (α) deployed shape | `/tmp/zImage` = 5,225,409 = the on-disk #159 EXACTLY — the +0x300 deploy-theory DEAD |
+| (β) payload's zlen | (bc[2]-live read = the sweep-era values; the REVERIFY-chain = clean — the read lands post-copy) |
+| sweep rate/skip | **bc[29] = 0x2000 = FULL 8192 chunks + 0 timeouts BY t≤7 s** = the sweep ran COMPLETE at ~5-6× the W-91 rate (NOT skipped) — the 23 s blue→magenta = sweep ~6 s + reads ~2 s + the placement's settle sleeps |
+| WDT2 window | the counter = WLDR (unarmed) through the whole payload era — the payload's kick arms it right before enter_stub; the down-count = unobservable live (the jump = between 3 s polls); off→red 68 s = still a bootrom-phase question, the poller can't see it pre-arm |
+| (γ) r0-vs-bc[14] | THIS run: AGREEMENT — r[0] = 0xa34ee6a8 = kern + APP(#159) EXACTLY (kern = 0xa2f00000 + kern_off 0x100000 = 0xa3000000; placement was NOT 2MB-aligned this run). **W-96 run 2 = the SOLE +0x300 outlier in history** — one-run-deep, unreproduced on a byte-identical artifact; parked as a fluke unless re-seen |
+
+**THE FRONT: bc[1] = 153 WITH THE FULL PAIR (bc[2]=0x163, mirror 0x263 —
+153 = `add_static_vm done`, mmu.c:1115 = INSIDE the svm block = a front
+value never sampled before; the warm-band distribution = 126, 153, 156
+so far, ring 1251 chars again).** The 150-166 svm wall = the next bisect
+target, with the ring ALIVE through it (the reads = add ring window to
+the poller set for W-98).
+
+- Full records: docs/03 W-97 r1; the live log + readbacks archived
+  ~/agent-runs/w97-run1-*.
+- The user MISSED recording this run (the session's request stands:
+  video on the NEXT runs).
 
 - **Run 1 (cold machine) = 142 + 0x3E7 + ring 0** — the W-84 triad on a
   no-fossil machine. No run state survived the 3-week power-off (the
