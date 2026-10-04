@@ -43,13 +43,13 @@ original conversation history.
 
 ## Current handoff state
 
-- Latest session notes: [session-notes/session-13.md](session-notes/session-13.md)
-- Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_14.md` — read it
-  first (it has the read order, the fossil-mechanism proof (the L2 =
-  a cross-run record), the sweep machinery + the two-op rule, the W-90b
-  underflow lesson, the W-91 whole-DRAM result, and the first task =
-  W-92: explain the 15,519 totalsize anomaly with the instrumented run)
-- Next action: W-92 — fix the bc[12]/bc[14] slot collision, the
-  deployed-file pre-check, the post-mortem memdump at __atags, and read
-  the decompressor's ATAG-compat path before the run
+- Latest session notes: [session-notes/session-14.md](session-notes/session-14.md)
+- Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_15.md` — read it
+  first (it has the read order, the migration's new workstation facts
+  (the qemu VM, the BerryShell-V4 door keeper, the UTS-stamp riddle),
+  the W-96 cold/warm determinism results, and the first task = W-97
+  prep: read the decompressor's ATAG-compat path to explain the +0x40
+  PB-RES pointer delta BEFORE the next instrumented run)
+- Next action: W-97 prep — the head-S ~384-460 ATAG-compat read (no
+  device needed), then the ring-cadence fix or the determinism repeat
 - Local-only assets and why: [SETUP.md](SETUP.md) §6
