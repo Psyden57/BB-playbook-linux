@@ -37,6 +37,19 @@ path (head-S ~384-460, r8 = the stub's TTBR0) before the next instrument;
 126/156 region); (3) the sweep A/Bs, one variable at a time; (4) the CPU1
 release (the bequest) = the strategic front.
 
+**LEAD (1) RESOLVED + RESHAPED (root audit, all python — see
+agent-runs/TASK-002-atag-compat.md for the full record):** the "+0x40" =
+a cross-run comparison artifact — DISSOLVED. Every historical ring's r[0]
+= kern + APP(own-era pack) EXACTLY (W-88/W-90a/W-91/W-93 verified).
+The ATAG-compat merge = CLOSED (never fires; cannot move __atags).
+The LIVE thread instead: **the deployed-shape +0x300 class** — run 2's
+ring r0 (low20 0xee9a8 = #155-pack-shaped) vs bc[14] (0xee6a8 = the
+on-disk #159 pack) disagree WITHIN one run. W-97's poller run settles it
+live: (α) ls -l /tmp/zImage mid-run, (β) bc[2] live-read pre-jump,
+(γ) bc[14]-vs-r0 agreement on the readback. **W-97 = the live poller
+instrument (host-side only; the WDT2 down-counter covers the two LED
+tensions too); kernel #159 + the payload remain byte-unchanged.**
+
 ## Where the boot stands (the session-13 detail, for context)
 
 **SESSION-13 (2026-09-12, W-90a/b/c — THE FOSSIL MECHANISM NAILED): THE
