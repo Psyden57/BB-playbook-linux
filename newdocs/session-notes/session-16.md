@@ -93,6 +93,23 @@ audit of the W-99 edit) — DeepSeek 4.1 flash, high effort, 7 min, exit 0.
 - Full record: docs/03 W-100 r1; live-20261005-144122.log;
   w100-run1-{bc,ring,bc16}.txt; w100-artifacts/.
 
+## W-100 r2 (the CMA-reserve-failed draw) — 2026-10-05
+
+- Same artifact; bc[16]=0x110=272 AGAIN (pass ran). **The draw: CMA
+  reserve FAILED (`Not enough slots` + `Failed to reserve 16 MiB` =
+  cma_area_count full/garbage, mm/cma.c:227/618) → no CMA → no remap →
+  NO 126-wall → the boot SKIPPED the entire 126-class death era.**
+- map_lowmem's garbage-region WARN fired (W-90a/92/97 class #4) WITH A
+  CLEAN PV: `0x00000000 at 0x20000000` = __va(0) computed exactly —
+  the old weird VAs were that era's un-cured pv faces. WARN survivable.
+- **bootmem_init done (128-pair), setup_arch RETURNED (bc[1]=111
+  FRESH) — died silently in the post-111 head (pre-"Kernel command
+  line:" print).** The 126-wall = the CMA-remap's own TLB-op family.
+- Discriminator STILL not exercised (failure classes orthogonal to pv
+  sites). Repeats continue.
+- Files: w100-run2-{bc,ring,bc16,mirrors,led}.txt;
+  live-20261005-160328.log; docs/03 W-100 r2.
+
 ## OPEN / NEXT
 
 1. The unpatched-pv-site audit: DONE same-session (TASK-004; report +

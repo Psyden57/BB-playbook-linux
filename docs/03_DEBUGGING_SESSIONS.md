@@ -3679,4 +3679,53 @@ Side note: W-99 (bad draw) vs W-100 (clean draw) both die in the 126
 window; the pv overlay shifts only the micro-death point (mid-BUG-printk
 vs in-remap).
 
+### Run W-100 r2 (2026-10-05, session 16): kernel #161 — ★ THE CMA-RESERVE
+### FAILED DRAW: the boot SKIPPED the whole 126-wall era and reached
+### POST-setup_arch (bc[1]=111 fresh — deepest-class survival); the
+### map_lowmem garbage-region WARN fired WITH A CLEAN PV (class
+### datapoint #4); the discriminator still not exercised
+
+Same artifact (deployed 5,227,633 = the pack exact; banner #160 Oct 5
+13:54:53). **bc[16] = 0x110 = 272 AGAIN (the inv pass ran).**
+
+- **THE DRAW: the CMA reservation FAILED this boot —
+  `cma: Not enough slots for CMA reserved regions!` + `cma: Failed to
+  reserve 16 MiB`** = `cma_new_area`/`cma_declare_contiguous_nid`'s
+  `cma_area_count == ARRAY_SIZE(cma_areas)` check (mm/cma.c:227/:618) —
+  i.e. the area count read as FULL for the ONE 16 MiB declare = a
+  corrupted/stale `cma_area_count` (the lottery's newest face) OR an
+  extra earlier declare this boot (no cma cmdline/DT node = the count
+  reading garbage is the leading reading).
+- **Consequence: no CMA block → `dma_contiguous_remap`'s list EMPTY (no
+  PB-CMA print) → NO CMA remap → NO iotable_init on the CMA → the boot
+  SAILED PAST the entire 126-class death zone.** The 126-wall = the
+  CMA-remap's own TLB-op family; without a CMA there is no wall there.
+- **The map_lowmem garbage-region WARN fired: `BUG: not creating
+  mapping for 0x00000000 at 0x20000000 in user region`** — the W-90a/
+  W-92/W-97 class, datapoint #4, and NOW WITH A CLEAN PV: the VA =
+  __va(0) computed EXACTLY (0x20000000 = 0 + 0x20000000 patched) — the
+  old weird VAs (0x20/0x62) were the un-cured-pv era's faces of the
+  same class. This WARN is survivable (refuse + skip).
+- The boot CONTINUED: bootmem_init done (bc[2] = 0x180 = the 128|0x100
+  pair ✓), paging_init done, **setup_arch RETURNED — bc[1] = 0x6f = 111
+  FRESH (main.c:1261, post-setup_arch)** — then died SILENTLY in the
+  post-111 head (before the "Kernel command line:" pr_notice; the
+  FAN5702 ioremap/LED block, jump_label_init, per-cpu setup era =
+  candidates; no print to pin it). Deeper than every 126-class run;
+  W-98's 185 (initcalls) still the era record.
+- Slots: bc[10]=0xc0de0002 (last console write = the BUG line's
+  early_write ✓), bc[13]=0xbfbfcf7c, bc[14]=0xc0de0030 (the second-parse
+  latch = the W-94-parity class), bc[20..23] = the DTB capture fresh
+  (0xedfe0dd0 + 0x15519), bc[19]=0 (W-32c tries/tmo 0 ✓), nonce
+  edf5b75a fresh. bc[2]=0x180 (128-pair) vs mirror0=0x27e (126|0x200) —
+  the 128-write's mirror flush lost while bc[2] survived (per-slot flush
+  luck; noted).
+- Ring count 1196; text = banner→PB-MEM→PB-RES→the two cma lines→
+  PB-ADJ→the BUG line. (Ring chars past 1196 = prior residue.)
+- **MISSION: the pv-site discriminator was AGAIN not exercised — this
+  draw's failure classes (region-data staleness + counter garbage) are
+  orthogonal to the pv sites (no site executed placeholder math; the
+  VA = patched). REPEATS CONTINUE.**
+- LED: user video (timings PENDING — ask).
+
 
