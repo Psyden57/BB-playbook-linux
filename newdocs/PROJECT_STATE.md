@@ -29,8 +29,13 @@ PB-ADJ#1 record). ring3.count = 23041 + ring1.count EXACTLY (3/3) — the
 r4 = fixup-region (THE TRIAD: bc[1]=142 + bc[2]=0x3E7 + ring 0; bc[16]=0 — the
 W-101 block left no completion marker; the 0x3E7 wild write recurred, 3rd
 lifetime) — no new classes yet. off→red: 68×8, 67, 68 (r4's recording was
-partial — the 68 band restored). NEXT: W-102 (fixup-region fine markers
-proposed) + more draws. The bucket-flip decision = ACCEPT + DOCUMENT
+partial — the 68 band restored). **W-102 (the fixup-region fine markers,
+bc[17]: 1 = walk-1 done / 2 = inv-loop entry) = BUILT AND FLYING (ledger
+#163; banner #162; pack 5,223,233 sha ee303813). W-102 r1 = the 142-window's
+FIRST SPLIT: bc[17]=0 ⇒ the fixup-region deaths (r4, r1) are WALK-1 deaths —
+the W-101 block is NOT implicated (r4 resolves by equivalence). The triad
+(142+0x3E7+ring0) struck 2 consecutive draws; 0x3E7 = 4th lifetime instance.
+NEXT: W-102 r2+ draws.** The bucket-flip decision = ACCEPT + DOCUMENT
 (DECISIONS D13 — no guard).**
 
 **SESSION-17 (2026-10-05, the W-101 build + first flights): THE FIXUP-SIDE

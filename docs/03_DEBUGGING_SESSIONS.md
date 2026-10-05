@@ -3952,4 +3952,31 @@ count3 = 0x5A01 + chars CONFIRMED (4/4).
 Spectrum (W-101): r1 early / r2 svm-store / r3 126-family / r4 fixup-region —
 no new class; N=4.
 
+### Run W-102 r1 (2026-10-05, session 18): ★ THE 142-WINDOW SPLIT — the death
+### is in WALK-1 (bc[17]=0; the M1 marker never landed); the triad struck
+### again (2nd consecutive)
+
+Setup: `PAYLOAD_MODE=--l2on ./poll-jump.sh zImage`; the W-102 pack deployed
+exact (5,223,233 B, sha ee303813). NEW-BUILD PROOF: bc[13]=0xa00085bc = the
+head.S W-12 computed target with the new __fixup_pv_table symbol (c00085bc =
++0x20 from c000859c). Nonce 4ec5fab1 → edc5faca fresh; placement 0xa3000000
+(non-flipped); sweep 8192/8192; DTB 87,321. LED: blue+5 / magenta+11 /
+off+34 / red+103 — deltas 6/23/69 (the 11th off→red; the 68/69 band).
+
+Readback: bc[1]=142 + bc[2]=0x3E7 + ring1/ring2 = 0 + mirror0 = 0x46 — THE
+TRIAD AGAIN (2nd consecutive after r4). bc[4]=143 + bc[5]=144 fresh (fixup
+entered, alignment passed). **bc[17] = 0 — M1 never landed** + bc[16]=0 ⇒
+the death is BEFORE M1 = inside WALK-1 (the patch walk or its setup) — NOT
+the W-101 block. W-101 r4's identical signature resolves to the same class
+(r4 predates the marker). The 0x3E7 wild write recurred (4th lifetime
+instance: W-35, W-84, W-101 r4, W-102 r1). ring3 = 0x5A01/0 (5th datapoint:
+count3 = base + chars). FRESH + source-matched: bc[3]=0xa3000000 (payload
+phys), bc[13] (W-12, new build), bc[20..23] = the decompressor W-54 dump,
+bc[24]/[25] = head.S W-56. CHANGED-but-unpinned: bc[27]=0x29 (r4: 0x31).
+
+Wrapper latency (user-flagged): measured 5m51s total = device reboot cycle
+(~3.5 min) + the battery readback (~1.5 min; the 0xF80 ring transfer) — no
+wrapper stall; the probes catch SSH within seconds. An optional slim (the
+ring read → the manual battery) noted for a user decision.
+
 

@@ -4,11 +4,11 @@
 
 Boot from BOOTSTRAP_SESSION_18 (read order done; link verified: door keeper
 alive since 13:36, SSH up; artifact #162 exact, 5,223,425 / 47c175cb; repo
-clean at d0c61cd). ONE user-gated device run so far (W-101 r3) + the full
-battery + two extra full-page reads (ring2/ring3). NO artifact change (pure
-draw — "one variable = none"). The session's biggest offline product: the
-DECODE CORRECTION (CR→LF dissolved) + the r2/r1 death windows restated from
-source order + the ring3.count model.
+clean at d0c61cd). Device runs: W-101 r3 + W-101 r4 + (the W-102 build
+in-session) + W-102 r1. NO artifact change for the W-101 draws (pure draws);
+W-102 = a built kernel change (the fixup-region fine markers). The session's
+biggest offline product: the DECODE CORRECTION (CR→LF dissolved) + the r2/r1
+death windows restated from source order + the ring3.count model.
 
 ## W-101 r3 (the run — full record: ~/agent-runs/w101-run3-record.md)
 
@@ -86,13 +86,33 @@ source order + the ring3.count model.
 - LED partial (magenta→off 20 s; off→red 68 s — the 10th instance, band
   restored).
 
+## W-102 (built in-session; r1 flown)
+
+- W-102 = the fixup-region fine markers on bc[17] (1 = walk-1 done, 2 =
+  inv-loop entry): design (W-102-design.md) + TASK-007 preflight audit (GO) +
+  clean build + rule-16 (markers disassembled at site; shared pool word
+  c0008300; +1/+1/+2/+1 census; the 0x770 store +0x20; __pv_table 272; DTB
+  identical) + snapshot + commit 3694e6c. Pack 5,223,233 sha ee303813
+  (ledger #163; banner #162).
+- W-102 r1 (full record: ~/agent-runs/w102-run1-record.md): ★ THE 142-WINDOW
+  SPLIT — bc[17]=0 ⇒ the fixup-region deaths are WALK-1 deaths (the W-101
+  block exonerated; r4 resolved by equivalence). The triad struck again
+  (2nd consecutive); 0x3E7's 4th lifetime instance. bc[13]=a00085bc = the
+  new-build proof (the +0x20 symbol shift). LED 6/23/69 (the 11th off→red).
+- Wrapper latency (user-flagged): 5m51s = device reboot ~3.5 min + readback
+  ~1.5 min; no stall found; a "slim the wrapper" option (move the 0xF80 ring
+  read to the manual battery) awaits the user's decision.
+
 ## OPEN / NEXT
 
-1. W-102 (user directive; name not defined in the repo yet — clarify/propose):
-   leading candidate = fixup-region fine markers (resolve the r4-class
-   sub-window + make the W-101 block's progress visible).
-2. More W-101 draws (r5+) as the spectrum builds (N=4: early / svm-store /
-   126-family / fixup-region).
-3. ring3 base-0x5A01 origin (one armed-window read settles it).
-4. TASK-005 follow-ups unchanged (early_write breadcrumb; F1 console-lock).
-5. Strategic fronts unchanged (the CPU1 release; the 185-path).
+1. W-102 draws r2+ (watch bc[17] on every readback; the walk-1 class is the
+   modal draw right now; can M1/M2 show intermediate states on other
+   classes?).
+2. The bc[27]=0x29/0x31 writer + the 0x3E7 writer (4th instance, now
+   consecutive with fixup deaths; the "999 = 1000−1" countdown lead is
+   logged in the r1 record, unverified).
+3. The wrapper-slim option (user decision pending — moves the 0xF80 ring
+   read from jump.sh to the manual battery; the wrapper saves ~30-60 s).
+4. ring3 base-0x5A01 origin (one armed-window read would settle it).
+5. TASK-005 follow-ups unchanged (early_write breadcrumb; F1 console-lock);
+   strategic fronts unchanged (the CPU1 release; the 185-path).
