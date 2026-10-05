@@ -43,16 +43,16 @@ original conversation history.
 
 ## Current handoff state
 
-- Latest session notes: [session-notes/session-16.md](session-notes/session-16.md)
-  — W-99 (#160: the live unpatched-pv catch) + TASK-004 (the pv-site
-  mechanism (a)) + W-100 (#161: the inv-only pass, 4 runs — the draw
-  spectrum, the initcall-era r3, the wedge = probabilistic) + the wrap
-- **Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_17.md` — READ IT
-  FIRST** (the read order, the session-16 state, the decision queue, and
-  the user's note: **you can ask the session-16 agent questions** — the
-  user relays them)
-- Next action: the W-101 decision (the fixup-side per-site inv = the
-  robust pv cure — vs more W-100 repeats; 0 stale-site hits in 4 draws);
-  the 185-path (initcall era, two heroes now); the CPU1 release still
-  the strategic cure front
+- Latest session notes: [session-notes/session-17.md](session-notes/session-17.md)
+  — W-101 (#162: the fixup-side per-site inv; the armv6k/movw build gotcha;
+  TASK-005/006) + the first two flights (r1 = early CR→LF death; r2 = the
+  first bucket-flip draw, deep) + the wrap
+- **Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_18.md` — READ IT
+  FIRST** (the read order, the session-17 state, the decision queue, and
+  the user's note: **you can ask the previous sessions' agents questions**
+  — the user relays them)
+- Next action: W-101 draws r3+ (the class-vs-dice question; watch the
+  CR→LF tails); the bucket-flip decision (payload guard ≥0xa8000000
+  candidate); the CR→LF signature audit; the 126-family wedge + the CPU1
+  release (the strategic fronts) unchanged
 - Local-only assets and why: [SETUP.md](SETUP.md) §6

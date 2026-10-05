@@ -3793,4 +3793,76 @@ appears rarer than the W-99 sample suggested, or hidden by other
 deaths).** LED: blue+5 / magenta+19 / off+41 / red+109 — off→red 68 s
 (the 6th: 68/69/68/68/68/68 — iron-clad).
 
+### Session-17 note (2026-10-05): the W-101 build + its first two flights
+
+W-101 (ledger #162; UTS banner "#161 Mon Oct  5 17:12:07 -03 2026"; pack
+5,223,425 B sha256 47c175cb) moves the pv-stub-line L2 invalidation INTO
+the head.S inline fixup as a per-site second walk (PL310 0x770 inv-only,
+MMU-off direct PA, CTRL-guarded, bounded 0x730 syncs every 64 + final;
+bc[16] = count / 0xFFFFFFFF) and REMOVES the W-100 start_kernel pass
+(session-16 directive: replace — the fixup closes the pre-C-world window
+the block could not). Build note: head.o assembles at -Wa,-march=armv6k —
+movw/movt unavailable in that file; constants via ldr= pools (entries at
+the post-stext .ltorg, behind the `b __enable_mmu` terminator). Rule-16:
+block disasm verified (0x770 store @ c00081f8; both polls; pool words @
+c00082e0/e4); __pv_table 272 @ c0e44a7c..ebc; DTB byte-identical.
+
+### Run W-101 r1 (2026-10-05, session 17): kernel #162 — THE PASS RAN
+### (bc[16] 0→272, live-watched across the jump); the draw died at the
+### PB-ADJ#1 record's CR→LF gap (bc[1]=133); ring ends "...c0000000\r"
+
+Setup: `PAYLOAD_MODE=--l2on ./poll-jump.sh zImage`; #162 pack deployed
+(the payload's own bc[2]-live read = 0x004FB401 = 5,223,425 EXACT; banner
+"#161"); nonce ecc5cbd4 (arm 4ec5cbaf → pre-jump ecc5cbd4, poll-watched);
+the arm-time ring sanitize watched live (0x488 → 0 → 791); bc[16] 0→272.
+LED: blue+5 / magenta+24 / off+45 / red+113 — deltas 19/21/68 s (the 7th
+68 s off→red instance).
+Readback: bc[1]=0x85=133 (pair 0x185); bc[4]/[5]/[6] = 143/144/0xe0000000;
+bc[10]=0xC0DE0002; bc[13]=0x66=102 (the cmdline length, python-verified);
+bc[14]=0xff8edee8; bc[15]=ecc5cbd4 FRESH; bc[16]=272. Ring count=idx=791:
+banner → … → "Memory policy" → `PB-ADJ: vmalloc_limit=d0000000
+lowmem_limit=c0000000\r` — THE '\n' NEVER EMITTED (death in the CR→LF gap;
+the next printk, PB-MEM at arm_memblock_init's top, never started). Death
+window = [133→134] (early_mm_init tail → arm_memblock_init). No BUG/WARN.
+ring2 = 791/791 (AGREES with ring1 — the char stream itself stopped);
+ring3.count = 23,832 (NOT run-scoped — accumulates across runs; parked;
+idx 781 = the early_write mirror cursor at the last completed chunk).
+Interpretation: the pass functioning ≠ a cure verdict (N=1); the death
+class open.
+
+### Run W-101 r2 (2026-10-05, session 17): ★ THE FIRST BUCKET-FLIP DRAW
+### (placement 0xaaf00000 → kernel base 0xa8000000; bc[6]=e8000000); deep
+### (map_lowmem + the W-94 snapshot); death at the PB-CMA record's CR→LF
+
+Same artifact (deployed exact; nonce e435d0c3 = the poll's pre-jump value;
+bc[16] 0→272 again — the pass ran 2/2). LED: blue+5 / magenta+12 / off+31
+/ red+99 — deltas 7/19/68 s (the 8th 68 s).
+THE BUCKET FLIP (first ever): bc[6] = 0xe8000000 (the fixup's delta for
+base 0xa8000000 — every prior run 0xe0000000); the ring's own line "OF:
+fdt: Ignoring memory range 0xa0000000 - 0xa8000000"; PB-MEM m[0] =
+a8000000+0x18000000. THE SPLIT-BRAIN: the stubs carry 0xe8000000 (true for
+this boot) while the W-32c block forces the VARIABLE __pv_offset to the
+build constant → the PB-CMA line prints va=d6800000 (stub-computed; the
+correct linear VA for base a800) with pv_off=ffffffffe0000000 (the forced
+variable).
+Readback: bc[1]=0xa7=167 (mmu.c:1091 "dumps done" — a plain pb_bc; the
+last PB_MMU_BC was 127, per mirror0=0x27f); bc[13]=0xbfbfffd4; bc[18]=
+0xaaf00000; bc[24..31] = THE FULL W-94 MEMBLOCK SNAPSHOT captured live for
+the first time (cnt=1, m0.base=0xa8000000, m0.size=0x17e00000 post-shave,
+sentinels intact, cnt2=1; bc[26]/[27] = the kept sweep slots). Ring=1231:
+… → PB-MEM → PB-RES r[0]=ab4edee8 → cma → PB-ADJ (bfe0) → PB-CMA
+(…pfn=a0000) — the '\n' NEVER EMITTED (death in the CR→LF gap, at the
+PB-CMA record = the classic post-remap position). No BUG. ring2 =
+1231/1231; ring3.count = 24,272 (parked).
+Interpretation: a luck-configured draw (bucket flip) dying in the known
+post-remap window with the CR→LF micro-signature.
+
+THE CR→LF MICRO-SIGNATURE (cross-draw, 3 datapoints): W-99 r1 (at the BUG
+line's CR), W-101 r1 (PB-ADJ#1's CR), W-101 r2 (PB-CMA's CR) — death in
+the 1-char window after a record's final '\r', at three different depths.
+Candidate: the first console-adjacent code after a completed write. OPEN
+(carry to session 18). Decode note: the r1 tail was initially misread
+through an 8-byte ring-offset slip (fixed; the generic decoder
+`w101-artifacts/decode_readbacks_generic.py` and skill updated).
+
 

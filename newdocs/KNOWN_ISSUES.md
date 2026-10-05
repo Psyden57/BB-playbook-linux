@@ -1,5 +1,23 @@
 # Known Issues & Open Problems
 
+**SESSION-17 HEADER (2026-10-05): W-101 (the fixup-side per-site pv inv,
+ledger #162) is BUILT + FLYING — the pass runs live (bc[16] 0→272, both
+draws).** The two flights: r1 died EARLY at the PB-ADJ#1 record's CR→LF
+gap (bc[1]=133); r2 = **THE FIRST BUCKET-FLIP DRAW** (placement 0xaaf00000
+→ kernel base 0xa8000000; bc[6]=0xe8000000; the stubs-vs-variable
+split-brain — the W-32c block force-writes the build constant over the
+true runtime delta) that went deep (map_lowmem + the W-94 memblock
+snapshot captured live) and died at the PB-CMA record's CR→LF gap
+(bc[1]=167). **NEW OPEN CLASS 1: the CR→LF death signature (3 datapoints:
+W-99 r1, W-101 r1, W-101 r2) — death in the 1-char window after a
+record's final '\r'; candidate = the first console-adjacent code after a
+completed write.** **NEW OPEN CLASS 2: the bucket-flip (payload
+placements ≥0xa8000000 flip AUTO_ZRELADDR; guard candidate).** ring3.count
+= NOT run-scoped (accumulates; arm-sanitize patch candidate). The
+authoritative state = newdocs/PROJECT_STATE.md's session-17 block +
+docs/03's session-17 note + ~/agent-runs/w101-run1/2-record.md. The
+historical headers below stand for context.
+
 **SESSION-16 HEADER (2026-10-05): W-99 r1 CAUGHT THE UNPATCHED-PV SITE
 LIVE (the #4-family class, previously inference-only).** The PB-CMA
 print fired its designed discriminator: va = base − 0x81810000 EXACTLY

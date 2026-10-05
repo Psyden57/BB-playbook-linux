@@ -9,6 +9,32 @@ with dated headers.
 
 ## Where the boot stands
 
+**SESSION-17 (2026-10-05, the W-101 build + first flights): THE FIXUP-SIDE
+PV-STUB INV IS IN AND FLYING (ledger #162; UTS banner "#161"; pack =
+5,223,425 B sha256 47c175cb). W-101 = a per-site PL310 inv-only (0x770)
+SECOND WALK inside the head.S inline fixup (MMU-off direct PA,
+CTRL-guarded, bounded 0x730 syncs every 64 + final; bc[16] = count /
+0xFFFFFFFF) — the W-100 start_kernel pass is REMOVED (session-16
+directive: replace). Build gotcha fixed mid-build: head.o assembles at
+armv6k — no movw/movt there; constants via ldr= pools (post-stext .ltorg,
+behind the `b __enable_mmu`). Rule-16 on the shipped artifact: disasm +
+pool placement + byte-deltas + DTB identity all verified. THE TWO DRAWS:
+**r1 = the pass ran (bc[16] 0→272, live-watched) but the draw died EARLY
+at the PB-ADJ#1 record's CR→LF gap (bc[1]=133 — a shallow class); r2 =
+THE FIRST BUCKET-FLIP DRAW (placement 0xaaf00000 → kernel base
+0xa8000000; bc[6]=0xe8000000; the FDT trims the bank; the
+stubs-vs-variable split-brain: W-32c force-writes e0000000 over the true
+e8000000) — it went DEEP (map_lowmem + the W-94 memblock snapshot
+captured live for the first time) and died at the PB-CMA record's CR→LF
+gap (bc[1]=167). THE CR→LF MICRO-SIGNATURE: 3 datapoints now (W-99 r1,
+W-101 r1, W-101 r2) — deaths in the 1-char window after a record's final
+'\r'; OPEN thread.** The off→red 68 s: 7th/8th instances (68×8). TASK-005
+(console silence = F1 "stops being invoked", MEDIUM-HIGH) + TASK-006
+(W-101 preflight, GO) accepted. NEXT (session 18): W-101 draws r3+ (the
+class-vs-dice question; watch the CR→LF tails); the bucket-flip decision
+(payload guard ≥0xa8000000 candidate); the CR→LF signature audit; the
+strategic fronts (the 126-family wedge; the CPU1 release) unchanged.**
+
 **SESSION-16 (2026-10-05, W-99 r1 — kernel #160: the omap4bc batch-flush
 cadence 64→16 + window 42 lines; front = 126 warm, ring 1246): ★ THE
 PB-CMA PRINT CAUGHT AN UNPATCHED PV SITE LIVE — va = 0xbe800000 −
