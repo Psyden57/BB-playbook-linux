@@ -3770,4 +3770,26 @@ inv pass ran — 3/3 runs).**
   probabilistic nature + the second hero.
 - LED: user video (timings PENDING — ask).
 
+### Run W-100 r4 (2026-10-05, session 16): kernel #161 — a 126-class draw
+### AGAIN (the r1 flavor): patched va, no BUG, death in the remap window;
+### pass ran 4/4
+
+Same artifact. **bc[16] = 0x110 = 272 (pass ran — 4/4).** Fresh-slot
+proof: bc[1]=126 (CHANGED from r3's 184), bc[10]=0xde800000 (CHANGED
+from r3's c0de0002; = iotable_init's md->virtual — the PATCHED remap
+VA again), bc[13]=0xdfbf7000 (the 126-signature), bc[15]=0xed45bc29
+(nonce fresh), bc[20..23] DTB capture ✓.
+
+Ring 1160: banner → PB-CMA (va=de800000 patched) → STOP (no BUG;
+printless after, same shape as r1). Death in the CMA-remap window (the
+cleaned-va wedge class — died where r3 happened to pass).
+
+**The draw spectrum after 4 W-100 runs (same artifact!): r1 = clean-126
+remap-window death; r2 = CMA-reserve-fail → deep (111); r3 = wedge-pass
+→ initcall era (rcu hero); r4 = clean-126 remap-window death. The
+remap-window death = the modal outcome; the wedge = per-draw dice. The
+pv-site discriminator: 4 draws, 0 stale-site hits (the target class
+appears rarer than the W-99 sample suggested, or hidden by other
+deaths).**
+
 
