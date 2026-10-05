@@ -70,6 +70,29 @@ audit of the W-99 edit) — DeepSeek 4.1 flash, high effort, 7 min, exit 0.
   live-20261004-222541.log, w99-artifacts/ (pre/post images + packed + dtb +
   SHA256SUMS), TASK-003-* (report + reviewed brief).
 
+## W-100 r1 (kernel #161, the inv-only pv-site pass) — 2026-10-05
+
+- Built: init/main.c pass (W-32c block extension) — walks __pv_table
+  (272 entries), NS inv-only 0x770 per site, bounded syncs, bc[16] =
+  count. Rule-16 verified on the shipped artifact. Pack = 5,227,633
+  sha f69f4539 (w100-artifacts). Committed e87c71c.
+- FLOWN (--l2on, poll-jump): deployed = 5,227,633 exact; banner
+  "#160 Oct 5 13:54:53" (UTS counter; ledger #161). Front = 126 (pair
+  0x17e/0x27e — freshness AMBIGUOUS vs W-99 residue, same values).
+- **bc[16] = 0x110 = 272 = THE PASS RAN.** bc[10] = 0xde800000 (fresh;
+  mmu.c:1103 iotable_init md->virtual = the CORRECT patched VA; the
+  boot reached the descriptor loop). bc[13]=0xdfbf7000 (126-signature),
+  bc[14]=0xff8eef58, nonce ec55a42f.
+- Ring: count 1160; text through PB-CMA (va=de800000 PATCHED, NO BUG);
+  death in the remap window (bc[10]-after, no 152). Ring chars past
+  count = W-99 residue (decode only count-many).
+- VERDICT: pass correct + benign; the discriminator NOT exercised (a
+  clean-S1 draw). REPEATS (2-3 draws) to catch a stale draw. The
+  126-wall (wedge family) unchanged.
+- LED timings: user video (PENDING — ask).
+- Full record: docs/03 W-100 r1; live-20261005-144122.log;
+  w100-run1-{bc,ring,bc16}.txt; w100-artifacts/.
+
 ## OPEN / NEXT
 
 1. The unpatched-pv-site audit: DONE same-session (TASK-004; report +
@@ -86,12 +109,11 @@ audit of the W-99 edit) — DeepSeek 4.1 flash, high effort, 7 min, exit 0.
      va=0x3cff0000 (placeholder), same function/era ⇒ draw-dependent.
    - §6 FIXED by the root: the discriminator must be INV-ONLY (0x770),
      never CIPA (clean would poison pre-patch bytes into DRAM).
-2. W-100 candidates (pending user pick):
-   (i) the one-loop discriminator (extend W-32c with an inv-only pass
-       over the pv sites) — a run settles (a);
-   (ii) the robust cure = per-site inv inside the fixup itself (MMU-off,
-       PL310 PA — the omap4bc-proven pattern). ONE kernel-side variable
-       either way.
+2. W-100 = BUILT + FLOWN (r1): the pass runs (272 invs) but r1 = a clean
+   draw → the discriminator needs REPEATS (2-3 more draws; a stale
+   draw that stays clean = support; any BUG-refusal = refute). The
+   fixup-side per-site inv (W-101) = the robust cure, held until the
+   discriminator's evidence lands.
 3. More draws: the 185-path (atomic_pool_init evidence) + the 126-repeat
    determinism; the cadence's effect = still untested-for-effect.
 4. The CPU1 release = the strategic cure front (unchanged).

@@ -31,10 +31,15 @@ w99-artifacts). Full record: docs/03 W-99 r1. **TASK-004 audit FOLLOWED
 the .text stub's instruction fetch (HIGH/MEDIUM; 136 sites enumerated,
 zero cache ops in the fixup, variables-only W-32c coverage, and the
 cross-draw proof: W-96 r2 va=0xde800000 vs W-99 r1 va=0x3cff0000 on
-the same function). W-100 candidates: the inv-only (0x770) discriminator
-loop / the per-site inv in the fixup itself.** NEXT: W-100 build + run;
-more draws (the 185-path for atomic_pool_init; the 126-flavor
-determinism repeat); the CPU1 release stays the strategic cure front.**
+the same function). W-100 CANDIDATES: the inv-only (0x770) discriminator
+loop / the per-site inv in the fixup itself.** **W-100 r1 (kernel #161,
+the inv-only pass) = FLOWN: THE PASS RAN (bc[16]=272) and is benign —
+but this draw came out CLEAN-S1 (va=de800000 patched, no BUG), so the
+discriminator was NOT exercised (a clean draw and a healed draw are
+indistinguishable). REPEATS NEEDED (2-3 draws) to catch a stale draw.
+The 126-class wall itself (the wedge family, CPU1-held) is UNCHANGED by
+the pass.** NEXT: W-100 repeats; the 185-path; the CPU1 release stays
+the strategic cure front.**
 
 **SESSION-14 (2026-10-04/05, the post-migration session): W-96 (the
 determinism series) → W-97/W-98 (the LIVE-poller era: kexec/poll-jump.sh,

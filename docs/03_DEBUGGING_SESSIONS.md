@@ -3627,4 +3627,56 @@ block covers the two pv VARIABLES, not every inline site — a candidate
 listing via the pv-table audit); more draws for the atomic_pool_init
 (185-class) evidence path.
 
+### Run W-100 r1 (2026-10-05, session 16): kernel #161 (the inv-only pv-site
+### pass) — ★ THE PASS RAN (bc[16] = 272 invs); this draw = CLEAN-S1
+### (va=de800000 PATCHED, no BUG) — the discriminator was NOT exercised
+### (clean draw); death at the same 126-class wall (the CMA-remap window)
+
+Setup: `PAYLOAD_MODE=--l2on ./poll-jump.sh zImage`, kernel #161 + unchanged
+payload. Rule-16/artifact chain: deployed `/tmp/zImage` = 5,227,633 = the
+W-100 pack EXACTLY; banner "#160 Mon Oct 5 13:54:53 -03 2026" (the UTS
+counter; the project ledger = #161 — the split holds), host debian-dev;
+DTB 87,321.
+
+LED (user video — TIMINGS PENDING): recorded; live poller: whole-DRAM sweep
+8192/8192 by +14 s (0x2000, 0 timeouts); placement 0xa2900000 (non-2MB);
+dark from +47 s (jump ≈ +45 s).
+
+Readback (fresh dumps re-read post-reboot; py-decoded):
+- bc[1]=0x7e=126 with bc[2]=0x17e / mirror0=0x27e — **AMBIGUOUS freshness:
+  W-99's run left the IDENTICAL values in these slots; the readback cannot
+  separate a W-100 write from W-99 residue (note in the record).** The
+  FRESH slots carry W-100: bc[10]/[13]/[14]/[16] all differ from W-99's
+  finals.
+- **bc[10] = 0xde800000 = mmu.c:1103's iotable_init forensic write
+  (md->virtual) — FRESH: the boot reached the descriptor loop with the
+  CORRECT PATCHED remap VA (0xbe800000 + 0x20000000).** (In W-99 this slot
+  ended at 0xc0de0002 = the early_write marker of its last console write.)
+- bc[13]=0xdfbf7000 (the alloc_init_pte pte = the W-90a-era "126-front
+  signature"), bc[14]=0xff8eef58 (matches r[0]=a2eeef58's low bits),
+  bc[15]=0xec55a42f (nonce fresh).
+- **bc[16] = 0x00000110 = 272 = THE W-100 PASS RAN — every pv_table entry
+  invalidated (L2-on branch; 0xFFFFFFFF would have meant L2-off skip).**
+- Ring1 = count=1160, full text through `PB-CMA: cma[0] base=0xbe800000
+  size=0x01000000 va=de800000 pv_off=ffffffffe0000000 pfn=a0000\r\n` —
+  **va = PATCHED, NO BUG line.** (Chars beyond 0x589 = W-99 residue —
+  beyond THIS run's count; the ring-data-persistence caveat: read only
+  count-many chars, the rest is stale by design.)
+
+Death: in the dma_contiguous_remap → iotable_init → create_mapping window
+(bc[10] written at mmu.c:1103; no marker-152 observed; both the
+die-inside-create_mapping and the die-post-126 readings cap at the same
+readback — not discriminable). Same 126-class wall as W-96 r2/W-99 — the
+wedge family unchanged by the pass.
+
+**VERDICT: the pass executes correctly, counts 272, and is benign (depth
+parity with the clean-draw class). Mechanism (a) NOT discriminated this
+run: the draw had no stale map-site to heal — a clean draw and a
+successfully-healed draw are INDISTINGUISHABLE from this readback (both =
+"no BUG line"). REPEATS REQUIRED: ~2-3 more draws to catch either a
+stale-draw-stays-clean (support) or any BUG-refusal (refute).**
+Side note: W-99 (bad draw) vs W-100 (clean draw) both die in the 126
+window; the pv overlay shifts only the micro-death point (mid-BUG-printk
+vs in-remap).
+
 
