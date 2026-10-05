@@ -1899,7 +1899,7 @@
  
  	local_irq_disable();
  	early_boot_irqs_disabled = true;
-@@ -913,9 +1123,102 @@
+@@ -913,9 +1123,146 @@
  	 * enable them.
  	 */
  	boot_cpu_init();
@@ -1986,6 +1986,50 @@
 +			if (*pv_off == want && *pv_pfn == 0xa0000ul)
 +				break;
 +		}
++		/* PlayBook W-100 (session 16): invalidate the pv STUB lines.
++		 * The head.S fixup patched the .text sites in DRAM (MMU-off,
++		 * SO stores bypass the L2); a decompressor-era L2 line can
++		 * still hold the PRE-patch (placeholder) bytes and serve the
++		 * C world's first instruction fetch of a site (W-99 r1:
++		 * PB-CMA va = base - 0x81810000 = 0x3cff0000, the
++		 * dma-mapping.c:287 stub; mechanism (a), TASK-004 audit).
++		 * 0x770 = NS inv-ONLY by PA — a CLEAN here (0x7F0/0x101)
++		 * would write the stale bytes over the patched DRAM (the
++		 * W-90a poison class). Bounded syncs (rule 10); ~1 op per
++		 * table entry (~272). Runs before setup_arch's first
++		 * consumers. bc[16] = inv count (0xFFFFFFFF = L2 off). */
++		{
++			u32 *e;
++			unsigned ninv = 0;
++			unsigned n;
++			if (pb_pl[0x100 / 4] & 1) {
++				for (e = (u32 *)&__pv_table_begin;
++				     e < (u32 *)&__pv_table_end; e++) {
++					u32 site = (u32)(unsigned long)e + *e;
++					pb_pl[0x770 / 4] = site - 0x20000000u;
++					if ((ninv & 63) == 63) {
++						pb_pl[0x730 / 4] = 0;
++						n = 100000;
++						while ((pb_pl[0x730 / 4] & 1)
++						       && --n)
++							;
++						if (!n)
++							pb_tmo++;
++					}
++					ninv++;
++				}
++				pb_pl[0x730 / 4] = 0;
++				n = 100000;
++				while ((pb_pl[0x730 / 4] & 1) && --n)
++					;
++				if (!n)
++					pb_tmo++;
++				pb_bc_put(0xD0000040, ninv);
++			} else {
++				pb_bc_put(0xD0000040, 0xFFFFFFFFu);
++			}
++			dsb(sy);
++		}
 +		pb_bc_put(0xD0000004, 163);	/* block ran; bc[19] = tries */
 +		pb_bc_put(0xD000004C,
 +			  (unsigned int)tries | (pb_tmo << 8));
@@ -2002,7 +2046,7 @@
  	/* Static keys and static calls are needed by LSMs */
  	jump_label_init();
  	static_call_init();
-@@ -1032,6 +1335,7 @@
+@@ -1032,6 +1379,7 @@
  	 * this. But we do want output early, in case something goes wrong.
  	 */
  	console_init();
@@ -2010,7 +2054,7 @@
  	if (panic_later)
  		panic("Too many boot %s vars at `%s'", panic_later,
  		      panic_param);
-@@ -1088,12 +1392,18 @@
+@@ -1088,12 +1436,18 @@
  	pidfs_init();
  	cpuset_init();
  	cgroup_init();
@@ -2029,7 +2073,7 @@
  
  	/* Do the rest non-__init'ed, we're now alive */
  	rest_init();
-@@ -1315,8 +1625,22 @@
+@@ -1315,8 +1669,22 @@
  		   NULL, ignore_unknown_bootoption);
  
  	trace_initcall_level(initcall_level_names[level]);
@@ -2053,7 +2097,7 @@
  }
  
  static void __init do_initcalls(void)
-@@ -1476,6 +1800,8 @@
+@@ -1476,6 +1844,8 @@
  	numa_default_policy();
  
  	rcu_end_inkernel_boot();
@@ -2062,7 +2106,7 @@
  
  	do_sysctl_args();
  
-@@ -1539,6 +1865,7 @@
+@@ -1539,6 +1909,7 @@
  {
  	/* Now the scheduler is fully set up and can do blocking allocations */
  	gfp_allowed_mask = __GFP_BITS_MASK;
@@ -2070,14 +2114,14 @@
  
  	/*
  	 * init can allocate pages on any node
-@@ -1565,6 +1892,7 @@
+@@ -1565,6 +1936,7 @@
  	page_alloc_init_late();
  
  	do_basic_setup();
 +	pb_bc(187);			/* do_basic_setup done (pre-initcalls) */
  
  	kunit_run_all_tests();
- 
+
 --- a/kernel/cgroup/cgroup.c
 +++ b/kernel/cgroup/cgroup.c
 @@ -6106,23 +6106,32 @@
