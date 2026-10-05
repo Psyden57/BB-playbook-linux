@@ -113,3 +113,16 @@ froze the box (W-28). DISPC = accessible (kill + readback verified).
 Never assume a device register is NS-touchable: verify from a prior
 run's evidence first; treat external aborts as device-wedging, not
 cheap crashes.
+
+## D13: Bucket-flip placements = ACCEPT + DOCUMENT (no guard) (session 18)
+
+W-101 r2 produced the first flipped-bucket draw (placement ≥0xa8000000 flips
+AUTO_ZRELADDR → kernel base 0xa8000000; the stubs-vs-variable split-brain:
+the fixup patches the TRUE delta 0xe8000000 while the W-32c block force-writes
+the build constant 0xe0000000 — the FDT trims the bank and memblock stays
+healthy; the split shows up downstream). Decision (user, 2026-10-05): do NOT
+add a payload guard; accept flipped draws and DOCUMENT them. Rationale:
+flipped draws are rare and carry unique data (r2 = the deepest W-101 draw);
+the split-brain is characterized; a guard can be added at any time as a single
+payload variable if the draws ever need constraining. The [0xa0000000,
+0xa1000000) zreladdr reservation (D5) stands separate and unchanged.

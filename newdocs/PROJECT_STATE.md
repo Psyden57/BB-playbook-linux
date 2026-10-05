@@ -25,9 +25,13 @@ dma_contiguous_remap (bc[13]=svm_pa=0xbfbfffd4; last mirror=127; md loop not
 yet run); r1's window [133→134] stands (refined: after the complete
 PB-ADJ#1 record). ring3.count = 23041 + ring1.count EXACTLY (3/3) — the
 "accumulates across runs" reading was a +440-delta coincidence. Spectrum
-(W-101 so far): r1 = early [133→134] / r2 = svm-store / r3 = 126-family —
-no new classes yet. off→red: 68×8 then 67 (the 9th instance). NEXT (session
-18): r4+ draws; the bucket-flip decision; the strategic fronts.**
+(W-101, 4 draws): r1 = early [133→134] / r2 = svm-store / r3 = 126-family /
+r4 = fixup-region (THE TRIAD: bc[1]=142 + bc[2]=0x3E7 + ring 0; bc[16]=0 — the
+W-101 block left no completion marker; the 0x3E7 wild write recurred, 3rd
+lifetime) — no new classes yet. off→red: 68×8, 67, 68 (r4's recording was
+partial — the 68 band restored). NEXT: W-102 (fixup-region fine markers
+proposed) + more draws. The bucket-flip decision = ACCEPT + DOCUMENT
+(DECISIONS D13 — no guard).**
 
 **SESSION-17 (2026-10-05, the W-101 build + first flights): THE FIXUP-SIDE
 PV-STUB INV IS IN AND FLYING (ledger #162; UTS banner "#161"; pack =

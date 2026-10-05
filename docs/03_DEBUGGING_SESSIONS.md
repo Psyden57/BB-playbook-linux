@@ -3922,4 +3922,34 @@ Decoder fixed: ~/agent-runs/w101-artifacts/decode_readbacks_generic.py
 (raw[0x79:]). Future decodes: sanity-check the FIRST fresh char = "[" (the
 banner) and the LAST = "\n" against the count.
 
+### Run W-101 r4 (2026-10-05, session 18): THE TRIAD DRAW — bc[1]=142 +
+### bc[2]=0x3E7 + ring 0 (the W-35/W-84 class, first instance in this era);
+### death inside the inline fixup region (bc[16]=0 — the W-101 block left no
+### completion marker)
+
+Same artifact (#162, deployed exact; nonce 4ec5e806 → edf5e81f fresh;
+placement 0xa3300000 — non-flipped; arm sanitize watched: ring1 0x488→0,
+bc[16] 0x110→0; sweep marked by [7s]). LED (PARTIAL recording): magenta→off
+20 s; off→red 68 s (the 10th instance — the 68 band restored after r3's 67);
+blue onset not captured. Jump ≈ +28..30 s.
+
+Readback: bc[1]=142 + bc[2]=0x3E7 + ring1/ring2 = 0 + mirror0 = 0x46 (payload
+value — no PB_MMU_BC ran). bc[4]=143 + bc[5]=144 FRESH ⇒ the fixup entered and
+passed the alignment check. bc[16] = 0 (arm-zeroed, never written): the W-101
+second walk left NO completion marker. Source order: death ∈ (the 144 marker,
+pbmark 131) = INSIDE THE INLINE FIXUP REGION — walk-1 patch loop and/or the
+W-101 block; the sub-window is not resolvable from this readback (no marker
+between them) — an instrument candidate. The 0x3E7 wild write RECURRED (3rd
+lifetime instance: W-35, W-84, r4). Fresh + source-matched slots: bc[3]=
+0xa3300000 (the payload's bc[3]=phys, qnx2linux.c:1109 — C-world runs overwrite
+it with the ACTLR=0); bc[13]=0xa000859c (head.S:296-300, the W-12 computed call
+target — verifies r8=0xa0000000); bc[20..23]=a38edee8/edfe0dd0/a3903408/a0008000
+(the DECOMPRESSOR's W-54 dtb dump, compressed/head.S:377-381 — first capture
+with a pre-C death); bc[24]/[25] = a38edee8/0xffffffff (head.S:201-204, W-56
+r2/r1 at stext). ring3 = 0x5A01/0 — the base alone with zero chars:
+count3 = 0x5A01 + chars CONFIRMED (4/4).
+
+Spectrum (W-101): r1 early / r2 svm-store / r3 126-family / r4 fixup-region —
+no new class; N=4.
+
 

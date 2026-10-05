@@ -8,8 +8,11 @@ docs/03's session-18 correction). All records end \r\n-complete. W-101 r3
 the session-11 front / the 126-family wedge proper); pass 3/3; W-94
 snapshot live (fresh bc[25]/bc[28]). ring3.count = 23041 + ring1.count
 EXACTLY (3/3) — usable cross-channel; base parked. The bucket-flip class
-stands (r2; guard decision pending). The session-17 header below stands
-EXCEPT for its OPEN CLASS 1.**
+stands (r2; decision = ACCEPT + DOCUMENT, DECISIONS D13 — no guard). W-101 r4
+= THE TRIAD (bc[1]=142 + bc[2]=0x3E7 + ring 0 — the old W-35/W-84 class'
+recurrence; death inside the inline fixup region; bc[16]=0; the 0x3E7 writer
+STILL unidentified). The session-17 header below stands EXCEPT for its
+OPEN CLASS 1.**
 
 **SESSION-17 HEADER (2026-10-05): W-101 (the fixup-side per-site pv inv,
 ledger #162) is BUILT + FLYING — the pass runs live (bc[16] 0→272, both

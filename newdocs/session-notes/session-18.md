@@ -72,15 +72,27 @@ source order + the ring3.count model.
 - poll-jump.sh's pass-1 residue read is the freshness baseline for every
   slot 0..31 — compare CHANGED values against it.
 
+## W-101 r4 (the run — full record: ~/agent-runs/w101-run4-record.md)
+
+- THE TRIAD DRAW: bc[1]=142 + bc[2]=0x3E7 + ring 0/0; death INSIDE the inline
+  fixup region (after 144, before pbmark 131; bc[16]=0 — the W-101 block left
+  no completion marker; walk-1-vs-W-101 sub-window not resolvable without new
+  markers).
+- Fresh + source-matched: bc[3]=a3300000 (payload phys write), bc[13]=a000859c
+  (head.S W-12 target), bc[20..23] = the decompressor W-54 dump (first
+  pre-C-death capture), bc[24]/[25] = head.S W-56 (r2/r1 at stext).
+- ring3 = 0x5A01/0 — the base alone (4/4 model; the base's writer still
+  unpinned — settle with one armed-window read).
+- LED partial (magenta→off 20 s; off→red 68 s — the 10th instance, band
+  restored).
+
 ## OPEN / NEXT
 
-1. W-101 draws r4+ (the spectrum; N=3 so far, no new classes yet).
-2. The bucket-flip decision (bootstrap queue item 2 — raise with the user:
-   (a) payload guard ≥0xa8000000, (b) accept+document, (c) the W-32c
-   runtime-delta design note).
-3. ring3 base-23041 origin (parked; optional).
-4. TASK-005 follow-ups: the early_write breadcrumb instrument (designed);
-   the ring3 arm-sanitize patch (LOWER value now — count3 understood);
-   the F1 sub-mechanism (console-lock candidate — unaffected by the decode
-   fix: the printless era is real).
+1. W-102 (user directive; name not defined in the repo yet — clarify/propose):
+   leading candidate = fixup-region fine markers (resolve the r4-class
+   sub-window + make the W-101 block's progress visible).
+2. More W-101 draws (r5+) as the spectrum builds (N=4: early / svm-store /
+   126-family / fixup-region).
+3. ring3 base-0x5A01 origin (one armed-window read settles it).
+4. TASK-005 follow-ups unchanged (early_write breadcrumb; F1 console-lock).
 5. Strategic fronts unchanged (the CPU1 release; the 185-path).
