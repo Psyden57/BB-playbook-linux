@@ -44,14 +44,15 @@ original conversation history.
 ## Current handoff state
 
 - Latest session notes: [session-notes/session-16.md](session-notes/session-16.md)
-  — W-99 r1: kernel #160 built + flown; front 126; THE LIVE UNPATCHED-PV
-  CATCH (va = base − 0x81810000) + the full-ring readback instrument;
-  the persistence model (windows vs the wider empirical survival)
-- Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_16.md` (session-14's
-  product still; the session-16 boot read it; a BOOTSTRAP_SESSION_17
-  comes at the next wrap)
-- Next action: MORE DRAWS (the 185-path for atomic_pool_init; the 126
-  determinism repeat) + the unpatched-pv-site audit (offline; which
-  inline __va site the pv walk misses — the W-24 block covers the two
-  variables only); full W-99 record in docs/03
+  — W-99 (#160: the live unpatched-pv catch) + TASK-004 (the pv-site
+  mechanism (a)) + W-100 (#161: the inv-only pass, 4 runs — the draw
+  spectrum, the initcall-era r3, the wedge = probabilistic) + the wrap
+- **Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_17.md` — READ IT
+  FIRST** (the read order, the session-16 state, the decision queue, and
+  the user's note: **you can ask the session-16 agent questions** — the
+  user relays them)
+- Next action: the W-101 decision (the fixup-side per-site inv = the
+  robust pv cure — vs more W-100 repeats; 0 stale-site hits in 4 draws);
+  the 185-path (initcall era, two heroes now); the CPU1 release still
+  the strategic cure front
 - Local-only assets and why: [SETUP.md](SETUP.md) §6

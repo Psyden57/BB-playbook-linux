@@ -3790,6 +3790,7 @@ remap-window death; r2 = CMA-reserve-fail → deep (111); r3 = wedge-pass
 remap-window death = the modal outcome; the wedge = per-draw dice. The
 pv-site discriminator: 4 draws, 0 stale-site hits (the target class
 appears rarer than the W-99 sample suggested, or hidden by other
-deaths).**
+deaths).** LED: blue+5 / magenta+19 / off+41 / red+109 — off→red 68 s
+(the 6th: 68/69/68/68/68/68 — iron-clad).
 
 

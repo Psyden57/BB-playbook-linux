@@ -32,14 +32,19 @@ the .text stub's instruction fetch (HIGH/MEDIUM; 136 sites enumerated,
 zero cache ops in the fixup, variables-only W-32c coverage, and the
 cross-draw proof: W-96 r2 va=0xde800000 vs W-99 r1 va=0x3cff0000 on
 the same function). W-100 CANDIDATES: the inv-only (0x770) discriminator
-loop / the per-site inv in the fixup itself.** **W-100 r1 (kernel #161,
-the inv-only pass) = FLOWN: THE PASS RAN (bc[16]=272) and is benign —
-but this draw came out CLEAN-S1 (va=de800000 patched, no BUG), so the
-discriminator was NOT exercised (a clean draw and a healed draw are
-indistinguishable). REPEATS NEEDED (2-3 draws) to catch a stale draw.
-The 126-class wall itself (the wedge family, CPU1-held) is UNCHANGED by
-the pass.** NEXT: W-100 repeats; the 185-path; the CPU1 release stays
-the strategic cure front.**
+loop / the per-site inv in the fixup itself.** **W-100 r1-r4 (kernel
+#161, the inv-only pass) = FLOWN ×4 on the SAME artifact: the pass runs
+(272/272, bc[16]=0x110, 4/4) and is benign. THE DRAW SPECTRUM: r1/r4 =
+126-remap-window death (modal, va patched, no BUG); r2 = CMA-reserve-
+FAILED → deep (post-setup_arch, bc[1]=111); r3 = THE WEDGE PASSED →
+INITCALL ERA (bc[2]=0xBEEF, core level, hero = `rcu_init_tasks_generic`
+— the #2 hero after atomic_pool_init; bc[1]=184). The 126-wall = the
+CMA-remap's TLB-op family = PER-DRAW DICE, not deterministic. The
+stale-site discriminator: 0 hits in 4 draws — the W-101 decision (the
+fixup-side per-site inv = the robust cure) heads the session-17 queue.
+off→red = 68 s ×6 (the bootloader-phase delta).** NEXT (session 17):
+read BOOTSTRAP_SESSION_17; the W-101 decision; the 185-path; the CPU1
+release stays the strategic cure front.**
 
 **SESSION-14 (2026-10-04/05, the post-migration session): W-96 (the
 determinism series) → W-97/W-98 (the LIVE-poller era: kexec/poll-jump.sh,

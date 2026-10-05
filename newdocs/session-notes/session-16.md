@@ -129,6 +129,38 @@ audit of the W-99 edit) — DeepSeek 4.1 flash, high effort, 7 min, exit 0.
 - Files: w100-run3-{bc,ring,slots,mirror0,led}.txt;
   live-20261005-161046.log; docs/03 W-100 r3.
 
+## W-100 r4 — a 126-class draw again — 2026-10-05
+
+- Same artifact; pass ran 4/4. Fresh slots: bc[1]=126 (changed from r3's
+  184), bc[10]=0xde800000 (iotable_init md->virtual patched), no BUG,
+  ring 1160 through PB-CMA. Death in the remap window again (r1 flavor).
+- LED: blue+5 / magenta+19 / off+41 / red+109 — **off→red 68 s (the 6th:
+  68/69/68/68/68/68 — the bootloader-phase delta, iron-clad).**
+
+## THE WRAP (session 16 final state)
+
+- **W-99** (#160): the flush-cadence build + THE LIVE UNPATCHED-PV CATCH
+  (va = base − 0x81810000; BUG; mid-printk death) + the full-ring
+  readback fix (0xf80) + the persistence model (SMC-per-console-write =
+  primary; the batch = in-flight insurance; survival beyond windows).
+- **TASK-004**: mechanism (a) — a stale L2 line serves the .text
+  pv-stub fetch (136 sites/272 insns; zero cache ops in the fixup;
+  variables-only W-32c; cross-draw proof; the INV-ONLY §6 fix).
+- **W-100** (#161): the inv-only pass (272, bc[16]=0x110, 4/4 runs,
+  benign). Draw spectrum: r1/r4 remap-death; r2 CMA-fail-deep; r3
+  INITCALL ERA (rcu_init_tasks_generic hero, the wedge passed).
+  0 stale-site hits — the discriminator awaits; W-101 (fixup-side inv)
+  = the robust cure, queued for session 17.
+- **The lottery map**: 126-remap-death (modal); wedge-pass; CMA-fail;
+  stale-pv overlay; map_lowmem garbage-region WARN (4 datapoints,
+  pv-orthogonal). New flavors: cma_area_count garbage; the cold-read
+  43 s stall.
+- All committed + pushed; BOOTSTRAP_SESSION_17 written (with the user's
+  note: **the session-16 agent is reachable for questions**); the
+  HANDOFF pointers moved; the skills updated.
+- Artifacts: ~/agent-runs/w99-*, w100-run{1..4}-*, w99/w100-artifacts,
+  TASK-003/004 records, the live logs, 6 LED files.
+
 ## OPEN / NEXT
 
 1. The unpatched-pv-site audit: DONE same-session (TASK-004; report +
