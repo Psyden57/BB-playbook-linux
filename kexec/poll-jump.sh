@@ -7,8 +7,9 @@
 #
 # What it settles (the W-97 check list, one run):
 #   (alpha) the DEPLOYED artifact sizes on-device (ls -l /tmp/zImage + the
-#           DTB) — expect zImage = 5,227,633 (the W-100 #161 pack);
-#           5,224,865 = the #160 pack = a STALE deploy;
+#           DTB) — expect zImage = 5,223,425 (the W-101 #162 pack);
+#           5,227,633 = the #161 (W-100) pack = a STALE deploy;
+#           5,224,865 = the #160 (W-99) pack = a STALE deploy;
 #           5,225,409 = the #159 pack = a STALE deploy;
 #           5,226,177 = the #155 shape = an artifact-chain bug.
 #   (beta)  bc[2] LIVE (= the payload's own zlen write) — the same

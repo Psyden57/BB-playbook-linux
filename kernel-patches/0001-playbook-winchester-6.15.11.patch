@@ -26,6 +26,7 @@
  	default "debug/sa1100.S" if DEBUG_SA1100
  	default "debug/palmchip.S" if DEBUG_UART_8250_PALMCHIP
  	default "debug/8250.S" if DEBUG_LL_UART_8250 || DEBUG_UART_8250
+
 --- a/arch/arm/kernel/early_printk.c
 +++ b/arch/arm/kernel/early_printk.c
 @@ -11,9 +11,43 @@
@@ -101,6 +102,7 @@
  	early_console = &early_console_dev;
  	register_console(&early_console_dev);
  	return 0;
+
 --- a/arch/arm/kernel/head-common.S
 +++ b/arch/arm/kernel/head-common.S
 @@ -79,6 +79,20 @@
@@ -196,6 +198,7 @@
  #ifdef CONFIG_KASAN
  	bl	kasan_early_init
  #endif
+
 --- a/arch/arm/kernel/head.S
 +++ b/arch/arm/kernel/head.S
 @@ -98,6 +98,113 @@
@@ -351,7 +354,7 @@
  	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid
  	movs	r10, r5				@ invalid processor (r5=0)?
   THUMB( it	eq )		@ force fixup-able long branch encoding
-@@ -124,19 +263,144 @@
+@@ -124,19 +263,205 @@
  #else
  	ldr	r8, =PLAT_PHYS_OFFSET		@ always constant in this case
  #endif
@@ -485,6 +488,67 @@
 +	ldrcc	r7, [r4]		@ use branch for delay slot
 +	bcc	974b
 +
++	@ --- PlayBook W-101 (session 17): pv-stub-line L2 invalidation ---
++	@ The walk above patched the .text sites in DRAM (MMU-off SO stores);
++	@ a decompressor-era L2 line can still hold the PRE-patch bytes and
++	@ serve the C world's first fetch of a site (W-99 r1: PB-CMA va =
++	@ base - 0x81810000, the dma-mapping.c:287 stub; mechanism (a),
++	@ TASK-004). Second walk: re-walk __pv_table and issue PL310 inv-ONLY
++	@ by PA (0x770 — a CLEAN would write stale bytes over the patched
++	@ DRAM, the W-90a poison class). MMU off here: the PL310 registers sit
++	@ at their physical base 0x48242000 (the omap4bc-proven pattern at
++	@ this stage); the whole pass is guarded on the L2 state (CTRL bit0 —
++	@ line-ops into a disabled L2C are the W-77 poison class). Site PA =
++	@ entry + table address (already physical at MMU off). Sync: bounded
++	@ 0x730 poll every 64 invs + one final (rule 10, busyuart's shape).
++	@ bc[16] = inv count / 0xFFFFFFFF when skipped — SUPERSEDES the W-100
++	@ start_kernel pass (removed; this closes the pre-C-world window it
++	@ could not). Clobbers r0/r3/r4/r6/r7/ip only; r1/r2/r8/r9/r10 kept.
++	@ Constants via ldr= : head.o assembles at -Wa,-march=armv6k
++	@ (__LINUX_ARM_ARCH__=6), so movw/movt are unavailable; the pool
++	@ entry lands at the post-stext .ltorg (jumped-over) — file idiom.
++	ldr	r0, =0x48242000		@ r0 = PL310 physical base
++	ldr	r3, [r0, #0x100]	@ PL310 CTRL
++	tst	r3, #1			@ the L2 enabled?
++	beq	966f			@ no -> skip all line-ops
++	adr_l	r4, __pv_table_begin
++	mov	r6, #64			@ sync cadence: every 64 invs
++960:	cmp	r4, r5			@ r5 = __pv_table_end (walk 1)
++	bcs	963f
++	ldr	r7, [r4]
++	add	ip, r7, r4		@ site PA (= entry + table addr)
++	bic	ip, ip, #0x1f		@ line-aligned
++	str	ip, [r0, #0x770]	@ PL310 inv-ONLY by PA
++	add	r4, r4, #4
++	subs	r6, r6, #1
++	bne	960b
++	mov	r6, #64
++	mov	r3, #1000		@ bounded sync (rule 10)
++961:	ldr	ip, [r0, #0x730]
++	tst	ip, #1
++	beq	960b			@ sync clear -> next invs
++	subs	r3, r3, #1
++	bhi	961b
++	b	960b			@ countdown out -> continue
++963:	mov	r3, #1000		@ final sync
++964:	ldr	ip, [r0, #0x730]
++	tst	ip, #1
++	beq	965f
++	subs	r3, r3, #1
++	bhi	964b
++965:	adr_l	r4, __pv_table_begin
++	sub	r3, r5, r4		@ table bytes
++	lsr	r3, r3, #2		@ inv count (~272)
++	ldr	ip, =0x90000040		@ bc[16]
++	str	r3, [ip]
++	dsb
++	b	967f
++966:	mvn	r3, #0			@ L2 off: no line-ops issued
++	ldr	ip, =0x90000040		@ bc[16]
++	str	r3, [ip]
++	dsb
++967:
++
 +	b	976f
 +973:	mov	r0, r0			@ deadloop on misalignment (143 w/o 144)
 +	b	973b
@@ -497,7 +561,7 @@
  
  	/*
  	 * The following calls CPU specific code in a position independent
-@@ -229,6 +493,12 @@
+@@ -229,6 +554,12 @@
  #endif
  
  	ldr	r7, [r10, #PROCINFO_MM_MMUFLAGS] @ mm_mmuflags
@@ -510,7 +574,7 @@
  
  	/*
  	 * Create identity mapping to cater for __enable_mmu.
-@@ -343,6 +613,104 @@
+@@ -343,6 +674,104 @@
  	str	r3, [r0], #4
  #endif
  
@@ -615,7 +679,7 @@
  #else /* CONFIG_DEBUG_ICEDCC || CONFIG_DEBUG_SEMIHOSTING */
  	/* we don't need any serial debugging mappings */
  	ldr	r7, [r10, #PROCINFO_IO_MMUFLAGS] @ io_mmuflags
-@@ -373,6 +741,7 @@
+@@ -373,6 +802,7 @@
  #ifdef CONFIG_ARM_LPAE
  	sub	r4, r4, #0x1000		@ point to the PGD table
  #endif
@@ -623,7 +687,7 @@
  	ret	lr
  ENDPROC(__create_page_tables)
  	.ltorg
-@@ -465,6 +834,13 @@
+@@ -465,6 +895,13 @@
   *  r13 = *virtual* address to jump to upon completion
   */
  __enable_mmu:
@@ -637,7 +701,7 @@
  #if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
  	orr	r0, r0, #CR_A
  #else
-@@ -479,9 +855,21 @@
+@@ -479,9 +916,21 @@
  #ifdef CONFIG_CPU_ICACHE_DISABLE
  	bic	r0, r0, #CR_I
  #endif
@@ -659,7 +723,7 @@
  	mov	r5, #DACR_INIT
  	mcr	p15, 0, r5, c3, c0, 0		@ load domain access register
  	mcr	p15, 0, r4, c2, c0, 0		@ load page table pointer
-@@ -506,12 +894,28 @@
+@@ -506,12 +955,28 @@
  	.align	5
  	.pushsection	.idmap.text, "ax"
  ENTRY(__turn_mmu_on)
@@ -689,6 +753,7 @@
  	mov	r3, r13
  	ret	r3
  __turn_mmu_on_end:
+
 --- a/arch/arm/kernel/phys2virt.S
 +++ b/arch/arm/kernel/phys2virt.S
 @@ -29,6 +29,79 @@
@@ -822,6 +887,7 @@
  	adr_l	r4, __pv_table_begin
  	adr_l	r5, __pv_table_end
  	b	__fixup_a_pv_table
+
 --- a/arch/arm/kernel/setup.c
 +++ b/arch/arm/kernel/setup.c
 @@ -599,18 +599,55 @@
@@ -1028,6 +1094,7 @@
  	request_standard_resources(mdesc);
  
  	if (mdesc->restart) {
+
 --- a/arch/arm/mach-omap2/omap4-common.c
 +++ b/arch/arm/mach-omap2/omap4-common.c
 @@ -156,6 +156,14 @@
@@ -1054,6 +1121,7 @@
  }
  
  #endif
+
 --- a/arch/arm/mm/dma-mapping.c
 +++ b/arch/arm/mm/dma-mapping.c
 @@ -270,6 +270,8 @@
@@ -1173,6 +1241,7 @@
  	}
  }
  #endif
+
 --- a/arch/arm/mm/init.c
 +++ b/arch/arm/mm/init.c
 @@ -183,6 +183,33 @@
@@ -1209,6 +1278,7 @@
  	/* Register the kernel text, kernel data and initrd with memblock. */
  	memblock_reserve(__pa(KERNEL_START), KERNEL_END - KERNEL_START);
  
+
 --- a/arch/arm/mm/mmu.c
 +++ b/arch/arm/mm/mmu.c
 @@ -700,6 +700,13 @@
@@ -1642,6 +1712,7 @@
  
  	empty_zero_page = virt_to_page(zero_page);
  	__flush_dcache_folio(NULL, page_folio(empty_zero_page));
+
 --- a/init/main.c
 +++ b/init/main.c
 @@ -86,6 +86,7 @@
@@ -1899,7 +1970,7 @@
  
  	local_irq_disable();
  	early_boot_irqs_disabled = true;
-@@ -913,9 +1123,146 @@
+@@ -913,9 +1123,110 @@
  	 * enable them.
  	 */
  	boot_cpu_init();
@@ -1986,50 +2057,14 @@
 +			if (*pv_off == want && *pv_pfn == 0xa0000ul)
 +				break;
 +		}
-+		/* PlayBook W-100 (session 16): invalidate the pv STUB lines.
-+		 * The head.S fixup patched the .text sites in DRAM (MMU-off,
-+		 * SO stores bypass the L2); a decompressor-era L2 line can
-+		 * still hold the PRE-patch (placeholder) bytes and serve the
-+		 * C world's first instruction fetch of a site (W-99 r1:
-+		 * PB-CMA va = base - 0x81810000 = 0x3cff0000, the
-+		 * dma-mapping.c:287 stub; mechanism (a), TASK-004 audit).
-+		 * 0x770 = NS inv-ONLY by PA — a CLEAN here (0x7F0/0x101)
-+		 * would write the stale bytes over the patched DRAM (the
-+		 * W-90a poison class). Bounded syncs (rule 10); ~1 op per
-+		 * table entry (~272). Runs before setup_arch's first
-+		 * consumers. bc[16] = inv count (0xFFFFFFFF = L2 off). */
-+		{
-+			u32 *e;
-+			unsigned ninv = 0;
-+			unsigned n;
-+			if (pb_pl[0x100 / 4] & 1) {
-+				for (e = (u32 *)&__pv_table_begin;
-+				     e < (u32 *)&__pv_table_end; e++) {
-+					u32 site = (u32)(unsigned long)e + *e;
-+					pb_pl[0x770 / 4] = site - 0x20000000u;
-+					if ((ninv & 63) == 63) {
-+						pb_pl[0x730 / 4] = 0;
-+						n = 100000;
-+						while ((pb_pl[0x730 / 4] & 1)
-+						       && --n)
-+							;
-+						if (!n)
-+							pb_tmo++;
-+					}
-+					ninv++;
-+				}
-+				pb_pl[0x730 / 4] = 0;
-+				n = 100000;
-+				while ((pb_pl[0x730 / 4] & 1) && --n)
-+					;
-+				if (!n)
-+					pb_tmo++;
-+				pb_bc_put(0xD0000040, ninv);
-+			} else {
-+				pb_bc_put(0xD0000040, 0xFFFFFFFFu);
-+			}
-+			dsb(sy);
-+		}
++		/* PlayBook W-101 (session 17): the pv-stub-line L2
++		 * invalidation MOVED into the head.S inline fixup (second
++		 * __pv_table walk, per-site, PL310 inv-only 0x770; bc[16] =
++		 * count / 0xFFFFFFFF — see head.S and the W-101 record).
++		 * The fixup-side pass closes the pre-C-world window this
++		 * block could not: no C-world fetch of a stub, however
++		 * early, can see a pre-patch line once the second walk has
++		 * run. Only the W-32c variable repair remains here. */
 +		pb_bc_put(0xD0000004, 163);	/* block ran; bc[19] = tries */
 +		pb_bc_put(0xD000004C,
 +			  (unsigned int)tries | (pb_tmo << 8));
@@ -2046,7 +2081,7 @@
  	/* Static keys and static calls are needed by LSMs */
  	jump_label_init();
  	static_call_init();
-@@ -1032,6 +1379,7 @@
+@@ -1032,6 +1343,7 @@
  	 * this. But we do want output early, in case something goes wrong.
  	 */
  	console_init();
@@ -2054,7 +2089,7 @@
  	if (panic_later)
  		panic("Too many boot %s vars at `%s'", panic_later,
  		      panic_param);
-@@ -1088,12 +1436,18 @@
+@@ -1088,12 +1400,18 @@
  	pidfs_init();
  	cpuset_init();
  	cgroup_init();
@@ -2073,7 +2108,7 @@
  
  	/* Do the rest non-__init'ed, we're now alive */
  	rest_init();
-@@ -1315,8 +1669,22 @@
+@@ -1315,8 +1633,22 @@
  		   NULL, ignore_unknown_bootoption);
  
  	trace_initcall_level(initcall_level_names[level]);
@@ -2097,7 +2132,7 @@
  }
  
  static void __init do_initcalls(void)
-@@ -1476,6 +1844,8 @@
+@@ -1476,6 +1808,8 @@
  	numa_default_policy();
  
  	rcu_end_inkernel_boot();
@@ -2106,7 +2141,7 @@
  
  	do_sysctl_args();
  
-@@ -1539,6 +1909,7 @@
+@@ -1539,6 +1873,7 @@
  {
  	/* Now the scheduler is fully set up and can do blocking allocations */
  	gfp_allowed_mask = __GFP_BITS_MASK;
@@ -2114,13 +2149,14 @@
  
  	/*
  	 * init can allocate pages on any node
-@@ -1565,6 +1936,7 @@
+@@ -1565,6 +1900,7 @@
  	page_alloc_init_late();
  
  	do_basic_setup();
 +	pb_bc(187);			/* do_basic_setup done (pre-initcalls) */
  
  	kunit_run_all_tests();
+ 
 
 --- a/kernel/cgroup/cgroup.c
 +++ b/kernel/cgroup/cgroup.c
@@ -2192,6 +2228,7 @@
  		if (ss->early_init)
  			cgroup_init_subsys(ss, true);
  	}
+
 --- a/kernel/taskstats.c
 +++ b/kernel/taskstats.c
 @@ -689,12 +689,15 @@
@@ -2210,6 +2247,7 @@
  }
  
  static int __init taskstats_init(void)
+
 --- a/mm/slab_common.c
 +++ b/mm/slab_common.c
 @@ -285,6 +285,7 @@
@@ -2244,6 +2282,7 @@
  	if (IS_ERR(s)) {
  		err = PTR_ERR(s);
  		kfree_const(cache_name);
+
 --- a/arch/arm/boot/dts/ti/omap/Makefile
 +++ b/arch/arm/boot/dts/ti/omap/Makefile
 @@ -76,10 +76,9 @@
@@ -2258,6 +2297,7 @@
  	omap4-xyboard-mz609.dtb \
  	omap4-xyboard-mz617.dtb
  dtb-$(CONFIG_SOC_AM33XX) += \
+
 --- /dev/null
 +++ b/arch/arm/boot/dts/ti/omap/omap4-winchester.dts
 @@ -0,0 +1,120 @@
@@ -2536,3 +2576,4 @@
 +		pop	{r1, r2, r3, r4, r5}
 +		.endm
 \ No newline at end of file
+
