@@ -3440,6 +3440,65 @@ NEXT (SESSION-14's LEADS, ranked):
 ### skipped); THE FRONT = 153 (the svm block's add_static_vm done) — a NEW
 ### front value for the warm band
 
+### Run W-98 r1 (2026-10-04, session 14): ★★★ THE INITCALL ERA REACHED —
+### bc[1]=185 REPRODUCED + THE INITCALL BREADCRUMBS DECODED (bc[6]=LEVEL 2
+### postcore, bc[7]=atomic_pool_init c0e0719c System.map-verified,
+### bc[2]=0xBEEF = the per-initcall WDT2 KICK NONCE — main.c:1629-1642) —
+### THE DEEPEST L2-ON BOOT EVER, ~10 WALLS PAST THE CMA
+
+Same instrument (poll-jump.sh + the 0x140 ring window added to the poll
+set), same kernel #159 + payload (rule 16 ✓). The user's LED timeline:
+blue +5 s, magenta +12 s, off +33 s, red +101 s — matches the poller's
+own timestamps (the sweep ~6 s, dark = the jump between the 26-32 s polls).
+
+LIVE: t≤7 s = the whole-DRAM sweep COMPLETE (bc[29]=0x2000 = 8192/8192
+chunks, 0 timeouts — the W-97 rate CONFIRMED); placement 0xa2f00000 →
+0xa3400000-class; healthy DRAM; ring count = 0 through the payload era
+(the kernel starts from count=0 every run — the QNX-era residue = decayed).
+
+READBACK (the era family):
+- **bc[1]=185 with bc[2]=0xBEEF** — not a PB_MMU_BC pair: bc[2] = 0xBEEF =
+  **the per-initcall KICK NONCE (main.c:1637: `0xD0000008 = 0xBEEF` before
+  every do_one_initcall + the WDT2 kick at 1638)** — the boot REACHED THE
+  INITCALL LOOP. **bc[6]=2 = the initcall LEVEL = postcore_init; bc[7]=
+  0xc0e0719c = `atomic_pool_init` (System.map, py-verified) = the fn that
+  was RUNNING when the box died.**
+- bc[14]=0xC0DE0030 = the second-parse done-latch (the W-94 marker) =
+  reproduced; bc[13]=0xbfbfff50 = the W-94-era pointer, SAME VALUE =
+  deterministic; bc[10]=0xC0DE0002 (the earlycon-registered class).
+- ring = 1165 chars (the count froze at the W-88-class log — the
+  initcall-era prints sat in the unflushed batch tail; the ring-window
+  poller addition = for the NEXT capture).
+- mirror0+4 = 0x280 = the jump-started marker's mirror (the 0x280 shape =
+  the era's own post-jump write; the trap page = clean, no abort fired).
+
+**THE DECODED WALLS (all fallen, one boot): fixmap → CMA → devicemaps →
+vmalloc/iotable → svm (153-class) → map_lowmem → kmem_cache_create (185
+= the W-94 record) → taskstats → earlycon → the core initcalls →
+POSTCORE (level 2) → atomic_pool_init = THE DEATH HERO.** That fn:
+allocates the DMA atomic pool (CMA-class allocation, GFP_ATOMIC, the
+pool's gen_pool creation) — its death candidates: the allocation path
+(the CMA hook? the pool's fixed ranges vs the 16 MiB CMA at 0xbe800000),
+or the TLB-op class again (the pool's ioremap/map calls), or the
+exclusive-spinlock family (SMP=n should neutralize... but the W-84-era
+note: the L2-on + SMP=n = the TLB ops = flaky, the exclusives = harmless).
+
+**W-98's NEXT INSTRUMENT (designed, not yet built): the ring-window poller
+= ALREADY IN (0x140) — the death era speaks through printk ONLY in the
+flushed batches; the next lever = the FLUSH CADENCE (the batch-64 = too
+coarse — the W-95 lead #2): a kernel-side build with the batch flush
+tightened (batch-16 or per-line-flush in the initcall era — ONE variable)
+= the first kernel-side change candidate for W-99. THE ALTERNATIVE = the
+bc-side: main.c's per-initcall breadcrumbs could also carry the fn's
+printed name (the printk in do_before) — NO, the ring = the channel; the
+CADENCE = the fix.**
+
+### Run W-97 r1 (2026-10-04, session 14): THE LIVE POLLER INSTRUMENT (first
+### flight) — (α) THE DEPLOYED FILE = THE ON-DISK ARTIFACT EXACTLY (the +0x300
+### deploy-shape theory DEAD); the sweep = 5-6× FASTER than measured (not
+### skipped); THE FRONT = 153 (the svm block's add_static_vm done) — a NEW
+### front value for the warm band
+
 The new `kexec/poll-jump.sh` = jump.sh wrapped with a LIVE 3 s host-side
 poller (bc page 0x80 + the WDT2 counter; the deployed-file sizes at pass
 1); kernel #159 + payload = the SAME verified bytes (rule 16 ✓).
@@ -3462,10 +3521,10 @@ poller (bc page 0x80 + the WDT2 counter; the deployed-file sizes at pass
   re-verify era), payload dark between 32-61 polls = THE JUMP.
 
 **READBACK: bc[1]=153 with the FULL PAIR (bc[2]=0x163 = 153|0x100 ✓,
-mirror=0x263 = 153|0x200 ✓ — marker 153 HAS its pair, unlike 156)，
+mirror=0x263 = 153|0x200 ✓ — marker 153 HAS its pair, unlike 156),**
 bc[10]=0xC0DE0002 (the setup_early_printk-registered class = the W-94
 marker family), bc[11..12]=C0DE parse ✓, bc[13]=0xbfbfff50 = the W-94-era
-svm-VA-class pte pointer, RING = 1251 chars.**
+svm-VA-class pte pointer, RING = 1251 chars.
 Python ladders (py-verified): **153 = `add_static_vm done` (mmu.c:1115)
 = INSIDE the svm block (150=iotable_init entry → 153=add_static_vm →
 155/159-161 = the find/`__va` span; the static VM mapping = done) — a
@@ -3484,6 +3543,9 @@ buffer inside a 2MB-aligned block (the kern_off ≠ 0 runs = the +0x100000
 class) — BUT the r0 family = kern+APP(kern, NOT buf). The +0x300 remains
 unexplained but is now ONE-RUN-DEEP (a fluke until re-seen; not worth a
 kernel change).**
+
+The warm-band floor after W-97 r1: 126 / 153 / 156 sampled (6 warm runs).
+The 150-166 svm wall = the next bisect target, with the ring alive.
 
 VERTEX (the spindle of the day): **the sweeps moved the lottery's FLOOR:
 the warm band now = 126..153..156 sampled; the sample count = 6 warm
