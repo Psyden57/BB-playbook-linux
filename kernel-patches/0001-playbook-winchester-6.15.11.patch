@@ -354,7 +354,7 @@
  	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid
  	movs	r10, r5				@ invalid processor (r5=0)?
   THUMB( it	eq )		@ force fixup-able long branch encoding
-@@ -124,19 +263,205 @@
+@@ -124,19 +263,224 @@
  #else
  	ldr	r8, =PLAT_PHYS_OFFSET		@ always constant in this case
  #endif
@@ -488,6 +488,17 @@
 +	ldrcc	r7, [r4]		@ use branch for delay slot
 +	bcc	974b
 +
++	@ --- PlayBook W-102 (session 18): the walk-1/W-101 boundary marker ---
++	@ bc[17] = 1: the patch walk (walk 1) completed; entering the W-101
++	@ block. Splits the r4-window deaths (142/143/144 + bc[16]=0) between
++	@ walk-1 and the second walk. File idiom (the 143/144 markers): plain
++	@ SO store — the 0x90 section, MMU off = DRAM truth — + dsb. Clobbers
++	@ ip + r0 only (r0 is reloaded at the PL310 base below).
++	ldr	ip, =0x90000044		@ bc[17]
++	mov	r0, #1
++	str	r0, [ip]
++	dsb
++
 +	@ --- PlayBook W-101 (session 17): pv-stub-line L2 invalidation ---
 +	@ The walk above patched the .text sites in DRAM (MMU-off SO stores);
 +	@ a decompressor-era L2 line can still hold the PRE-patch bytes and
@@ -511,6 +522,14 @@
 +	ldr	r3, [r0, #0x100]	@ PL310 CTRL
 +	tst	r3, #1			@ the L2 enabled?
 +	beq	966f			@ no -> skip all line-ops
++	@ W-102: bc[17] = 2 — the CTRL check passed (L2 on); entering the
++	@ inv loop. L2-off draws keep bc[17] = 1 (+ bc[16] = 0xFFFFFFFF at
++	@ 966). Clobbers ip + r3 only (r3 is dead on every path from here —
++	@ reloaded at the sync cadence; r0 = the PL310 base must survive).
++	ldr	ip, =0x90000044		@ bc[17]
++	mov	r3, #2
++	str	r3, [ip]
++	dsb
 +	adr_l	r4, __pv_table_begin
 +	mov	r6, #64			@ sync cadence: every 64 invs
 +960:	cmp	r4, r5			@ r5 = __pv_table_end (walk 1)
@@ -561,7 +580,7 @@
  
  	/*
  	 * The following calls CPU specific code in a position independent
-@@ -229,6 +554,12 @@
+@@ -229,6 +573,12 @@
  #endif
  
  	ldr	r7, [r10, #PROCINFO_MM_MMUFLAGS] @ mm_mmuflags
@@ -574,7 +593,7 @@
  
  	/*
  	 * Create identity mapping to cater for __enable_mmu.
-@@ -343,6 +674,104 @@
+@@ -343,6 +693,104 @@
  	str	r3, [r0], #4
  #endif
  
@@ -679,7 +698,7 @@
  #else /* CONFIG_DEBUG_ICEDCC || CONFIG_DEBUG_SEMIHOSTING */
  	/* we don't need any serial debugging mappings */
  	ldr	r7, [r10, #PROCINFO_IO_MMUFLAGS] @ io_mmuflags
-@@ -373,6 +802,7 @@
+@@ -373,6 +821,7 @@
  #ifdef CONFIG_ARM_LPAE
  	sub	r4, r4, #0x1000		@ point to the PGD table
  #endif
@@ -687,7 +706,7 @@
  	ret	lr
  ENDPROC(__create_page_tables)
  	.ltorg
-@@ -465,6 +895,13 @@
+@@ -465,6 +914,13 @@
   *  r13 = *virtual* address to jump to upon completion
   */
  __enable_mmu:
@@ -701,7 +720,7 @@
  #if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
  	orr	r0, r0, #CR_A
  #else
-@@ -479,9 +916,21 @@
+@@ -479,9 +935,21 @@
  #ifdef CONFIG_CPU_ICACHE_DISABLE
  	bic	r0, r0, #CR_I
  #endif
@@ -723,7 +742,7 @@
  	mov	r5, #DACR_INIT
  	mcr	p15, 0, r5, c3, c0, 0		@ load domain access register
  	mcr	p15, 0, r4, c2, c0, 0		@ load page table pointer
-@@ -506,12 +955,28 @@
+@@ -506,12 +974,28 @@
  	.align	5
  	.pushsection	.idmap.text, "ax"
  ENTRY(__turn_mmu_on)
