@@ -110,6 +110,25 @@ audit of the W-99 edit) — DeepSeek 4.1 flash, high effort, 7 min, exit 0.
 - Files: w100-run2-{bc,ring,bc16,mirrors,led}.txt;
   live-20261005-160328.log; docs/03 W-100 r2.
 
+## W-100 r3 — ★ THE INITCALL ERA AGAIN + THE NEW HERO — 2026-10-05
+
+- Same artifact; pass ran 3/3 (bc[16]=272). CMA ok; va=de800000 patched;
+  no BUG; **the remap did NOT wedge this draw — the boot sailed from
+  the CMA past 111 through rest_init to the INITCALL LOOP** (r1 = same
+  artifact died in the remap window ⇒ the wedge = PROBABILISTIC).
+- **bc[2]=0xBEEF (per-initcall kick) + bc[6]=1 (core) + bc[7]=
+  0xc0e14d6c = `rcu_init_tasks_generic`** (core_initcall,
+  kernel/rcu/tasks.h:2278; spawns the RCU-tasks kthreads + self-tests)
+  = the NEW DEATH HERO. W-98's = atomic_pool_init (postcore/2). The
+  initcall era now: two depth datapoints, two heroes.
+- Ladder: bc[1]=184 (185-slot lost to flush-luck; the pair =
+  slab_common.c:329/341), bc[13]=0xbfbfff50 (W-94 class), bc[14]=latch,
+  nonce fresh. Ring 1160 = printless past PB-CMA (again).
+- Discriminator STILL not exercised (orthogonal death). Repeats on
+  request; the era-depth result = the session's biggest single run.
+- Files: w100-run3-{bc,ring,slots,mirror0,led}.txt;
+  live-20261005-161046.log; docs/03 W-100 r3.
+
 ## OPEN / NEXT
 
 1. The unpatched-pv-site audit: DONE same-session (TASK-004; report +

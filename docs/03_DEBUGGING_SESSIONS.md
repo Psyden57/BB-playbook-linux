@@ -3728,4 +3728,46 @@ Same artifact (deployed 5,227,633 = the pack exact; banner #160 Oct 5
   VA = patched). REPEATS CONTINUE.**
 - LED: user video (timings PENDING — ask).
 
+### Run W-100 r3 (2026-10-05, session 16): kernel #161 — ★★★ THE INITCALL
+### ERA REACHED AGAIN (bc[2]=0xBEEF, bc[6]=1 "core", bc[7] =
+### rcu_init_tasks_generic — System.map-verified, core_initcall at
+### kernel/rcu/tasks.h:2278) — AND THE 126-WALL WAS *PASSED* ON THIS DRAW
+### (same artifact as r1!) — the wedge is PROBABILISTIC, not a wall
+
+Same artifact (deployed = the pack exact). **bc[16] = 0x110 = 272 (the
+inv pass ran — 3/3 runs).**
+
+- **The CMA reserved fine; PB-CMA va=de800000 (patched); no BUG — and
+  the remap did NOT wedge: the boot went the FULL distance** — through
+  paging_init/setup_arch (bc[1] climbed past 111) → rest_init →
+  kernel_init → do_basic_setup (187) → **THE INITCALL LOOP.** Same
+  artifact as r1 (which died in the remap window) — so the
+  remap-window/TLB-op deaths = PER-DRAW dice (the known L2-on wedge
+  flakiness), not a deterministic wall. THE REACHED-DEPTH RECORD OF
+  THE CURRENT ERA: r3 = initcall core level.
+- **Death: inside the initcall loop — bc[2]=0xBEEF (the per-initcall
+  WDT2 kick nonce, main.c:1681), bc[6]=1 (the ZERO-BASED level index;
+  names: 0=pure, 1=core, 2=postcore, 3=arch, …; W-98's 2=postcore ✓),
+  bc[7]=0xc0e14d6c = `rcu_init_tasks_generic` (+0x0, fn entry;
+  resolved in the #161 System.map; `core_initcall` at
+  kernel/rcu/tasks.h:2278; body = spawns the RCU-tasks kthreads +
+  runs the RCU-tasks self-tests). THE NEW DEATH HERO (W-98's =
+  atomic_pool_init, postcore/2 — the initcall era now has TWO depth
+  datapoints and two heroes).**
+- Ladder: bc[1]=184 (the last surviving slot write; 184/185 =
+  slab_common.c:329/341 "merge/alias scan survived"/"create_cache
+  survived" — kmem_cache_init's pair; 185's slot write = lost to the
+  flush-luck, or the readback caps at 184 — noted). bc[13]=0xbfbfff50
+  (the W-94-era pointer class!), bc[14]=0xc0de0030 (second-parse
+  latch), bc[15]=0xef45b94c (nonce fresh), bc[20..23] DTB capture ✓,
+  bc[24..28] the memblock/sweep captures intact.
+- Ring: count=1160 — text ends at PB-CMA again (NOTHING printed
+  between the CMA print and the initcall death — the printless-death
+  era; rcu's init prints nothing). Ring chars past count = residue.
+- **MISSION: the pv-site discriminator STILL not exercised (va
+  patched; r3's death = orthogonal — an initcall-era stall/fault).**
+  But the run's other payloads are big: the era depth + the wedge's
+  probabilistic nature + the second hero.
+- LED: user video (timings PENDING — ask).
+
 
