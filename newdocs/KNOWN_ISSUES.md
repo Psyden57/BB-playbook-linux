@@ -1,5 +1,16 @@
 # Known Issues & Open Problems
 
+**SESSION-18 HEADER (2026-10-05): the CR→LF death signature (the
+session-17 header's "NEW OPEN CLASS 1") is RETIRED — it was a ring-decoder
+OFF-BY-ONE (ring text starts at +0x101; decoder fixed → raw[0x79:]; see
+docs/03's session-18 correction). All records end \r\n-complete. W-101 r3
+= a 126-class draw: death in the [126→125] window (early_fixmap_shutdown —
+the session-11 front / the 126-family wedge proper); pass 3/3; W-94
+snapshot live (fresh bc[25]/bc[28]). ring3.count = 23041 + ring1.count
+EXACTLY (3/3) — usable cross-channel; base parked. The bucket-flip class
+stands (r2; guard decision pending). The session-17 header below stands
+EXCEPT for its OPEN CLASS 1.**
+
 **SESSION-17 HEADER (2026-10-05): W-101 (the fixup-side per-site pv inv,
 ledger #162) is BUILT + FLYING — the pass runs live (bc[16] 0→272, both
 draws).** The two flights: r1 died EARLY at the PB-ADJ#1 record's CR→LF

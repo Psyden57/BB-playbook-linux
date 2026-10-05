@@ -9,6 +9,26 @@ with dated headers.
 
 ## Where the boot stands
 
+**SESSION-18 (2026-10-05, W-101 r3 + the decode correction): r3 = a
+NON-flipped deep draw (placement 0xa2400000; bc[6]=e0000000, fresh) — death
+in the [126→125] window = early_fixmap_shutdown (bc[1]=126 + bc[2]=0x17e +
+mirror=0x27e triple; bc[10]=0xde800000 = the dma_contiguous_remap's
+iotable_init md->virtual; bc[13]=0xdfbf7000 = the "126-signature") = the
+session-11 front / the 126-family wedge PROPER. THE PASS RAN 3/3
+(bc[16]=272; arm-zero watched live). The W-94 snapshot ran
+(bc[25]=0xa0000000, bc[28]=0x1fe00000 fresh; sentinels intact). ★ THE
+DECODE CORRECTION: the ring text starts at +0x101 (ring_put pre-increments
+the index) — the session-17 decoder was off by one and the CR→LF
+"micro-signature" WAS THAT ARTIFACT: all records (r1/r2/r3 + W-99 r1's BUG
+line) end \r\n-COMPLETE; r2's death restated = the svm-store class INSIDE
+dma_contiguous_remap (bc[13]=svm_pa=0xbfbfffd4; last mirror=127; md loop not
+yet run); r1's window [133→134] stands (refined: after the complete
+PB-ADJ#1 record). ring3.count = 23041 + ring1.count EXACTLY (3/3) — the
+"accumulates across runs" reading was a +440-delta coincidence. Spectrum
+(W-101 so far): r1 = early [133→134] / r2 = svm-store / r3 = 126-family —
+no new classes yet. off→red: 68×8 then 67 (the 9th instance). NEXT (session
+18): r4+ draws; the bucket-flip decision; the strategic fronts.**
+
 **SESSION-17 (2026-10-05, the W-101 build + first flights): THE FIXUP-SIDE
 PV-STUB INV IS IN AND FLYING (ledger #162; UTS banner "#161"; pack =
 5,223,425 B sha256 47c175cb). W-101 = a per-site PL310 inv-only (0x770)

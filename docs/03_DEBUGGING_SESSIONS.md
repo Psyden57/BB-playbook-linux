@@ -3865,4 +3865,61 @@ Candidate: the first console-adjacent code after a completed write. OPEN
 through an 8-byte ring-offset slip (fixed; the generic decoder
 `w101-artifacts/decode_readbacks_generic.py` and skill updated).
 
+### Run W-101 r3 (2026-10-05, session 18): a 126-class draw — death in the
+### [126→125] window (early_fixmap_shutdown); the pass ran 3/3; every ring
+### record ends \r\n-complete (see the decode correction below)
+
+Setup: `PAYLOAD_MODE=--l2on ./poll-jump.sh zImage`; #162 pack deployed EXACT
+(/tmp/zImage = 5,223,425, poll [alpha]); nonce bc[15]=0xec85d989 (fresh; the
+handoff fell after the [32s] last live read — 4ec5d968 armed); arm-time
+sanitize watched (ring1 0x4cf→0→1160; bc[16] 0x110→0); placement 0xa2400000
+(NON-flipped; bc[6]=0xe0000000 fresh); sweep 8192/8192 by [13s]; DTB 87,321 ✓.
+LED: blue+5 / magenta+20 / off+40 / red+107 — deltas 15/20/67 (the 9th
+off→red: 68×8 then 67 — the first sub-68; flagged).
+
+Readback: bc[1]=0x7e=126, bc[2]=0x17e, mirror0=0x27e — a clean PB_MMU_BC(126)
+triple; bc[4]/[5]/[6] = 143/144/0xe0000000 (fixup fresh); bc[10]=0xde800000
+(the dma_contiguous_remap's iotable_init md->virtual — the md loop ran);
+bc[13]=0xdfbf7000 (the W-100 "126-signature"); bc[16]=0x110=272 (the pass ran
+— 3/3). SOURCE ORDER (mmu.c paging_init): map_kernel→PB_MMU_BC(127) → shave →
+dma_contiguous_remap() → PB_MMU_BC(126) → early_fixmap_shutdown() →
+PB_MMU_BC(125) ⇒ death ∈ early_fixmap_shutdown = the session-11 front ("the
+first TLB op after the CMA") = the 126-family wedge PROPER. W-94 snapshot ran
+(bc[24]=1 cnt; bc[25]=0xa0000000 m[0].base FRESH; bc[28]=0x1fe00000 m[0].size
+FRESH; sentinels intact; bc[31]=1). Ring count=idx=1160; text ends COMPLETE:
+"...pfn=a0000\r\n" — no BUG/WARN. ring2=1160/1160 (agrees). ring3
+count/idx=24201/1144 — MODEL: count3 = 23041 + count1 EXACTLY (3/3: 23832 vs
+791, 24272 vs 1231, 24201 vs 1160); base 23041 parked (dual-writer page).
+
+### SESSION-18 DECODE CORRECTION (2026-10-05): the CR→LF "micro-signature"
+### = A RING-DECODER OFF-BY-ONE — DISSOLVED. Restated death windows for
+### W-101 r2, W-101 r1 and W-99 r1 (the earlier entries stand as written;
+### this note corrects them).
+
+ring_put (omap4bc.S) PRE-increments the wrapping index: char k lands at
+base+0x100+k ⇒ the text starts at +0x101, NOT +0x100. The session-17 decoder
+used raw[0x78:] (one byte too low): it prepended a residue byte and DROPPED
+THE TRUE LAST CHAR of every ring. With raw[0x79:], every record ends
+\r\n-complete — W-101 r1, r2, r3 AND W-99 r1 ("...in user region\r\n").
+THE CR→LF MICRO-SIGNATURE is RETIRED — it was the missed char, not a death
+window. Corrections:
+- W-101 r2: died INSIDE the iotable_init called by dma_contiguous_remap
+  (dma-mapping.c:393 → mmu.c:1042-1116), at/within the first svm store
+  (p[0]=0 after marker 167; the 0x567 "store 1" never wrote; bc[13]=svm_pa=
+  0xbfbfffd4; bc[10]=0xc0de0002 = the last early_write, md loop not yet run;
+  bc[2]/mirror=0x17f/0x27f = 127 because PB_MMU_BC(126) had not run) — the
+  W-35/36/37 svm-store class.
+- W-101 r1: death AFTER the complete PB-ADJ#1 record (adjust_lowmem_bounds
+  #1, setup.c:1275), before arm_memblock_init's PB-MEM print; window
+  [133→134] stands as recorded.
+- W-99 r1: "death mid-printk" = the same artifact; the BUG line completed,
+  the death followed it.
+- r2↔r3 ring diff exact: r2 = r3 + 71 chars = the flipped draw's FDT-trim
+  warning line ("OF: fdt: Ignoring memory range 0xa0000000 - 0xa8000000")
+  plus its "[    0.000000] " prefix; all else equal (4 same-length value
+  substitutions: PB-MEM m[0], PB-RES r[0], PB-CMA va).
+Decoder fixed: ~/agent-runs/w101-artifacts/decode_readbacks_generic.py
+(raw[0x79:]). Future decodes: sanity-check the FIRST fresh char = "[" (the
+banner) and the LAST = "\n" against the count.
+
 
