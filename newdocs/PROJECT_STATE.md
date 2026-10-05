@@ -9,18 +9,42 @@ with dated headers.
 
 ## Where the boot stands
 
-**SESSION-14 (2026-10-04, the first runs after the workstation migration):
-W-96 = the 3-run determinism series on kernel #159 (the packed artifact,
-UNCHANGED — sha256-verified before the runs) with PAYLOAD_MODE=--l2on.
-RESULTS: run 1 (COLD machine — 3 weeks unpowered, DRAM decayed to AA-rot,
-no valid L2 fossils) = 142 + 0x3E7 + ring 0 = THE W-84 TRIAD exactly;
-run 2 (warm) = 126 with the FULL RING (1165 chars: banner → PB-ADJ/MEM/RES
-→ CMA → PB-CMA → stop, the log ends exactly where 126 says); run 3 (warm)
-= 156 (the W-93 front reproduced; bc[2]/mirror = 127 |1|2 via the 156
-writer's pair-less shape — rule 17 archaeology, see docs/03 W-96).
-⇒ COLD = the triad; WARM = consistently ≥126 but the depth draws
-(126/156 observed) — the sweep machinery = a consistent floor-lifter on
-warm machines, the wound lottery persists between 126 and 156.**
+**SESSION-14 (2026-10-04/05, the post-migration session): W-96 (the
+determinism series) → W-97/W-98 (the LIVE-poller era: kexec/poll-jump.sh,
+host-side 3 s telemetry during the payload window). THE HEADLINE
+(W-98 r1): THE BOOT REACHED THE INITCALL ERA — bc[1]=185 (the W-94
+record front, reproduced) with THE INITCALL BREADCRUMBS DECODED:
+bc[6]=2 = the initcall LEVEL (postcore), bc[7]=0xc0e0719c =
+`atomic_pool_init` (System.map-verified) = THE DEATH HERO (the DMA
+atomic-pool initializer — the fn RUNNING at death), bc[2]=0xBEEF = the
+per-initcall WDT2 kick nonce (main.c:1629-1642 — the ladder mechanism
+itself, now documented). ~10 walls past the CMA in one boot from a
+COLD machine 3 weeks prior: fixmap → CMA → devicemaps → vmalloc/iotable
+→ svm → map_lowmem → kmem_cache_create → taskstats → earlycon → core
+initcalls → POSTCORE → atomic_pool_init.**
+
+**The warm-band front distribution (7 warm runs, kernel #159-class
+bytes, all --l2on): 126 (×2) / 153 / 156 (×2) / 185 (×2).** The sweep
+machinery = the floor-lifter (the whole-DRAM sweep = complete 8192/8192
+chunks, 0 timeouts, BY t≤7 s on every flight — ~5-6× the W-91-era
+measure; the 23 s blue→magenta question = SOLVED, the sweep is FAST).
+The W-96 r2 "+0x300" = the SOLE outlier of the r[0]=kern+APP(history)
+law — parked one-run-deep. The WDT2 down-counter read = WLDR (unarmed)
+through the payload era (the counter read = the LOAD register until
+kicked; the live down-count channel = CLOSED pre-jump; the off→red 68 s
+LED question = parked on the bootrom-phase explanation).**
+
+**NEXT (W-99, designed, not built): the RING FLUSH CADENCE = batch-64
+= too coarse in the initcall era (W-98's death-era prints sat in the
+unflushed tail — the console carried nothing past PB-CMA). One
+kernel-side variable: tighten the omap4bc.S batch flush (batch-16 or
+the initcall-era per-initcall flush), rebuild → rule-16 → poller run.
+THE SECOND THREAD: atomic_pool_init's own death analysis (the
+CMA/gen_pool path vs the TLB-op class at this depth) = informed by
+whatever the W-99 console says — the ring speaking through the death =
+the richest evidence class left.**
+
+## Where the boot stands (the session-14 detail, for context)
 
 **OBSERVABILITY: the console ring was ALIVE THROUGH THE CMA for the first
 time in the warm runs (1165 chars, ends at PB-CMA — matching marker 126),

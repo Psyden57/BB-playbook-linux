@@ -85,10 +85,31 @@ so far, ring 1251 chars again).** The 150-166 svm wall = the next bisect
 target, with the ring ALIVE through it (the reads = add ring window to
 the poller set for W-98).
 
-- Full records: docs/03 W-97 r1; the live log + readbacks archived
-  ~/agent-runs/w97-run1-*.
-- The user MISSED recording this run (the session's request stands:
-  video on the NEXT runs).
+- Full records: docs/03 W-97 r1 (+ the W-98 r1 record right before it);
+  the live logs + readbacks archived ~/agent-runs/w97-run1-*,
+  w98-run1-*, w98-live-*.
+- The W-98 r1 LED timeline (user video): blue+5 s, magenta+12 s,
+  off+33 s, red+101 s — the poller's own timestamps agree (the sweep
+  ~6 s, the jump = between the 26-32 s polls).
+
+## SESSION-14 WRAP (the state at handoff)
+
+- The boot's deepest reach: THE INITCALL ERA (W-98 r1 = 185 + the
+  initcall breadcrumbs decoded: bc[6]=level 2 postcore,
+  bc[7]=atomic_pool_init = the death fn; bc[2]=0xBEEF = the per-
+  initcall WDT2 kick nonce — main.c:1629-1642 documented).
+- The front distribution across 7 warm runs: 126/153/156/185 — the
+  lottery = alive but the FLOOR = deep (the sweeps = the floor-lifter,
+  8192/8192 chunks ≤7 s every flight).
+- The +0x40 = dissolved; ATAG-compat = closed; the +0x300 = parked
+  one-run-deep; the WDT2 down-count = closed pre-arm.
+- W-99 = designed: the ring flush CADENCE (one kernel-side variable)
+  so the death era speaks through the console.
+- Skills = playbook-dev-orchestration (+ subagent-delegation ref) +
+  blackberry-playbook-dev-access, both updated with this session's
+  lessons. The task records = ~/agent-runs/TASK-00{1,2}*.
+- 9 device runs this session, all user-gated; pushed through d3e9a45.
+
 
 - **Run 1 (cold machine) = 142 + 0x3E7 + ring 0** — the W-84 triad on a
   no-fossil machine. No run state survived the 3-week power-off (the

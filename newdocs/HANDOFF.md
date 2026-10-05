@@ -44,12 +44,13 @@ original conversation history.
 ## Current handoff state
 
 - Latest session notes: [session-notes/session-14.md](session-notes/session-14.md)
-- Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_15.md` — read it
-  first (it has the read order, the migration's new workstation facts
-  (the qemu VM, the BerryShell-V4 door keeper, the UTS-stamp riddle),
-  the W-96 cold/warm determinism results, and the first task = W-97
-  prep: read the decompressor's ATAG-compat path to explain the +0x40
-  PB-RES pointer delta BEFORE the next instrumented run)
-- Next action: W-97 prep — the head-S ~384-460 ATAG-compat read (no
-  device needed), then the ring-cadence fix or the determinism repeat
+- Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_16.md` — read it
+  first (it has the read order, the post-migration workstation facts,
+  the LIVE-POLLER instrument, the initcall-crumbs decode table, the
+  W-96/97/98 run records' locations, and the first task = W-99: the
+  ring flush CADENCE (one kernel-side variable) so the console speaks
+  through the death era)
+- Next action: W-99 — the omap4bc.S batch-flush tightening (batch-16
+  or the per-initcall flush), rebuild, rule-16, poller run; the
+  atomic_pool_init analysis follows the console's evidence
 - Local-only assets and why: [SETUP.md](SETUP.md) §6
