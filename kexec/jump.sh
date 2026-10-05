@@ -72,5 +72,7 @@ ssh $SSHARGS root@169.254.0.1 "on -C 0 /tmp/memdump3 88000000 0x8" 2>&1
 echo "== mirror2 0x9FE00000 (trap vectors; abort flag @ +0xA0) =="
 ssh $SSHARGS root@169.254.0.1 "on -C 0 /tmp/memdump3 9fe00000 0x8; on -C 0 /tmp/memdump3 9fe000a0 0x4" 2>&1
 
-echo "== ring1 (chars @0x88000100, count @0x88000080) =="
-ssh $SSHARGS root@169.254.0.1 "on -C 0 /tmp/memdump3 88000080 0x20" 2>&1
+echo "== ring1 (count @0x88000080, chars @0x88000100..0xFFF) =="
+# W-99: full ring window (0x80..0x1000 = count/idx + all 3840 chars). The old
+# 0x20 captured the header only; full-ring dumps were manual until now.
+ssh $SSHARGS root@169.254.0.1 "on -C 0 /tmp/memdump3 88000080 0xf80" 2>&1

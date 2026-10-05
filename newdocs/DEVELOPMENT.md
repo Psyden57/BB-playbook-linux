@@ -11,7 +11,9 @@
     TLB-op wedge, see session-11 notes)
  4. watch the LED: blue = payload/kernel start, off = kernel running, red = reset
  5. jump.sh automatically polls the bc ladder and dumps readbacks after reboot
- 6. decode the console ring: ssh root@169.254.0.1 "on -C 0 /tmp/memdump3 88000080 0x4e0"
+ 6. decode the console ring: ssh root@169.254.0.1 "on -C 0 /tmp/memdump3 88000080 0xf80"
+    (W-99: full ring page — count/idx + all 3840 chars; the old 0x4e0 window
+    cut the log at ~1120 chars)
     then decode word-reversed (memdump3 prints words big-endian)
  7. update docs/03 (run log) + the handoff
 ```
