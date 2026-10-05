@@ -7,11 +7,23 @@ print fired its designed discriminator: va = base − 0x81810000 EXACTLY
 then hit create_mapping's user-region refusal ("BUG: not creating
 mapping ... in user region", captured in-ring) and the death followed
 mid-printk (the BUG line's '\n' was never written; ring count 1246).
-NEW OPEN LEAD: which inline __va site the pv-table walk missed (the
-W-24 block covers the two pv VARIABLES, not every site; the pv-table
-audit is the next offline task). The historical headers below stand for
-context; the authoritative current state = newdocs/PROJECT_STATE.md +
-docs/03 W-99 r1.
+**AUDIT RESULT (TASK-004, done the same session): mechanism (a)
+identified — a STALE (L2) cache line serves the C-world instruction
+fetch of a .text pv stub, so the site executes placeholder math while
+the separately-cleaned variables read correct.** Evidence: 136 stub
+sites / 272 instructions enumerated (all of S1/S2/S3/I1 present; no
+coverage gap); the inline fixup's patch loop has ZERO cache maintenance
+(head.S:373-393 — the W-77 removal rested on a since-reverted C=0);
+the W-32c block covers only the two variable lines (0xc0f09540-9f);
+CROSS-DRAW: W-96 r2's same-function site read va=0xde800000 (patched)
+vs W-99 r1's 0x3cff0000 (placeholder) — draw-dependent = cache-state,
+not build. **W-100 CANDIDATES: (i) the one-loop discriminator — extend
+the W-32c block with an NS INVALIDATE-ONLY (0x770!) pass over the pv
+sites' lines (the CLEAN variant would poison DRAM — W-90a lesson);
+(ii) the robust cure — per-site inv inside the fixup (MMU-off, PL310
+PA, the omap4bc-proven pattern).** The historical headers below stand
+for context; the authoritative current state = newdocs/PROJECT_STATE.md
++ docs/03 W-99 r1 + the task record ~/agent-runs/TASK-004-*.
 
 **SESSION-12 HEADER (2026-09-12): the fronts below are STALE — read
 SESSION-HANDOFF/BOOTSTRAP_SESSION_13.md first.** The current state = the

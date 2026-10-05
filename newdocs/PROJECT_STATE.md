@@ -26,11 +26,15 @@ effect this draw). The FULL RING TEXT IS ON RECORD for the first time
 second ~+10 s-over-WDT2 instance; the bootrom-phase delay reproduces).
 Artifacts: kernel #160 pack = 5,224,865 B sha256 b77d1197… (`kexec/
 kernel/zImage`; #159 backup in ~/agent-runs/w95-artifacts, #160 in
-w99-artifacts). Full record: docs/03 W-99 r1. NEXT: more draws (the
-185-path for atomic_pool_init; the 126-flavor determinism repeat); the
-unpatched-pv-site audit (which inline site the walk misses — the W-24
-block covers the two pv variables only); the CPU1 release stays the
-strategic cure front.**
+w99-artifacts). Full record: docs/03 W-99 r1. **TASK-004 audit FOLLOWED
+(same session): the unpatched-pv mechanism = a STALE L2 line serving
+the .text stub's instruction fetch (HIGH/MEDIUM; 136 sites enumerated,
+zero cache ops in the fixup, variables-only W-32c coverage, and the
+cross-draw proof: W-96 r2 va=0xde800000 vs W-99 r1 va=0x3cff0000 on
+the same function). W-100 candidates: the inv-only (0x770) discriminator
+loop / the per-site inv in the fixup itself.** NEXT: W-100 build + run;
+more draws (the 185-path for atomic_pool_init; the 126-flavor
+determinism repeat); the CPU1 release stays the strategic cure front.**
 
 **SESSION-14 (2026-10-04/05, the post-migration session): W-96 (the
 determinism series) → W-97/W-98 (the LIVE-poller era: kexec/poll-jump.sh,

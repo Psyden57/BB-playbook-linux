@@ -72,11 +72,26 @@ audit of the W-99 edit) — DeepSeek 4.1 flash, high effort, 7 min, exit 0.
 
 ## OPEN / NEXT
 
-1. The unpatched-pv-site audit (OFFLINE, read-only): which inline __va
-   site the pv-table walk misses (W-24 covers the two variables only).
-   Candidate = a subagent task.
-2. More draws: the 185-path (atomic_pool_init evidence) + 126-repeat
-   determinism; the cadence's effect = still untested-for-effect (needs a
-   draw where an in-flight printk tail is the margin — or accept it as
-   insurance and move on).
-3. The CPU1 release = the strategic cure front (unchanged).
+1. The unpatched-pv-site audit: DONE same-session (TASK-004; report +
+   root review in ~/agent-runs/TASK-004-*). Mechanism (a) = a stale (L2)
+   line serves the C-world fetch of a .text pv stub (HIGH/MEDIUM):
+   - 136 sites / 272 instructions enumerated; no coverage gap (S1/S2/S3/
+     I1 all in __pv_table; S1 = the observed dma-mapping.c:287 site).
+   - The inline fixup's patch loop (head.S:373-393) = ZERO cache ops
+     (W-77's removal rested on a since-reverted C=0; the C world is
+     cached).
+   - The W-32c block covers only the two pv-variable lines; no stub line
+     is ever cleaned/invalidated.
+   - CROSS-DRAW PROOF (root): W-96 r2 va=0xde800000 (patched) vs W-99 r1
+     va=0x3cff0000 (placeholder), same function/era ⇒ draw-dependent.
+   - §6 FIXED by the root: the discriminator must be INV-ONLY (0x770),
+     never CIPA (clean would poison pre-patch bytes into DRAM).
+2. W-100 candidates (pending user pick):
+   (i) the one-loop discriminator (extend W-32c with an inv-only pass
+       over the pv sites) — a run settles (a);
+   (ii) the robust cure = per-site inv inside the fixup itself (MMU-off,
+       PL310 PA — the omap4bc-proven pattern). ONE kernel-side variable
+       either way.
+3. More draws: the 185-path (atomic_pool_init evidence) + the 126-repeat
+   determinism; the cadence's effect = still untested-for-effect.
+4. The CPU1 release = the strategic cure front (unchanged).
