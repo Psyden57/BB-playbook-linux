@@ -43,14 +43,15 @@ original conversation history.
 
 ## Current handoff state
 
-- Latest session notes: [session-notes/session-14.md](session-notes/session-14.md)
-- Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_16.md` — read it
-  first (it has the read order, the post-migration workstation facts,
-  the LIVE-POLLER instrument, the initcall-crumbs decode table, the
-  W-96/97/98 run records' locations, and the first task = W-99: the
-  ring flush CADENCE (one kernel-side variable) so the console speaks
-  through the death era)
-- Next action: W-99 — the omap4bc.S batch-flush tightening (batch-16
-  or the per-initcall flush), rebuild, rule-16, poller run; the
-  atomic_pool_init analysis follows the console's evidence
+- Latest session notes: [session-notes/session-16.md](session-notes/session-16.md)
+  — W-99 r1: kernel #160 built + flown; front 126; THE LIVE UNPATCHED-PV
+  CATCH (va = base − 0x81810000) + the full-ring readback instrument;
+  the persistence model (windows vs the wider empirical survival)
+- Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_16.md` (session-14's
+  product still; the session-16 boot read it; a BOOTSTRAP_SESSION_17
+  comes at the next wrap)
+- Next action: MORE DRAWS (the 185-path for atomic_pool_init; the 126
+  determinism repeat) + the unpatched-pv-site audit (offline; which
+  inline __va site the pv walk misses — the W-24 block covers the two
+  variables only); full W-99 record in docs/03
 - Local-only assets and why: [SETUP.md](SETUP.md) §6

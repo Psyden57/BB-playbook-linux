@@ -1,5 +1,18 @@
 # Known Issues & Open Problems
 
+**SESSION-16 HEADER (2026-10-05): W-99 r1 CAUGHT THE UNPATCHED-PV SITE
+LIVE (the #4-family class, previously inference-only).** The PB-CMA
+print fired its designed discriminator: va = base − 0x81810000 EXACTLY
+(0xbe800000 → 0x3cff0000) while __pv_offset read correct; the wrong va
+then hit create_mapping's user-region refusal ("BUG: not creating
+mapping ... in user region", captured in-ring) and the death followed
+mid-printk (the BUG line's '\n' was never written; ring count 1246).
+NEW OPEN LEAD: which inline __va site the pv-table walk missed (the
+W-24 block covers the two pv VARIABLES, not every site; the pv-table
+audit is the next offline task). The historical headers below stand for
+context; the authoritative current state = newdocs/PROJECT_STATE.md +
+docs/03 W-99 r1.
+
 **SESSION-12 HEADER (2026-09-12): the fronts below are STALE — read
 SESSION-HANDOFF/BOOTSTRAP_SESSION_13.md first.** The current state = the
 L2-on STALE-VIEW LOTTERY (three boots W-84/88/89 = three death points;

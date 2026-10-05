@@ -9,6 +9,29 @@ with dated headers.
 
 ## Where the boot stands
 
+**SESSION-16 (2026-10-05, W-99 r1 — kernel #160: the omap4bc batch-flush
+cadence 64→16 + window 42 lines; front = 126 warm, ring 1246): ★ THE
+PB-CMA PRINT CAUGHT AN UNPATCHED PV SITE LIVE — va = 0xbe800000 −
+0x81810000 = 0x3cff0000 EXACTLY (the placeholder delta; __pv_offset =
+the correct ffffffff e0000000), the exact discriminator the print was
+built for; the wrong va then fed create_mapping (PA 0xbe800000 @ VA
+0x3cff0000 < TASK_SIZE) → the in-ring "BUG: not creating mapping" line
+→ **death MID-PRINTK (the line's '\n' never written; count stops at the
+'\r')**. THE RING PERSISTENCE = empirically wider than both flush
+windows (text to 1246 = 31 chars past the last batch flush) ⇒ the
+console is NOT the bottleneck — the boot dies before printing more; the
+cadence change remains the in-flight-printk insurance (untested-for-
+effect this draw). The FULL RING TEXT IS ON RECORD for the first time
+(the W-99 jump.sh fix: readback 0x20 → 0xf80). off→red = 69 s (the
+second ~+10 s-over-WDT2 instance; the bootrom-phase delay reproduces).
+Artifacts: kernel #160 pack = 5,224,865 B sha256 b77d1197… (`kexec/
+kernel/zImage`; #159 backup in ~/agent-runs/w95-artifacts, #160 in
+w99-artifacts). Full record: docs/03 W-99 r1. NEXT: more draws (the
+185-path for atomic_pool_init; the 126-flavor determinism repeat); the
+unpatched-pv-site audit (which inline site the walk misses — the W-24
+block covers the two pv variables only); the CPU1 release stays the
+strategic cure front.**
+
 **SESSION-14 (2026-10-04/05, the post-migration session): W-96 (the
 determinism series) → W-97/W-98 (the LIVE-poller era: kexec/poll-jump.sh,
 host-side 3 s telemetry during the payload window). THE HEADLINE

@@ -3554,4 +3554,77 @@ mass in 126-156 = the decision tree's next fork: bisect the 150-166 wall
 with the ring alive = the NEXT instrument = keep this poller + add the
 ring-window read to the poll set).**
 
+### Run W-99 r1 (2026-10-05, session 16): kernel #160 (the omap4bc batch-flush
+### cadence 64->16 + window 36->42 lines) — ★ THE PB-CMA PRINT CAUGHT AN
+### UNPATCHED PV SITE LIVE (va = base − 0x81810000 = the EXACT designed
+### discriminator); the full-ring readback captured the complete death tail
+### (the BUG line with its args, killed mid-printk between CR and LF);
+### front = 126 (warm, with the proper pair)
+
+Setup: `PAYLOAD_MODE=--l2on ./poll-jump.sh zImage`, kernel #160 + unchanged
+payload. Rule 16/artifact chain: deployed `/tmp/zImage` = 5,224,865 B = the
+W-99 pack EXACTLY (live [alpha] ls + the payload's own bc[2]-live read
+0x004fb9a1 = 5,224,865); banner "#159 ... Sun Oct 4 22:21:18 -03 2026 ...
+debian-dev" = the new build date (the UTS counter ≠ the project ledger, the
+known split — the DATE is the identity here); DTB 87,321 ✓.
+
+LED (user video): blue +5 s, magenta +15 s, off +38 s, red +107 s.
+blue→magenta 10 s; magenta→off 23 s; **off→red 69 s = the SECOND ~+69 s
+instance vs the 58.6 s WDT2 window (W-96 r1 = 68 s) — the bootrom-phase
+delay reproduces; the parked question gains its second stable datapoint.**
+Live poller: whole-DRAM sweep 8192/8192 complete by +13 s (bc[29]=0x2000,
+0 timeouts); placement 0xa3000000 (2 MB-aligned, kern_off=0); dark from
++41 s (jump ~+38 s).
+
+Readback (py-decoded): bc[1]=0x7e=126 WITH THE PROPER PAIR (bc[2]=0x17e,
+mirror0+4=0x27e = 126|0x100 / 126|0x200); nonce bc[15]=0xedc4bf77 FRESH;
+bc[10..12]=C0DE0002/0010/0020 (fresh, the W-98 class); bc[13]=0xbfbfffd4
+(the svm-pte pointer class — new value); bc[14]=0xff8ee488 (= the r[0] low
+bits). bc[6]/bc[7] = e0000000/410000c4 = stale canaries (the deep slots =
+residue — the decoder rule holds).
+
+**Ring1 = count=index=1246 — and THE FULL TEXT IS ON RECORD (the new 0xf80
+readback = the W-99 instrument fix): banner → PB-ADJ → PB-MEM → PB-RES
+r[0]=a34ee488+15519 → cma 16 MiB @ 0xbe800000 → PB-ADJ (bfe00000) →
+PB-CMA: cma[0] base=0xbe800000 size=0x01000000 va=3cff0000
+pv_off=ffffffffe0000000 pfn=a0000 → BUG: not creating mapping for
+0xbe800000 at 0x3cff0000 in user region [+ '\r' only] — END at 1246.**
+
+**THE DISCRIMINATOR FIRED (python, rule 13): 0xbe800000 − 0x81810000 =
+0x3cff0000 EXACTLY** = an UNPATCHED pv site (the placeholder delta
+__PV_BITS_31_24+__PV_BITS_23_16) — the exact signature the PB-CMA print's
+comment predicted ("va == base − 0x81810000 = an UNPATCHED pv stub while
+__pv_offset reads correct" — and __pv_offset printed ffffffff e0000000 =
+the correct runtime value). FIRST live catch of the class (prior sightings:
+session-6's remap-base anomaly + the W-4-era placeholder inference — this
+is direct). The wrong va then fed create_mapping (PA 0xbe800000 @ VA
+0x3cff0000 < TASK_SIZE) → refused with the BUG line → **the death arrived
+MID-PRINTK: the line's '\n' was never written (count stops at the '\r')** —
+the tightest death localization yet (between two chars of one console
+write).
+
+Death-class reading: W-96 r2 (126, NO BUG line) vs W-99 r1 (126 + BUG):
+the 126 front = a REGION (the dma_contiguous_remap aftermath + its next
+global op — the wedge family), and the unpatched-pv site = a DRAW-DEPENDENT
+OVERLAY (present this draw, absent from W-96 r2's visible text). The
+129-slot placement / stale-view luck determines which draws carry it.
+
+Persistence note (W-99 analysis, now twice-observed): the DRAM text
+survives PAST BOTH flush windows — the last pb_flush_rings (SMC, [0x80,
+0x580) = chars ≤ 1151) and the last batch flush (16-multiples; at count
+1232 = [0x80, 0x5C0) = chars ≤ 1215): this run's text runs to 1246 = 31
+chars beyond (W-96 r2: 14 beyond). ⇒ the ring persistence is empirically
+WIDER than the formal windows (leading mechanisms: L2 dirty-line survival
++ QNX-boot-side eviction writeback / possible monitor range-op semantics);
+the console is NOT the bottleneck — the boot dies before printing more.
+The batch-cadence change = NOT decisively tested by this draw (the death
+landed mid-printk; both cadences would lose the same tail class) — it
+remains the in-flight-printk insurance.
+
+NEXT: the 126-draw re-test (determinism of this flavor vs the 185 draws);
+the unpatched-pv-site follow-up (which site the walk missed — the W-24
+block covers the two pv VARIABLES, not every inline site — a candidate
+listing via the pv-table audit); more draws for the atomic_pool_init
+(185-class) evidence path.
+
 
