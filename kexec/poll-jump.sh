@@ -36,7 +36,7 @@ KIMG=${1:-zImage}
 SSHARGS="-o StrictHostKeyChecking=no -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa -o MACs=+hmac-sha1 -o ConnectTimeout=6 -i ../rsa"
 R="root@169.254.0.1"
 T0=$(date +%s)
-LIVELOG="${LIVELOG:-/home/psyden/agent-runs/w97-live-$(date +%Y%m%d-%H%M%S).log}"
+LIVELOG="${LIVELOG:-/home/psyden/agent-runs/live-$(date +%Y%m%d-%H%M%S).log}"
 
 echo "== poll-jump: live log = $LIVELOG"
 echo "== launching jump.sh ($KIMG) in the background =="
@@ -54,7 +54,7 @@ while [ $pass -lt 90 ]; do
         echo "[alpha] deployed-file sizes captured (pass 1)" | tee -a "$LIVELOG"
     fi
     cur=$(timeout 8 ssh $SSHARGS $R \
-        "on -C 0 /tmp/memdump3 90000000 0x80; on -C 0 /tmp/memdump3 4a31402c 4" \
+        "on -C 0 /tmp/memdump3 90000000 0x80; on -C 0 /tmp/memdump3 4a31402c 4; on -C 0 /tmp/memdump3 88000080 0x140" \
         2>/dev/null | tr '\n' ' ')
     if [ -z "$cur" ]; then
         dark=$((dark+1))
