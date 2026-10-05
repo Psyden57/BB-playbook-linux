@@ -2337,9 +2337,10 @@
 +&mmc5 {
 +	status = "disabled";
 +};
+
 --- /dev/null
 +++ b/arch/arm/include/debug/omap4bc.S
-@@ -0,0 +1,144 @@
+@@ -0,0 +1,150 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +/*
 + * omap4bc.S — DEBUG_LL for the BlackBerry PlayBook (OMAP4430 "winchester").
@@ -2348,14 +2349,14 @@
 + * DEBUG_LL output would be invisible.  Every character is therefore written
 + * to UART3 (0x48020000, as usual) AND mirrored into THREE ring buffers in
 + * DRAM.  Per ring (base page): u32 monotonic count at +0x80, u32 wrapping
-+ * index at +0x84, 1024 chars at +0x100..+0x4FF.  Rings (scatter-proven
-+ * survivor pages — kexec/scatter.c, SESSION-HANDOFF ROUND 5):
++ * index at +0x84, 3840 chars at +0x100..+0xFFF (index wraps at 0xF00).  Rings
++ * (scatter-proven survivor pages — kexec/scatter.c, SESSION-HANDOFF ROUND 5):
 + *
 + *	0x88000000 / 0x90000000 / 0x94000000
 + *
-+ * The pages survive the WDT2 warm reset (and are no-map reserved in the DTS
-+ * so the kernel will not allocate over them).  They are read back from the
-+ * QNX side with memdump3 after the reboot.
++ * The pages survive the WDT2 warm reset (and are reserved in the DTS, kept
++ * in the linear map, so the kernel will not allocate over them).  They are
++ * read back from the QNX side with memdump3 after the reboot.
 + *
 + * L2 (PL310) flush: with MMU on the ring VAs are cached-normal; DCCMVAC only
 + * pushes L1->L2, and the ring lines are HOT (re-dirtied every char) so they
@@ -2451,12 +2452,18 @@
 +		@ flushes, the ring had nothing). The W-77 de-CIPA stays for the
 +		@ L2-OFF state (the dead line-ops into the disabled L2C = the
 +		@ W-77 poison class), so GUARD on the PL310 CTRL bit0: flush only
-+		@ when the L2 is enabled. Every 64 chars: clean+inv ring1's page
-+		@ window by PA (NS 0x7F0, the l2canary-proven op) + one bounded
-+		@ 0x730 sync (rule 10). ~40 device ops / 64 chars = inside the
-+		@ cliff. Clobbers r1/r2/r5 (pushed); r3 (UART base) untouched.
++		@ when the L2 is enabled. W-99 (session 16): cadence tightened
++		@ 64 -> 16 chars so an in-flight (never-completed) printk's tail
++		@ loses <=15 chars to the reset instead of <=63; window widened
++		@ 36 -> 42 lines = [0x80, 0x5C0) to cover the observed tail
++		@ (count 1165 ends 0x58D) + the 0x4e0 readback window. 42 device
++		@ ops / 16 chars, in bursts = inside the 4-5k cliff (rule 9);
++		@ one bounded 0x730 sync per flush (rule 10). The per-console-
++		@ write SMC flush (pb_flush_rings, [0x80,0x580)) remains the
++		@ primary persistence path; this batch = the in-flight insurance.
++		@ Clobbers r1/r2/r5 (pushed); r3 (UART base) untouched.
 +		ldr	r5, [r1]		@ ring1 monotonic count (fresh)
-+		tst	r5, #63			@ flush on every 64th char
++		tst	r5, #15			@ flush on every 16th char
 +		bne	95f
 +		cmp	r4, #1			@ MMU on?
 +		ldreq	r5, =0xFEB42000		@ PL310 via the static VA
@@ -2465,7 +2472,7 @@
 +		tst	r2, #1			@ the L2 enabled?
 +		beq	95f			@ no -> device stores = DRAM truth
 +		ldr	r1, =0x88000080		@ ring1 PA: count/index + chars
-+		mov	r2, #36			@ lines 0x80..0x4FF (0x480 bytes)
++		mov	r2, #42			@ lines 0x80..0x5BF (0x540 bytes)
 +91:		str	r1, [r5, #0x7F0]	@ clean+inv line by PA
 +		add	r1, r1, #32
 +		subs	r2, r2, #1

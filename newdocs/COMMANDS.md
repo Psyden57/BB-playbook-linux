@@ -130,6 +130,10 @@ for f in arch/arm/boot/dts/ti/omap/omap4-winchester.dts \
   echo >> $OUT
 done
 cp linux/.config /home/psyden/playbook-dev/kernel-patches/winchester.config
+# keep the snapshot diff-stable: strip the tab+timestamp that plain `diff -u`
+# appends to the ---/+++ header lines (mtimes = noise; without this every
+# regen churns ~30 header lines):
+sed -i -E 's/^(--- |\+\+\+ )(.+)\t[0-9]{4}-[0-9]{2}-[0-9]{2} .*/\1\2/' $OUT
 # then: git add kernel-patches && git commit && git push
 ```
 
