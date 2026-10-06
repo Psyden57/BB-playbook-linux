@@ -9,6 +9,33 @@ with dated headers.
 
 ## Where the boot stands
 
+**SESSION-20 (2026-10-06, wrapped):** the W-104 arc end-to-end. THE REDESIGN
+(~/agent-runs/W-104-design.md): the reset-safe neutralization = the W-103
+instrument + a PRE-KERNEL RESTORE — the continuation (stub3.S cont_start,
+IRAM 0x40308000) restores CPU1_WAKEUP_NS_PA_ADDR = 0x4A326B00 iff params[4]
+(0x40309810) equals it (armed ONLY by --sarrep; normal --l2on runs skip —
+reset-safe). Relay-reviewed (session-19 GO + folds) + TASK-013 preflight
+(ACCEPTED; GO-WITH-FIXES) + BUILD #165 (29,108 B sha 08fc7bbf; the link
+carries a ~6-byte build-varying stamp — rule-16 via size + disasm + byte
+patterns). **★ F1 (flown 23:09:07Z, PAYLOAD_MODE=--sarrep): CLEAN RECOVERY —
+the W-103 r1 stall did NOT reproduce with the restore in place (the
+single-variable delta; restore-before-reset VALIDATED at N=1).** The run: a
+FLIPPED-bucket draw (aac00000; 3rd flipped ever) + the fixup instrument
+PASSED again (bc[16]=272 + bc[17]=2; 2nd healthy) + a 126-family wedge death
+(3rd instance; trio 126/0x17e/0x27e; inside early_fixmap_shutdown) with a
+NEW CMA-reserve-failure sub-shape (empty dma_mmu_remap; console 1181 chars
+ending at PB-ADJ#2 — no PB-CMA record; r2's = 1317). Timeline: reboot-wait
+163 s; total 4 m 07 s; off→red 68 s (the band's 13th); host USB chain
+normal; no button. Post-run: A08 = 0x4a326b00 (restore-default no-op); **the
+park blob SURVIVED at 40309A00** (e320f002/eafffffd — contra r1's
+post-button "cleared" reading; the WDT cycle does not clear IRAM); PRM_RSTST
+= 0x4A307B04 NS-READABLE (first read; PRE=POST=0 → inconclusive — the boot
+consumes the sticky bits; USB/LED stays primary); A0C stable (8a852251);
+ring3 model 7/7. The USB calibration (user): normal cycles produce host USB
+events (bootloader/RNDIS/devmode) — r1's "no reset completed" is calibrated.
+Record: ~/agent-runs/w104-run1-record.md. PENDING: the relay cross-check of
+the F1 verdict (→ the F2/F3 ladder decision).
+
 **SESSION-19 (2026-10-05/06, wrapped):** TASK-008 CLOSED the 0x3E7
 thread — the writer = kexec/probe.S:157 (the probe's long-loop pass
 counter; terminal 999; a DESIGNED benign breadcrumb; visible iff the

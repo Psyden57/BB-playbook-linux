@@ -1,5 +1,16 @@
 # Known Issues & Open Problems
 
+**SESSION-20 HEADER (2026-10-06): READ BOOTSTRAP_SESSION_21 FIRST.**
+W-104 (the reset-safe neutralization: transient diversion + the cont
+pre-kernel restore; build #165) is BUILT + FLOWN: **F1 = CLEAN RECOVERY —
+the W-103 r1 reset-cycle stall did NOT reproduce with the restore in place
+(restore-before-reset validated at N=1)**. The run = a flipped-bucket
+126-family draw (3rd instance) with a NEW CMA-reserve-failure sub-shape; the
+fixup instrument passed again (272/2); the park blob SURVIVED the cycle
+(40309A00 — the WDT cycle does not clear IRAM); PRM_RSTST (0x4A307B04) is
+NS-readable (0→0 inconclusive — the boot consumes the bits; USB/LED remains
+the primary reset discriminator). The historical headers below stand.
+
 **SESSION-19 HEADER (2026-10-06): READ BOOTSTRAP_SESSION_20 FIRST.**
 Resolved: the 0x3E7 writer (probe.S:157 — benign; the item below carries
 the dated update). New state: W-102 r2 = the fixup region PASSED

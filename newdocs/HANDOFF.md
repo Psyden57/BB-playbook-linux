@@ -43,18 +43,19 @@ original conversation history.
 
 ## Current handoff state
 
-- Latest session notes: [session-notes/session-19.md](session-notes/session-19.md)
-  — the context overhaul + 0x3E7 CLOSED (probe.S:157) + W-102 r2 (the
-  fixup region PASSED; a flipped 126-family death) + the latency-model
-  correction + the SAR chain (TASK-010/011/012 + the live probe) + W-103
-  (built + r1: THE RESET-CYCLE STALL finding) + the wrap
-- **Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_20.md` — READ IT
-  FIRST** (the tightened read order, the session-19 state, the gated
-  payload, the SAR/reset rules, the decision queue, and the user's note:
-  **you can ask the previous sessions' agents questions** — the user
-  relays them)
-- Next action: the route-(a) stage-1 redesign (the reset-valid wake
-  problem; NO A08-touching flight before design + relay review); draws
-  r3+ are safe again (the payload gate); the 126-family wedge + the CPU1
-  release (the strategic fronts) unchanged
+- Latest session notes: [session-notes/session-20.md](session-notes/session-20.md)
+  — the W-104 redesign (the reset-safe neutralization: transient diversion
+  + the cont pre-kernel restore) + TASK-013 preflight + build #165 + ★ F1:
+  CLEAN RECOVERY — the W-103 r1 stall did NOT reproduce with the restore in
+  place (restore-before-reset validated at N=1) + the wrap
+- **Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_21.md` — READ IT
+  FIRST** (the tightened read order, the session-20 state, the W-104
+  instrument + the F1 records, the pending relay cross-check, the F2/F3
+  ladder queue, and the user's note: **you can ask the previous sessions'
+  agents questions** — the user relays them)
+- Next action: the relay cross-check of the F1 verdict → then the F2/F3
+  ladder decision (the release flight done reset-safely — see the design
+  §8); an F1-repeat for N=2 is optional/cheap; draws r3+ remain available
+  (--l2on is reset-safe); the 126-family (with the new CMA-failure
+  sub-shape) + the strategic fronts unchanged
 - Local-only assets and why: [SETUP.md](SETUP.md) §6

@@ -4071,4 +4071,33 @@ start/end (this session's commit) so future logs self-table the phases;
 the keeper log's "Connection lost → Authenticated" pairs give every run's
 network-back moment.
 
+### Run W-104 r1 (F1) (2026-10-06, session 20): ★ THE RESTORE-BEFORE-RESET
+### FLIGHT — CLEAN RECOVERY (the W-103 r1 reset-cycle stall did NOT
+### reproduce); a CMA-failure-sub-shape flipped 126-family draw
+
+Setup: `PAYLOAD_MODE=--sarrep ./poll-jump.sh zImage` (fired 23:09:07Z,
+wrapper exit 23:13:14Z; total 4 m 07 s). The W-104 payload (#165; 29,108 B)
+= the W-103 instrument + the cont pre-kernel restore (A08 = 0x4A326B00 iff
+params[4] armed). The block verified LIVE at [26s] (bc[11]=0x5A52A108 +
+bc[2]=zlen + bc[1]=0x31/49); jump ≈ +29 s (LED off 00:29). The kernel ran
+to the C world (bc[11]=0xc0de0010 / bc[12]=0xc0de0020) and died at
+bc[1]=126 + bc[2]=0x17e + mirror 0x27e (the 126-family wedge PROPER, 3rd
+instance) inside early_fixmap_shutdown (mmu.c:2060) — a FLIPPED-bucket draw
+(bc[18]=aac00000; bc[6]=e8000000; kernel base 0xa8000000) with a NEW
+sub-shape: the CMA reserve FAILED ("Not enough slots"/"Failed to reserve
+16 MiB") ⇒ the dma_mmu_remap list stayed empty ⇒ silent
+dma_contiguous_remap (no PB-CMA record; console 1181 chars ending at
+PB-ADJ#2; r2's = 1317). The fixup instrument PASSED again (bc[16]=272 +
+bc[17]=2; 2nd healthy; fresh vs the pre-run frame). **THE WDT RESET FIRED
+AND COMPLETED: reboot-wait 163 s; off→red = 68 s (the band's 13th); host
+USB chain normal; NO power-button.** Post-run: A08 = 0x4a326b00
+(restore-default no-op); **the park blob SURVIVED at 40309A00
+(e320f002/eafffffd)** — contra r1's post-button "cleared" read; PRM_RSTST
+(0x4A307B04) NS-READABLE (first read; PRE=POST=0 → inconclusive — the boot
+consumes the sticky bits); A0C stable (8a852251); ring3 model 7/7 (0x5E9E =
+0x5A01+0x49D); both ring ends verified. **READ: with the single-variable
+cont-restore in place, the r1 stall did not reproduce — restore-before-reset
+VALIDATED at N=1 (the per-draw lottery caveat documented).** Record:
+~/agent-runs/w104-run1-record.md.
+
 
