@@ -53,9 +53,10 @@ cont_start:                                 @ PC == PA from here on
         mov     r0, #212
         str     r0, [r11, #4]               @ bc = 212: sp set
         dsb                                 @ head.S error paths + DEBUG_LL
-        @ (NOTE: no literals in the cont — the memcpy copies [cont_start,
-        @ cont_end) only, so an =literal pool after cont_end is never copied
-        @ and the ldr would read leftover IRAM junk. Bit us once.)
+        @ (NOTE: literals are only SAFE INSIDE [cont_start, cont_end) — the
+        @ memcpy copies that range only, so a pool after cont_end is never
+        @ copied and the ldr would read leftover IRAM junk. Bit us once.
+        @ The W-104 insert below follows this: its pool rides the .ltorg.)
         dsb
         mov     r0, #213
         str     r0, [r11, #4]               @ bc = 213: pre-TLBIALL
@@ -76,6 +77,22 @@ cont_start:                                 @ PC == PA from here on
         @ identical call with MMU on returns fine, 2 runs). The L2 disable
         @ lives in enter_stub (qnx2linux.c) — MMU on, last cached-context
         @ act before blx into the trampoline.
+        @ --- W-104 (session 20): the pre-kernel RESTORE (restore-before-reset).
+        @ If params[4] (0x40309810) == 0x4A326B00 (armed by the payload's
+        @ --sarrep block), restore CPU1_WAKEUP_NS_PA_ADDR = 0x4A326B00 here —
+        @ the restore-before-reset safety net (W-103 r1: a repointed wake path
+        @ at reset time stalls the reset cycle). Any other value (0, residue)
+        @ skips: normal runs never touch the SAR. MMU is OFF here — plain
+        @ physical stores, same class as the bc=23 store above. No SMC.
+        ldr     r2, =0x40309800
+        ldr     r0, [r2, #0x10]             @ params[4]: the armed restore value
+        ldr     r1, =0x4A326B00             @ the canonical armed value
+        cmp     r0, r1
+        bne     .Lw104_no_restore
+        ldr     r1, =0x4A326A08             @ CPU1_WAKEUP_NS_PA_ADDR
+        str     r0, [r1]
+        dsb
+.Lw104_no_restore:
         mov     r0, #0                      @ ARM Linux boot convention
         mvn     r1, #0                      @ r1 = 0xffffffff
         @ r2 = DTB phys from the params block (0x40309800+4) — the register

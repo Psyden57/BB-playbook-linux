@@ -1138,9 +1138,26 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         if (rb == 0x40309A00u) {
             bc[11] = 0x5A52A108u;   /* repoint verified — LIVE marker only */
             printf("W-103: SAR A08 repointed (readback %08x)\n", rb);
+            /* W-104: arm the pre-kernel restore (the cont restores A08 =
+             * the canonical value iff params[4] equals it). */
+            {
+                volatile uint32_t *par4 = (volatile uint32_t *)(iram + 0x5810);
+                *par4 = 0x4A326B00u;
+                __asm__ volatile("dsb" ::: "memory");
+                if (*par4 != 0x4A326B00u) {
+                    printf("FAIL: W-104 restore arm (params4=%08x)\n", *par4);
+                    sar[0xA08 / 4] = 0x4A326B00u;   /* abort hygiene: restore */
+                    wdt2_disable(); return 1;
+                }
+                printf("W-104: restore armed (params4=4A326B00)\n");
+            }
         } else {
             bc[11] = 0xBAD00000u | (rb & 0xFFFFFu);      /* the readback */
             printf("FAIL: W-103 repoint readback %08x\n", rb);
+            sar[0xA08 / 4] = 0x4A326B00u;   /* W-104 abort hygiene: the
+                                             * forensic value is in bc[11] +
+                                             * the printf; restore the
+                                             * canonical value (no jump). */
             wdt2_disable(); return 1;    /* no jump; WDT2 disarmed (W-2) */
         }
     }
