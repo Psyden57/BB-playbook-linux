@@ -3979,4 +3979,55 @@ Wrapper latency (user-flagged): measured 5m51s total = device reboot cycle
 wrapper stall; the probes catch SSH within seconds. An optional slim (the
 ring read → the manual battery) noted for a user decision.
 
+### TASK-008 RESOLUTION (2026-10-05, session 19): THE 0x3E7 WRITER = kexec/
+### probe.S:157 (the probe's long-loop pass counter; a benign designed
+### breadcrumb)
+
+The 0x3E7 thread (W-6..W-102 era) is CLOSED. bc[2] = 0x3E7 is written by
+probe.S:157 `str r7,[r4,#8]` — the probe's pass counter, terminal value
+999 = 1000−1 (r7 counts 0..999; cmp #1000 exits). A DESIGNED breadcrumb
+(probe.S:9/:137), visible iff the death precedes the first kernel bc
+pair-write (the old "zImage-correlated" framing = a death-depth artifact;
+C-era deaths show pb_bc pair overwrites). Controls: W-10 (--t3, no probe)
+= bc[2]=0; --l2on deploys probe.bin by default. Ring-scatter and wild-strb
+classes KILLED; the 1000-bounded-counter class confirmed. New instance
+mined: W-96 r1 (w96-run1.log:16). Evidence: ~/agent-runs/TASK-008-3e7-
+writer-audit-report.md (+ the root review in the TASK-008 task file). The
+r4/r1 "STILL unidentified" lines stand as written (append-only file) —
+this note supersedes them.
+
+### Run W-102 r2 (2026-10-05/06, session 19): THE FIXUP REGION PASSES — a
+### flipped-bucket 126-family draw; the W-102 instrument's first healthy
+### reading (bc[17]=2 + bc[16]=272 = the pass COMPLETED)
+
+Setup: `PAYLOAD_MODE=--l2on ./poll-jump.sh zImage` (fired 03:25:04Z,
+wrapper exit 03:29:31Z; fired-command + log path recorded in
+w102-run2-session.log). The #163 pack deployed exact (5,223,233; [alpha]);
+banner "#162"; nonce chain 0xedc5faca (r1 residue) → 0x4ec62cd6 (arm) →
+0xe4762cf3 (final). Placement bc[18]=0xaab00000 ⇒ BUCKET-FLIP
+(bc[6]=0xe8000000; kernel base bc[25]=0xa8000000) — the second flipped
+draw ever; the D13 accept+document case.
+
+Readback: bc[1]=126 + bc[2]=0x17e + mirror 0x27e = the PB_MMU_BC(126) trio
+(mmu.c:2059, "dma_contiguous_remap done"); PB_MMU_BC(125) (mmu.c:2061)
+never ⇒ death INSIDE early_fixmap_shutdown() (mmu.c:2060/1912) = the
+126-family wedge PROPER (2nd instance: W-101 r3 → W-102 r2). bc[17]=2 +
+bc[16]=272 = "the pass COMPLETED (healthy)" — the W-102 instrument's first
+healthy reading; walk-1 AND the W-101 block both completed; the
+fixup-region class did NOT recur and the triad streak broke at 2.
+bc[2]=0x17e (the C-era pair overwrite — the TASK-008 prediction verified
+live; 0x3E7 absent, correct for a C-era death). W-94 snapshot ran
+(bc[24]=1, bc[25]=0xa8000000, bc[28]=0x17e00000, sentinels intact) —
+memblock healthy under the flipped base. ring1=ring2 = 1317 chars (both
+ends verified; text complete through PB-CMA); ring3 = 0x5f26 = 0x5A01 +
+1317 (model now 6/6 exact; idx=0x513 parked). bc[13]=0xd7bf7000 = the
+126-signature under the flipped base (r3's 0xdfbf7000 − 0x08000000).
+
+LED (user video): B+5 / M+21 / O+40 / R+108 — deltas 5/16/19/68; off→red
+= 68 s = the 12th instance of the band (series: 68×8, 67, 68, 69, 68).
+
+Files: ~/agent-runs/w102-run2-{session.log,readbacks-raw.txt,led.txt,
+record.md} + live-20261006-002504.log. Spectrum (W-102): r1 = walk-1
+(triad) / r2 = fixup completed + 126-family (flipped).
+
 

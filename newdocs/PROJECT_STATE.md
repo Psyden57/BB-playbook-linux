@@ -9,6 +9,21 @@ with dated headers.
 
 ## Where the boot stands
 
+**SESSION-19 (in progress, 2026-10-05/06): TASK-008 CLOSED the 0x3E7
+thread — the writer = kexec/probe.S:157 (the probe's long-loop pass
+counter; terminal 999; a DESIGNED benign breadcrumb; visible iff the
+death precedes the first kernel bc pair-write; the old
+"zImage-correlated" framing = a death-depth artifact; report + root
+review in ~/agent-runs/TASK-008-*). W-102 r2 FLOWN: THE FIXUP REGION
+PASSED — the instrument's first healthy reading (bc[17]=2 + bc[16]=272 =
+walk-1 + the W-101 block COMPLETED); a FLIPPED-bucket draw (placement
+0xaab00000; bc[6]=0xe8000000; D13 accept+document) died in the [126→125]
+window = early_fixmap_shutdown = the 126-family wedge PROPER (2nd
+instance: W-101 r3 → W-102 r2). The triad streak broke at 2; bc[2]=0x17e
+(the C-era pair overwrite — TASK-008 semantics verified live). W-94
+snapshot intact under the flipped base; ring1/2 = 1317 chars; ring3 model
+6/6 exact; off→red = 68 s (12th band instance; deltas 5/16/19/68).**
+
 **SESSION-18 (2026-10-05, W-101 r3 + the decode correction): r3 = a
 NON-flipped deep draw (placement 0xa2400000; bc[6]=e0000000, fresh) — death
 in the [126→125] window = early_fixmap_shutdown (bc[1]=126 + bc[2]=0x17e +
