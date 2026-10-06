@@ -15,7 +15,9 @@ STILL unidentified). **W-102 (the fixup-region fine markers, bc[17]) BUILT +
 FLYING: r1 SPLIT the window — bc[17]=0 ⇒ the fixup-region deaths are WALK-1
 deaths, NOT the W-101 block (r4 resolves by equivalence); the triad struck 2
 consecutive draws; 0x3E7 = 4th lifetime instance, writer STILL
-unidentified.** The session-17 header below stands EXCEPT for its
+unidentified — [RESOLVED 2026-10-05 session 19, TASK-008: the writer =
+probe.S:157 (the probe's pass counter — BENIGN; see the 0x3E7 UPDATE note
+at the item)].** The session-17 header below stands EXCEPT for its
 OPEN CLASS 1.**
 
 **SESSION-17 HEADER (2026-10-05): W-101 (the fixup-side per-site pv inv,
@@ -227,6 +229,24 @@ cache-clean/decompress traffic interacting with DRAM), or (b) 0x3E7 is a
 legitimate kernel/payload value for a code path only the zImage reaches.
 bc[2]'s writer remains unidentified. On the next zImage run, dump
 bc[0x80–0x8F] alongside as planned.
+
+**UPDATE 2026-10-05 (session 19, TASK-008): THE 0x3E7 WRITER IS FOUND —
+RESOLVED, and it is BENIGN.** The writer = `kexec/probe.S:157
+str r7,[r4,#8]` (r4 = 0x90000000, loaded at :28) — the probe's long-loop
+pass counter; its terminal stored value is 999 = 1000−1 (r7 counts 0..999;
+`cmp r7,#1000` exits at r7=1000). It fires on every run that deploys
+probe.bin (the --l2on/--probe chains, qnx2linux.c:1685-1690); the W-10
+control (--t3 → NULL probepath, :1704-1706; bc[2]=0) discriminates. It is
+a DESIGNED breadcrumb (probe.S:9/:137 comments say "bc[2]=... pass
+counter"), NOT a wild write: on zImage/pre-C deaths it SURVIVES (head.S
+never writes bc[2]; C-era deaths show pb_bc overwrite values, e.g.
+step|0x100). Classes audited: ring-scatter KILLED (ring_put offsets all ≥0;
+bc[2] = ring2's base − 0x78); wild-strb KILLED (a single 32-bit store);
+the 1000-bounded-counter class = the confirmed mechanism. DO NOT re-test;
+the "dump bc[0x80-0x8F]" instrument above is MOOT for this item. Instance
+list grows: W-96 r1 (w96-run1.log:16) joins W-29/W-35/W-84/W-6-era/W-101
+r4/W-102 r1. Evidence: ~/agent-runs/TASK-008-3e7-writer-audit-report.md
+(+ the root review/verdict appended in TASK-008-3e7-writer-audit.md).**
 
 ### 2. DTB delivery broken on the uncompressed-Image path (parked)
 
