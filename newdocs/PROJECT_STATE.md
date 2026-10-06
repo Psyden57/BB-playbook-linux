@@ -9,7 +9,7 @@ with dated headers.
 
 ## Where the boot stands
 
-**SESSION-19 (in progress, 2026-10-05/06):** TASK-008 CLOSED the 0x3E7
+**SESSION-19 (2026-10-05/06, wrapped):** TASK-008 CLOSED the 0x3E7
 thread — the writer = kexec/probe.S:157 (the probe's long-loop pass
 counter; terminal 999; a DESIGNED benign breadcrumb; visible iff the
 death precedes the first kernel bc pair-write; the old

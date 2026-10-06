@@ -1,5 +1,16 @@
 # Known Issues & Open Problems
 
+**SESSION-19 HEADER (2026-10-06): READ BOOTSTRAP_SESSION_20 FIRST.**
+Resolved: the 0x3E7 writer (probe.S:157 — benign; the item below carries
+the dated update). New state: W-102 r2 = the fixup region PASSED
+(bc[17]=2 + bc[16]=272) before a flipped-bucket 126-family death; W-103
+(the SAR neutralization, payload; ledger #164) r1 = THE FLIGHT + THE
+STALL — **the reset/boot flow CONSUMES CPU1's wake path; a parked-IRAM
+target is not reset-valid** (recovered via the power button; record:
+~/agent-runs/w103-run1-record.md). THE PAYLOAD IS GATED: `--l2on` =
+reset-safe; `--sarrep` = the opt-in re-flight. The historical headers
+below stand for context.
+
 **SESSION-18 HEADER (2026-10-05): the CR→LF death signature (the
 session-17 header's "NEW OPEN CLASS 1") is RETIRED — it was a ring-decoder
 OFF-BY-ONE (ring text starts at +0x101; decoder fixed → raw[0x79:]; see
