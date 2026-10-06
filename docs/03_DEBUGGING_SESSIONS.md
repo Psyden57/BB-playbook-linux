@@ -4030,4 +4030,21 @@ Files: ~/agent-runs/w102-run2-{session.log,readbacks-raw.txt,led.txt,
 record.md} + live-20261006-002504.log. Spectrum (W-102): r1 = walk-1
 (triad) / r2 = fixup completed + 126-family (flipped).
 
+### NOTE (2026-10-06, session 19): THE RUN-LATENCY MODEL CORRECTED — the
+### post-reboot readback is ~8 s (NOT ~1.5 min); the variance = the
+### [WDT-reset → network-back] boot phase
+
+Six runs measured (keeper-log door-back timestamps + the records; python):
+the post-reboot readback = 7–9 s CONSTANT (incl. the 0xF80 ring transfer);
+the wrapper total 4:08–6:27 (r1'=387 s the slow extreme, r4=248 s the
+fast); the variance sits entirely in [WDT reset → network-back] (est.
+131–272 s; QNX boot + USB re-enumeration). The session-18 frame "battery
+readback ~1.5 min, dominated by the 0xF80" AND the derived "slim the
+wrapper" option are RETIRED as measured-wrong — the slim is moot (~1–2 s).
+The polling adds no wall-clock (the dark-detection window is a constant
+~61–68 s, parallel with the reboot). jump.sh now stamps its reboot-wait
+start/end (this session's commit) so future logs self-table the phases;
+the keeper log's "Connection lost → Authenticated" pairs give every run's
+network-back moment.
+
 

@@ -56,11 +56,12 @@ done || true
 echo "== payload console log (if reachable) =="
 timeout 10 ssh $SSHARGS root@169.254.0.1 "cat /tmp/jump.log" 2>&1 || true
 
-echo "== waiting for reboot =="
+echo "== waiting for reboot (t=$(date -u +%FT%TZ)) =="
 for i in $(seq 1 80); do
     timeout 6 ssh $SSHARGS root@169.254.0.1 "echo up" >/dev/null 2>&1 && break
     sleep 3
 done
+echo "== ssh up (reboot-wait done; t=$(date -u +%FT%TZ)) =="
 
 echo "== breadcrumbs =="
 scp $SSHARGS memdump3 root@169.254.0.1:/tmp/ >/dev/null
