@@ -66,8 +66,9 @@ value, never re-ingest what this bootstrap/skill already digest.
   start ONE keeper (never two). The user sometimes UNPLUGS the tablet
   (overnight) — no RNDIS = plug it back first.
 - **Dark-run triage (NEW):** check the USER'S HOST USB events — a real
-  reset produces a USB disconnect/reconnect; a stall produces NONE (the
-  W-103 r1 signature). Recovery from a stall: power-button hold (the
+  reset produces USB events (CALIBRATED 2026-10-06: bootloader re-enum +
+  RNDIS + devmode reconnects on normal cycles); a stall produces NONE
+  (the W-103 r1 signature). Recovery from a stall: power-button hold (the
   W-73-class fallback; battery pull = last resort).
 - **The post-jump window:** link drop → ~4–5 min ARP-dark → "refused"
   seconds (keeper re-handshake) → SSH. A run's wall-clock: deploy ~40 s +
