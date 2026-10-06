@@ -4030,6 +4030,28 @@ Files: ~/agent-runs/w102-run2-{session.log,readbacks-raw.txt,led.txt,
 record.md} + live-20261006-002504.log. Spectrum (W-102): r1 = walk-1
 (triad) / r2 = fixup completed + 126-family (flipped).
 
+### Run W-103 r1 (2026-10-06, session 19): THE SAR NEUTRALIZATION FLIGHT —
+### the write succeeded; the RESET CYCLE STALLED with the repointed wake
+### path (recovered via power button; the reset/boot flow CONSUMES CPU1's
+### wake path — a hard finding)
+
+Fired 21:16:24Z with the W-103 payload (28,759 B; ledger #164 — the park
+blob + the repoint of CPU1_WAKEUP_NS_PA_ADDR from the armed QNX
+trampoline to IRAM 0x40309A00). The polls show the ladder progressing to
+the pre-block step; the jump followed (SSH gone @ t=45s; LED OFF) ⇒ NO
+abort — the block's blob-verify + repoint-readback passed. THEN: NO
+RESET. The device stayed powered (the user's host showed no USB event;
+no RED ever) — reboot-wait dark 21:17:41Z → 21:26:01Z (**8 m 20 s**)
+until the user's power-button hold. Recovery clean: normal boot; A08 =
+0x4a326b00 (armed; the restore-default was a no-op); B00 = the QNX
+trampoline back; IRAM cleared (the blob gone); A0C proved boot-mutable
+(0x8a85a251 → 0x8a852251). The DRAM evidence (bc/rings) was overwritten
+by the fresh boot — r1's record rests on the host logs + SAR deltas
+(~/agent-runs/w103-run1-record.md). **FINDING: the reset/boot flow
+consumes CPU1's wake path; a parked-IRAM landing is not reset-valid —
+route-(a) stage 1 needs a RESET-VALID wake target (kernel-side control),
+not an IRAM park.**
+
 ### NOTE (2026-10-06, session 19): THE RUN-LATENCY MODEL CORRECTED — the
 ### post-reboot readback is ~8 s (NOT ~1.5 min); the variance = the
 ### [WDT-reset → network-back] boot phase

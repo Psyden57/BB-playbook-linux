@@ -9,7 +9,7 @@ with dated headers.
 
 ## Where the boot stands
 
-**SESSION-19 (in progress, 2026-10-05/06): TASK-008 CLOSED the 0x3E7
+**SESSION-19 (in progress, 2026-10-05/06):** TASK-008 CLOSED the 0x3E7
 thread — the writer = kexec/probe.S:157 (the probe's long-loop pass
 counter; terminal 999; a DESIGNED benign breadcrumb; visible iff the
 death precedes the first kernel bc pair-write; the old
@@ -22,7 +22,20 @@ window = early_fixmap_shutdown = the 126-family wedge PROPER (2nd
 instance: W-101 r3 → W-102 r2). The triad streak broke at 2; bc[2]=0x17e
 (the C-era pair overwrite — TASK-008 semantics verified live). W-94
 snapshot intact under the flipped base; ring1/2 = 1317 chars; ring3 model
-6/6 exact; off→red = 68 s (12th band instance; deltas 5/16/19/68).**
+6/6 exact; off→red = 68 s (12th band instance; deltas 5/16/19/68).
+**W-103 r1 (the SAR neutralization flight, session-19's route-(a) stage 0)
+= a MECHANISM RESULT: the payload-side repoint + IRAM park blob (built,
+rule-16'd, ledger #164) RAN and JUMPED (no abort — the block's verifies
+passed), but the post-jump WDT cycle STALLED with the wake path
+repointed: the device stayed powered (host USB: no reset event; no RED)
+for 8 m 20 s (reboot-wait 21:17:41 → 21:26:01Z) until the user's
+power-button hold. Recovery clean — A08 = 0x4a326b00 (armed; restore = a
+no-op), the QNX trampoline back, IRAM cleared (the blob gone), A0C
+boot-mutable. FINDING: THE RESET/BOOT FLOW CONSUMES CPU1's WAKE PATH; a
+parked-IRAM landing is not reset-valid. Route-(a) stage 1's core
+requirement is now: a RESET-VALID wake target / kernel-side control
+(stage 2's shape), plus restore-before-reset discipline. DRAM evidence
+lost to the fresh boot; full record: ~/agent-runs/w103-run1-record.md.**
 
 **SESSION-18 (2026-10-05, W-101 r3 + the decode correction): r3 = a
 NON-flipped deep draw (placement 0xa2400000; bc[6]=e0000000, fresh) — death
