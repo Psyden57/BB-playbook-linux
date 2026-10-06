@@ -43,16 +43,16 @@ original conversation history.
 
 ## Current handoff state
 
-- Latest session notes: [session-notes/session-17.md](session-notes/session-17.md)
-  — W-101 (#162: the fixup-side per-site inv; the armv6k/movw build gotcha;
-  TASK-005/006) + the first two flights (r1 = early CR→LF death; r2 = the
-  first bucket-flip draw, deep) + the wrap
-- **Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_18.md` — READ IT
-  FIRST** (the read order, the session-17 state, the decision queue, and
-  the user's note: **you can ask the previous sessions' agents questions**
-  — the user relays them)
-- Next action: W-101 draws r3+ (the class-vs-dice question; watch the
-  CR→LF tails); the bucket-flip decision (payload guard ≥0xa8000000
-  candidate); the CR→LF signature audit; the 126-family wedge + the CPU1
-  release (the strategic fronts) unchanged
+- Latest session notes: [session-notes/session-18.md](session-notes/session-18.md)
+  — W-101 r3/r4 (the 126-family draw; THE TRIAD) + the DECODE CORRECTION
+  (CR→LF dissolved; raw[0x79:]) + W-102 (the fixup-region fine markers;
+  r1 = the 142-window split — the deaths are WALK-1) + the wrap
+- **Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_19.md` — READ IT
+  FIRST** (the read order, the session-18 state, the W-102 marker
+  semantics, the decision queue, and the user's note: **you can ask the
+  previous sessions' agents questions** — the user relays them)
+- Next action: W-102 draws r2+ (watch bc[17]/bc[16] on every readback;
+  the walk-1 class); the 0x3E7/bc[27] writer audits; the wrapper-slim
+  decision; the 126-family wedge + the CPU1 release (the strategic fronts)
+  unchanged
 - Local-only assets and why: [SETUP.md](SETUP.md) §6

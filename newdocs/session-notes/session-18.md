@@ -1,6 +1,6 @@
 # Session 18 Notes (2026-10-05 — W-101 r3: a 126-class draw + the decode correction)
 
-## THE SESSION'S SHAPE (in progress; the wrap will extend)
+## THE SESSION'S SHAPE (final; see THE WRAP at the end)
 
 Boot from BOOTSTRAP_SESSION_18 (read order done; link verified: door keeper
 alive since 13:36, SSH up; artifact #162 exact, 5,223,425 / 47c175cb; repo
@@ -116,3 +116,25 @@ death windows restated from source order + the ring3.count model.
 4. ring3 base-0x5A01 origin (one armed-window read would settle it).
 5. TASK-005 follow-ups unchanged (early_write breadcrumb; F1 console-lock);
    strategic fronts unchanged (the CPU1 release; the 185-path).
+
+## THE WRAP (final state)
+
+- SESSION-18 = (a) W-101 r3 + r4 flown (126-family draw; THE TRIAD) + the
+  DECODE CORRECTION (CR→LF dissolved — a ring-decoder off-by-one; raw[0x79:];
+  the r1/r2/W-99 windows restated from source order); (b) the bucket-flip
+  decision (DECISIONS D13 — accept + document, no guard); (c) W-102 designed,
+  audited (TASK-007 GO), built (ledger #163; banner #162; pack 5,223,233
+  sha ee303813), rule-16-verified, and flown — r1 = THE 142-WINDOW SPLIT:
+  bc[17]=0 ⇒ the fixup-region deaths (r4, r1) are WALK-1 deaths, the W-101
+  block exonerated; (d) the ring3 base model (0x5A01 + chars; 5 datapoints);
+  (e) the wrapper-latency measurement (device reboot + readback; no stall).
+- Artifacts: ~/agent-runs/w101-run{3,4}-* + w102-run1-* (records/leds/raws/
+  logs), W-102-design.md, TASK-007-* (+report+review), w102-artifacts/
+  (pack chain + pre-build snapshots + the fixup disasm), the fixed generic
+  decoder.
+- Docs: PROJECT_STATE (the SESSION-18 block), KNOWN_ISSUES (the SESSION-18
+  header), docs/03 (the r3/r4/r1 entries + the decode correction),
+  contradictions/cr-lf-signature-dissolved.md, DECISIONS D13.
+- Commits: 06018a9, 778aa8c, 3694e6c, ae3b8d5 + the wrap commit.
+- BOOTSTRAP_SESSION_19 written (incl. the W-102 marker-semantics table);
+  HANDOFF pointers moved. Repo clean at wrap.

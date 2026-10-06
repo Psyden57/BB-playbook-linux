@@ -36,7 +36,8 @@ FIRST SPLIT: bc[17]=0 ⇒ the fixup-region deaths (r4, r1) are WALK-1 deaths —
 the W-101 block is NOT implicated (r4 resolves by equivalence). The triad
 (142+0x3E7+ring0) struck 2 consecutive draws; 0x3E7 = 4th lifetime instance.
 NEXT: W-102 r2+ draws.** The bucket-flip decision = ACCEPT + DOCUMENT
-(DECISIONS D13 — no guard).**
+(DECISIONS D13 — no guard). Session wrapped 2026-10-05 —
+BOOTSTRAP_SESSION_19 = the wrap product.**
 
 **SESSION-17 (2026-10-05, the W-101 build + first flights): THE FIXUP-SIDE
 PV-STUB INV IS IN AND FLYING (ledger #162; UTS banner "#161"; pack =
