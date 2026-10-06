@@ -1105,6 +1105,40 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         bc_write(STEP_STUB);
     }
 
+    /* --- W-103 stage 0 (session 19): THE SAR NEUTRALIZATION ---
+     * Deploy the CPU1 parking blob into IRAM and repoint
+     * CPU1_WAKEUP_NS_PA_ADDR (SAR 0x4A326A08) from QNX's armed
+     * context-restore trampoline (0x4A326B00, verified live) to it.
+     * NO CPU1 release this stage. Coupled writes = ONE instrument
+     * (blob + repoint; they are useless apart); attribution between
+     * them is by design inseparable. NS-writable public SAR bank. */
+    {
+        static const uint32_t sar_park_blob[2] = {
+            0xE320F002u,   /* wfe        */
+            0xEAFFFFFDu,   /* b <wfe>    — re-sleeping loop (WFE idiom;
+                            * sleep-once-then-spin 0xEAFFFFFE rejected) */
+        };
+        volatile uint8_t  *blobp = iram + 0x5A00;        /* PA 0x40309A00 */
+        volatile uint32_t *sar   = mapdev(0x4A326000ull, 0x1000);
+        uint32_t rb;
+        memcpy((void *)blobp, sar_park_blob, sizeof sar_park_blob);
+        if (memcmp((void *)blobp, sar_park_blob, sizeof sar_park_blob)) {
+            printf("FAIL: W-103 blob verify\n"); wdt2_disable(); return 1;
+        }
+        printf("W-103: park blob at 40309A00 (wfe; b wfe)\n");
+        sar[0xA08 / 4] = 0x40309A00u;                    /* the repoint */
+        __asm__ volatile("dsb" ::: "memory");
+        rb = sar[0xA08 / 4];                             /* read the actual slot */
+        if (rb == 0x40309A00u) {
+            bc[11] = 0x5A52A108u;   /* repoint verified — LIVE marker only */
+            printf("W-103: SAR A08 repointed (readback %08x)\n", rb);
+        } else {
+            bc[11] = 0xBAD00000u | (rb & 0xFFFFFu);      /* the readback */
+            printf("FAIL: W-103 repoint readback %08x\n", rb);
+            wdt2_disable(); return 1;    /* no jump; WDT2 disarmed (W-2) */
+        }
+    }
+
     bc_write(39);
     bc[3] = (uint32_t)phys;
     bc[15] = (uint32_t)time(NULL) ^ (uint32_t)phys;   /* run nonce (phys varies per run) */
