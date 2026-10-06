@@ -4037,10 +4037,12 @@ record.md} + live-20261006-002504.log. Spectrum (W-102): r1 = walk-1
 
 Fired 21:16:24Z with the W-103 payload (28,759 B; ledger #164 — the park
 blob + the repoint of CPU1_WAKEUP_NS_PA_ADDR from the armed QNX
-trampoline to IRAM 0x40309A00). The polls show the ladder progressing to
-the pre-block step; the jump followed (SSH gone @ t=45s; LED OFF) ⇒ NO
-abort — the block's blob-verify + repoint-readback passed. THEN: NO
-RESET. The device stayed powered (the user's host showed no USB event;
+trampoline to IRAM 0x40309A00). **The [38s] live frame directly carries
+bc[11]=0x5A52A108 (the repoint verified live; with the final nonce
+ec572810)** and the jump followed (SSH gone @ t=45s; LED OFF) ⇒ NO
+abort — the block's blob-verify + repoint-readback passed (directly
+observed). THEN: NO RESET. The device stayed powered (the user's host
+showed no USB event;
 no RED ever) — reboot-wait dark 21:17:41Z → 21:26:01Z (**8 m 20 s**)
 until the user's power-button hold. Recovery clean: normal boot; A08 =
 0x4a326b00 (armed; the restore-default was a no-op); B00 = the QNX
