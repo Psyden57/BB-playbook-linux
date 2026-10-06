@@ -89,8 +89,8 @@ reset-valid wake target / kernel-side control.
 
 - **The payload is GATED**: `--l2on` skips the W-103 block (reset-safe
   again); re-flights = `PAYLOAD_MODE=--sarrep`. Built: 28,892 B
-  `dcba1545…`; backups: `qnx2linux.pre-w103` (28,291), `qnx2linux.w103-ungated`
-  (28,759 = the flown one).
+  `dcba1545…`; backups (LOCAL-ONLY): `~/agent-runs/w103-artifacts/`
+  (pre-w103 = 28,291; w103-ungated = 28,759 = the flown one).
 - Kernel #163 unchanged (5,223,233 / ee303813). /tmp on the device = wiped
   (the next jump.sh deploys everything fresh).
 - The device is armed; the keeper (PID 11424/11436 class) holds the door;

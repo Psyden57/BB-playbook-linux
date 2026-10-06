@@ -90,9 +90,10 @@ value, never re-ingest what this bootstrap/skill already digest.
 - **PAYLOAD = THE GATED W-103 BUILD: `kexec/qnx2linux` 28,892 B sha
   `dcba1545…`.** `--l2on` runs are RESET-SAFE (the W-103 block is gated
   OFF by default; the disasm guard = `cmp/beq` past the block). Re-flights
-  = `PAYLOAD_MODE=--sarrep`. Backups: `qnx2linux.pre-w103` (28,291 = the
-  pre-W-103 build), `qnx2linux.w103-ungated` (28,759 = the flown r1
-  build). **Do NOT fly `--sarrep` without the stage-1 redesign + relay
+  = `PAYLOAD_MODE=--sarrep`. Backups (LOCAL-ONLY):
+  `~/agent-runs/w103-artifacts/qnx2linux.pre-w103` (28,291 = the
+  pre-W-103 build) and `.../qnx2linux.w103-ungated` (28,759 = the flown
+  r1 build). **Do NOT fly `--sarrep` without the stage-1 redesign + relay
   review — it WILL stall the reset cycle (the proven r1 behavior).**
 - **The W-103 finding (the key datum):** the reset/boot flow consumes
   CPU1's wake path; a parked-IRAM landing is not reset-valid. Records:
