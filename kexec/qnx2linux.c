@@ -664,6 +664,10 @@ static int buf_placement_bad(uint8_t *b, off64_t p, size_t size)
 
 static int g_l2on;      /* --l2on: keep the PL310 enabled through the jump */
 static int g_dmaquiet;  /* --dmaquiet: softreset MMC2 (eMMC DMA master) pre-jump */
+static int g_sarrep;    /* --sarrep: W-103 stage-0 SAR repoint (OPT-IN — a
+                         * repointed wake path STALLS the reset cycle; see
+                         * ~/agent-runs/w103-run1-record.md; default OFF so
+                         * normal --l2on flights stay reset-safe) */
 /* PlayBook W-47 (2026-09-11): the fresh-boot (post-battery-pull) QNX pool
  * has NO 24 MB contiguous run at all (frag=129 on every hinted slot,
  * protected=12 -> NONE, twice) — but the buffer only NEEDS ~9 MB on the
@@ -1112,7 +1116,9 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
      * NO CPU1 release this stage. Coupled writes = ONE instrument
      * (blob + repoint; they are useless apart); attribution between
      * them is by design inseparable. NS-writable public SAR bank. */
-    {
+    if (g_sarrep) {  /* OPT-IN (--sarrep): W-103 r1 showed a repointed wake
+                      * path STALLS the reset cycle — normal --l2on flights
+                      * MUST skip this block (default OFF) */
         static const uint32_t sar_park_blob[2] = {
             0xE320F002u,   /* wfe        */
             0xEAFFFFFDu,   /* b <wfe>    — re-sleeping loop (WFE idiom;
@@ -1725,6 +1731,13 @@ int main(int argc, char **argv)
     if (argc > 1 && !strcmp(argv[1], "--dmaquiet")) {
         g_l2on = 1;
         g_dmaquiet = 1;
+        return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
+                     argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
+                     argc > 4 ? argv[4] : "/tmp/probe.bin");
+    }
+    if (argc > 1 && !strcmp(argv[1], "--sarrep")) {
+        g_l2on = 1;
+        g_sarrep = 1;
         return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
                      argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
                      argc > 4 ? argv[4] : "/tmp/probe.bin");
