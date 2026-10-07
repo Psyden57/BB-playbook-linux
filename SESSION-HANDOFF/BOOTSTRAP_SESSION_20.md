@@ -105,7 +105,10 @@ value, never re-ingest what this bootstrap/skill already digest.
   CPU1_WAKEUP_NS_PA_ADDR (armed value 0x4A326B00); the 0x150-B trampoline
   at 0x4A326B00 = the devpm .so blob (gates at B+0x12c armed 0x810 /
   B+0x140 = 0; the tables at B+0x150/+0x250); the SAR bank = NS-R/W;
-  IRAM = cleared by resets; A0C = boot-mutable.
+  **IRAM does not self-clear on every reset — the park blob SURVIVED a
+  WDT cycle (W-104 F1); cleared only across r1's BUTTON cycle —
+  reset-class-dependent, never assume clearing**; A0C = boot-mutable
+  across button cycles, stable across WDT cycles (F1).
 - Records inventory: TASK-008 (0x3E7), TASK-009 (w102-run2 reader),
   TASK-010 (cure routes), TASK-011 (SAR pre-read), TASK-012 (W-103
   preflight), w102-run2-record, w103-run1-record, W-103-design.md (the
