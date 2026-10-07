@@ -50,12 +50,14 @@ original conversation history.
   place (restore-before-reset validated at N=1) + the wrap
 - **Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_21.md` — READ IT
   FIRST** (the tightened read order, the session-20 state, the W-104
-  instrument + the F1 records, the pending relay cross-check, the F2/F3
-  ladder queue, and the user's note: **you can ask the previous sessions'
-  agents questions** — the user relays them)
-- Next action: the relay cross-check of the F1 verdict → then the F2/F3
-  ladder decision (the release flight done reset-safely — see the design
-  §8); an F1-repeat for N=2 is optional/cheap; draws r3+ remain available
-  (--l2on is reset-safe); the 126-family (with the new CMA-failure
-  sub-shape) + the strategic fronts unchanged
+  instrument + the F1 records, the F1 cross-check outcome + the (M) study
+  queue, and the user's note: **you can ask the previous sessions' agents
+  questions** — the user relays them)
+- Next action: **THE (M) MECHANISM/LEVER STUDY FIRST** (per the landed F1
+  cross-check: reset-time [A08] consumption; the release/re-hold sequences +
+  the SMC 0x103 verifies; value-vs-target via the kexec lead) → then the F2
+  delta design; HARD GATE: no A08-touching flight without the re-hold/verify
+  discipline. F1-repeat = optional (log the USB/LED signature on every
+  flight); draws r3+ remain available (--l2on is reset-safe); the 126-family
+  (with the new CMA-failure sub-shape) + the strategic fronts unchanged
 - Local-only assets and why: [SETUP.md](SETUP.md) §6

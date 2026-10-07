@@ -4,13 +4,22 @@
 
 You can ask the previous sessions' agents (the session-19 agent is alive)
 any questions — write the question down; the user relays it and brings the
-answer back. **PENDING AT WRAP: the session-20 F1-verdict cross-check was
-requested from session-19** (restore-before-reset validated at N=1; the
-blob-survival datum; the F2/F3 ladder recommendation) — if the answer has
-arrived, fold it; if not, re-send the packet (it is in session-19/20
-history). Route NEW subagent briefs through the relay for a pre-spawn review
-when offered, and send any report verdict that gates a build/draw back
-through it for a cross-check.
+answer back. **THE F1 CROSS-CHECK LANDED (session-19, 2026-10-06 — folded at
+wrap):** F1 stands cross-checked (the record verified; the chain sharpened to
+the no-fault link; the blob = INERT — pointer-driven, not blob-driven; C3
+parked as a diagnostic only, never a route). **The agreed next step = the (M)
+MECHANISM/LEVER STUDY FIRST** (offline): (i) when/how [A08] is consumed at
+reset (the ROM-RE 0x103/0x107 sites; the r1-vs-F1 deltas); (ii) the exact
+release/re-hold register+service sequences (+ the SMC 0x103 AUX_CORE_BOOT0
+verify reads — the hold state is verifiable in-flight); (iii) stall =
+value-driven vs target-driven (the mainline kexec DRAM-target lead). Then the
+F2 delta on (M)'s answers. **HARD GATE: no A08-touching flight without the
+re-hold/verify discipline** (F2's only design-clean landing: release → park →
+RE-HOLD → verify → cont-restore → reset; an abort after a release must retry
+the hold + flag "release-not-reheld" as a recover-before-anything state —
+the pen bit persists across warm resets). Route NEW subagent briefs through
+the relay for a pre-spawn review when offered, and send any report verdict
+that gates a build/draw back through it for a cross-check.
 
 ## THE ONE-PARAGRAPH STATE
 
@@ -28,6 +37,9 @@ healthy again (272/2), and — new — **the park blob SURVIVED the cycle at
 NS-readable (0→0, inconclusive — the boot consumes the sticky bits; the
 USB/LED stays the primary reset discriminator). The USB calibration is
 settled: normal cycles produce host USB events (bootloader/RNDIS/devmode).
+The F1 cross-check (session-19) landed at wrap: the record verified + the
+chain sharpened (the no-fault link, cross-check, session-19); the ladder now
+begins with the (M) mechanism study (see the user-note section).
 
 ## THE MANDATORY READ ORDER (before any work) — TIGHTENED v3
 
@@ -116,14 +128,18 @@ value, never re-ingest what this bootstrap/skill already digest.
 
 ## THE DECISION QUEUE FOR SESSION 21 (ranked)
 
-1. **The relay F1-verdict cross-check** (pending) → **the F2/F3 ladder
-   decision**: the F2 design delta (the release flight; the §8 conflict —
-   neither A08 state is reset-safe for a released CPU1; the SAME questions
-   as the r1 redesign, now with the blob-survival datum + the clean-cadence
-   recovery as new evidence; consider F3-first ordering; the wake-marker
-   design; SMC 0x104/0x105 untested). Design → relay → preflight, as always.
-2. **F1-repeat for N=2** (a second --sarrep flight — cheap; strengthens the
-   N=1 discrimination; same protocol; user-gated).
+1. **THE (M) MECHANISM/LEVER STUDY FIRST** (offline; per the landed F1
+   cross-check): the reset-time [A08] consumption (ROM 0x103/0x107 roles;
+   the r1-vs-F1 deltas); the release/re-hold sequences + the SMC 0x103
+   verify reads; value-vs-target (the kexec DRAM lead). Then the F2 delta
+   design (the re-hold centerpiece; the config matrix — released+canonical =
+   W-73 mode, released+diverted = untested; the abort-exposure design; the
+   pen-bit-persists hazard). **HARD GATE: no A08-touching flight without the
+   re-hold/verify discipline.** Design → relay → preflight, as always.
+2. **F1-repeat for N=2** — OPTIONAL (cross-check: do NOT spend a dedicated
+   stall-reproduction flight; instead log the USB/LED signature as a
+   first-class datum on EVERY future flight — a stall recurrence = the 2nd
+   stall datapoint; same protocol; user-gated).
 3. Draws remain available (--l2on; W-102 r3+) for the spectrum.
 4. The 126-family + the CMA-failure sub-shape tracking.
 5. Parked smalls: TASK-005 follow-ups; bc[27]=0xf5000002 (datum recorded).

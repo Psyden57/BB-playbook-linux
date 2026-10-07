@@ -33,8 +33,10 @@ post-button "cleared" reading; the WDT cycle does not clear IRAM); PRM_RSTST
 consumes the sticky bits; USB/LED stays primary); A0C stable (8a852251);
 ring3 model 7/7. The USB calibration (user): normal cycles produce host USB
 events (bootloader/RNDIS/devmode) — r1's "no reset completed" is calibrated.
-Record: ~/agent-runs/w104-run1-record.md. PENDING: the relay cross-check of
-the F1 verdict (→ the F2/F3 ladder decision).
+Record: ~/agent-runs/w104-run1-record.md. The relay cross-check LANDED
+(session-19: record verified; the chain sharpened; the blob = inert; C3
+parked as a diagnostic; the ladder starts with the (M) mechanism study;
+HARD GATE: no A08-touching flight without the re-hold/verify discipline).
 
 **SESSION-19 (2026-10-05/06, wrapped):** TASK-008 CLOSED the 0x3E7
 thread — the writer = kexec/probe.S:157 (the probe's long-loop pass

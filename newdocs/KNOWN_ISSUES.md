@@ -9,7 +9,10 @@ the W-103 r1 reset-cycle stall did NOT reproduce with the restore in place
 fixup instrument passed again (272/2); the park blob SURVIVED the cycle
 (40309A00 — the WDT cycle does not clear IRAM); PRM_RSTST (0x4A307B04) is
 NS-readable (0→0 inconclusive — the boot consumes the bits; USB/LED remains
-the primary reset discriminator). The historical headers below stand.
+the primary reset discriminator). **The F1 cross-check landed (session-19):
+the record verified; the ladder now starts with the (M) mechanism study;
+HARD GATE: no A08-touching flight without the re-hold/verify discipline.**
+The historical headers below stand.
 
 **SESSION-19 HEADER (2026-10-06): READ BOOTSTRAP_SESSION_20 FIRST.**
 Resolved: the 0x3E7 writer (probe.S:157 — benign; the item below carries

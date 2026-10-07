@@ -22,8 +22,10 @@ observed, not inferred); the wrap.
   sources; the TASK-007-style register-liveness table; the RSTST sticky-bit
   PRE/POST pair + never-W1C; the QNX-RE sweep for NS-read evidence; the
   expected USB/LED outcome channels) — all applied.
-- **The F1-verdict cross-check: requested at wrap — ANSWER PENDING** (fold
-  into session 21; it gates the F2/F3 ladder decision).
+- **The F1-verdict cross-check: LANDED (2026-10-06) — F1 stands verified;
+  the chain sharpened (the no-fault link); the blob = inert; C3 parked as a
+  diagnostic; the ladder starts with the (M) mechanism study; HARD GATE: no
+  A08-touching flight without the re-hold/verify discipline.**
 - Precedent: live frames are ground truth — the [38s] understatement + the
   STEP_STUB=11 / bc[1]=0x31=49(hex) nit were both settled by python
   tabulation of the raw logs.
@@ -110,4 +112,5 @@ caveat stands; an F1-repeat would strengthen).
 - Docs: docs/03 (the W-104 F1 note), PROJECT_STATE (the SESSION-20 block),
   KNOWN_ISSUES (the session-20 header), HANDOFF pointers. Commits: 1cd8ba7 +
   the wrap commit. BOOTSTRAP_SESSION_21 written.
-- PENDING AT WRAP: the relay F1-verdict cross-check (fold into session 21).
+- The relay F1-verdict cross-check: LANDED + folded at wrap (the record +
+  this file + the bootstrap + the docs).
