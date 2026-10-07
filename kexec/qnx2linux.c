@@ -668,6 +668,11 @@ static int g_sarrep;    /* --sarrep: W-103 stage-0 SAR repoint (OPT-IN — a
                          * repointed wake path STALLS the reset cycle; see
                          * ~/agent-runs/w103-run1-record.md; default OFF so
                          * normal --l2on flights stay reset-safe) */
+static int g_f2rel;     /* --f2rel: W-104 F2 — THE RELEASE FLIGHT. Implies
+                         * g_l2on + g_sarrep; adds the release→re-hold block
+                         * (W-104-F2-design.md). The re-hold discipline is
+                         * MANDATORY on every abort path (never jump with a
+                         * release-not-reheld state). */
 /* PlayBook W-47 (2026-09-11): the fresh-boot (post-battery-pull) QNX pool
  * has NO 24 MB contiguous run at all (frag=129 on every hinted slot,
  * protected=12 -> NONE, twice) — but the buffer only NEEDS ~9 MB on the
@@ -1119,10 +1124,14 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
     if (g_sarrep) {  /* OPT-IN (--sarrep): W-103 r1 showed a repointed wake
                       * path STALLS the reset cycle — normal --l2on flights
                       * MUST skip this block (default OFF) */
-        static const uint32_t sar_park_blob[2] = {
-            0xE320F002u,   /* wfe        */
-            0xEAFFFFFDu,   /* b <wfe>    — re-sleeping loop (WFE idiom;
-                            * sleep-once-then-spin 0xEAFFFFFE rejected) */
+        static const uint32_t sar_park_blob[7] = {
+            0xE59F000Cu,   /* ldr r0, [pc, #12]  -> word[5]: MARKER_PA */
+            0xE59F100Cu,   /* ldr r1, [pc, #12]  -> word[6]: MARKER_VAL */
+            0xE5801000u,   /* str r1, [r0]       — the landing-marker store */
+            0xE320F002u,   /* wfe */
+            0xEAFFFFFDu,   /* b <wfe>            — re-sleeping loop */
+            0x9000007Cu,   /* MARKER_PA  = bc[31] (0x9000007C) */
+            0x5A52F2F2u,   /* MARKER_VAL — the F2 landing marker */
         };
         volatile uint8_t  *blobp = iram + 0x5A00;        /* PA 0x40309A00 */
         volatile uint32_t *sar   = mapdev(0x4A326000ull, 0x1000);
@@ -1131,7 +1140,7 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         if (memcmp((void *)blobp, sar_park_blob, sizeof sar_park_blob)) {
             printf("FAIL: W-103 blob verify\n"); wdt2_disable(); return 1;
         }
-        printf("W-103: park blob at 40309A00 (wfe; b wfe)\n");
+        printf("W-103: park blob v2 at 40309A00 (marker store; wfe loop)\n");
         sar[0xA08 / 4] = 0x40309A00u;                    /* the repoint */
         __asm__ volatile("dsb" ::: "memory");
         rb = sar[0xA08 / 4];                             /* read the actual slot */
@@ -1160,6 +1169,95 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
                                              * canonical value (no jump). */
             wdt2_disable(); return 1;    /* no jump; WDT2 disarmed (W-2) */
         }
+    }
+
+    /* --- W-104 F2 (session 21): THE RELEASE FLIGHT (--f2rel) ---
+     * Release CPU1 onto the parked blob (A08 repointed; params[4] armed
+     * by the W-103 block above), poll for the blob's landing marker,
+     * RE-HOLD, verify every step via SMC 0x103 (bit9: SET=released,
+     * CLEAR=held). Reset-time end-state = the F1-proven held+canonical
+     * cell. Channels: bc[25] (ladder — LIVE; the kernel reclaims it
+     * post-jump, and the FILE is the post-run carrier), bc[31] (the
+     * CPU1-written marker — LIVE; kernel-mutable in deep draws),
+     * /accounts/devuser/kexec-f2.log (persistent record).
+     * Cross-checked: TASK-014 + folds (W-104-F2-design.md §3-§7). */
+    if (g_f2rel) {
+        volatile uint32_t *mkf  = mapdev(0x9000007Cull, 4);   /* bc[31] */
+        volatile uint32_t *rstf = mapdev(RSTCTRL_CPU1, 4);
+        volatile uint32_t *sarf = mapdev(0x4A326000ull, 0x1000); /* abort hygiene */
+        uint32_t r_pre, r_post, r_rehold = 0, seen = 0, tryn, sp;
+        int released_post, held_again;
+
+        bc[25] = 0x5A52F201u;                  /* ladder: block entered */
+        printf("W-104 F2: release block entered\n");
+        r_pre = mon_call(0x103, 0, 0);         /* expect held (bit9 clear) */
+        printf("W-104 F2: pre-103 = %08x\n", r_pre);
+
+        { /* fresh WDT2 window (preflight F4 guard; same class as the tail
+           * kick ~:1275) — covers the release sequence's window */
+            volatile uint32_t *wk = mapdev(0x4A314000ull, 0x100);
+            uint32_t g = wk[0x30 / 4]; wk[0x30 / 4] = ~g;
+        }
+        *rstf = 0;                             /* RELEASE — R1 alone */
+        __asm__ volatile("dsb" ::: "memory");
+        sp = *rstf;                            /* diagnostic readback */
+        for (tryn = 0; tryn < 1000000u; tryn++) {   /* bounded marker poll */
+            if (*mkf == 0x5A52F2F2u) { seen = 1; break; }
+        }
+        bc[25] = seen ? 0x5A52F202u : 0x5A52F280u;
+
+        r_post = mon_call(0x103, 0, 0);
+        printf("W-104 F2: post-103 = %08x marker=%u\n", r_post, seen);
+
+        for (tryn = 0; tryn < 3u; tryn++) {    /* RE-HOLD — <=3 attempts (main;
+                                                * the abort path retries <=3 more) */
+            *rstf = 1;
+            __asm__ volatile("dsb" ::: "memory");
+            r_rehold = mon_call(0x103, 0, 0);
+            if ((r_rehold & 0x200u) == 0) break;   /* held again */
+        }
+        printf("W-104 F2: re-hold 103 = %08x (tries=%u) sp=%08x\n",
+               r_rehold, tryn < 3u ? tryn + 1u : 3u, sp);
+
+        released_post = (r_post   & 0x200u) != 0;
+        held_again    = (r_rehold & 0x200u) == 0;
+
+        if ((!seen && released_post) || (seen && !held_again)) {
+            /* ABORT class: no-marker+released (fold b) / marker+not-held
+             * (fold d anomaly). NEVER jump: retry the hold, A08 restore,
+             * loud flag "release-not-reheld" = recover-before-anything. */
+            bc[25] = !seen ? 0x5A52F28Fu : 0x5A52F2FEu;
+            for (tryn = 0; tryn < 3u; tryn++) {   /* abort path: retry hold */
+                *rstf = 1;
+                __asm__ volatile("dsb" ::: "memory");
+                r_rehold = mon_call(0x103, 0, 0);
+                if ((r_rehold & 0x200u) == 0) break;
+            }
+            sarf[0xA08 / 4] = 0x4A326B00u;     /* abort hygiene: restore */
+            {
+                FILE *f = fopen("/accounts/devuser/kexec-f2.log", "w");
+                if (f) {
+                    fprintf(f, "ABORT release-not-reheld seen=%u pre=%08x "
+                            "post=%08x rehold=%08x sp=%08x\n",
+                            seen, r_pre, r_post, r_rehold, sp);
+                    fclose(f); sync();
+                }
+            }
+            printf("W-104 F2: ABORT (no jump) — hold retried, A08 restored\n");
+            wdt2_disable(); return 1;
+        }
+        bc[25] = seen ? 0x5A52F213u : 0x5A52F283u;
+        {
+            FILE *f = fopen("/accounts/devuser/kexec-f2.log", "w");
+            if (f) {
+                fprintf(f, "CONT seen=%u pre=%08x post=%08x rehold=%08x "
+                        "sp=%08x ladder=%08x\n",
+                        seen, r_pre, r_post, r_rehold, sp, bc[25]);
+                fclose(f); sync();
+            }
+        }
+        printf("W-104 F2: continue (marker=%u held-again=%d)\n",
+               seen, held_again);
     }
 
     bc_write(39);
@@ -1755,6 +1853,14 @@ int main(int argc, char **argv)
     if (argc > 1 && !strcmp(argv[1], "--sarrep")) {
         g_l2on = 1;
         g_sarrep = 1;
+        return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
+                     argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
+                     argc > 4 ? argv[4] : "/tmp/probe.bin");
+    }
+    if (argc > 1 && !strcmp(argv[1], "--f2rel")) {
+        g_l2on = 1;
+        g_sarrep = 1;
+        g_f2rel = 1;
         return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
                      argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
                      argc > 4 ? argv[4] : "/tmp/probe.bin");

@@ -22,6 +22,7 @@
  */
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/neutrino.h>
 
@@ -50,13 +51,21 @@ static void l2dump(const char *when)
     fflush(stdout);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     uint32_t r, tag0, data0;
 
     setvbuf(stdout, NULL, _IONBF, 0);
     if (ThreadCtl(_NTO_TCTL_IO_PRIV, 0) == -1)
         perror("IO_PRIV");
+
+    /* W-104 F2 (session 21): the post-run pen read — ONE 0x103 call,
+     * exit. The full 0x112 ladder below runs only in the no-arg mode. */
+    if (argc > 1 && !strcmp(argv[1], "--103")) {
+        r = mon_call(0x103, 0, 0);
+        printf("103 r0=%08x\n", r);
+        return 0;
+    }
 
     pl310 = mmap_device_memory(0, 0x1000, PROT_READ | PROT_NOCACHE,
                                MAP_SHARED | MAP_PHYS, 0x48242000ull);
