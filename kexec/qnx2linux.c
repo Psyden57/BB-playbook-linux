@@ -679,6 +679,11 @@ static int g_f2rel;     /* --f2rel: W-104 F2 — THE RELEASE FLIGHT. Implies
                          * (W-104-F2-design.md). The re-hold discipline is
                          * MANDATORY on every abort path (never jump with a
                          * release-not-reheld state). */
+static int g_engage;    /* --engage: W-105 — THE RELEASE-ENGAGED CONTROL (TASK-017).
+                         * The corrected CPU1 wake (do_hello-verbatim): hold ->
+                         * AUX arm -> release(+SEV) -> marker -> re-hold -> hand-back.
+                         * NO JUMP; NO [A08] touch (canonical throughout); ends with
+                         * CPU1 back in QNX. One variable: the release sequence. */
 /* PlayBook W-47 (2026-09-11): the fresh-boot (post-battery-pull) QNX pool
  * has NO 24 MB contiguous run at all (frag=129 on every hinted slot,
  * protected=12 -> NONE, twice) — but the buffer only NEEDS ~9 MB on the
@@ -1264,6 +1269,119 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         }
         printf("W-104 F2: continue (marker=%u held-again=%d)\n",
                seen, held_again);
+    }
+
+    /* --- W-105 (session 22): THE RELEASE-ENGAGED CONTROL (--engage) ---
+     * THE CORRECTED CPU1 WAKE (TASK-017): hold(1) -> arm AUX_CORE_BOOT_1 =
+     * blob + set AUX_CORE_BOOT_0 status (do_hello-verbatim) -> release(0)
+     * + SEV -> bounded marker poll -> re-hold(1) <=3 -> HAND-BACK to QNX
+     * (do_hello return form) -> return. NO JUMP, NO [A08] TOUCH, no GICD-off.
+     * End-state: CPU1 back in QNX (released, running); A08 canonical.
+     * Channels: bc[25] ladder 0x5A52F3xx (LIVE), bc[31] marker (CPU1-written),
+     * bc[1] heartbeats (56-60; 55 = the --dmaquiet-gated heartbeat — excluded),
+     * /accounts/devuser/kexec-w105.log (persistent),
+     * jump.log prints (READABLE post-run — no cycle). Design: W-105-design.md. */
+    if (g_engage) {
+        volatile uint32_t *mkf  = mapdev(0x9000007Cull, 4);   /* bc[31] */
+        volatile uint32_t *rstf = mapdev(RSTCTRL_CPU1, 4);
+        volatile uint32_t *auxf = mapdev(AUX_BOOT, 8);       /* [0]=AUX0 [1]=AUX1 */
+        uint32_t aux0_cap, aux1_cap, sp, r_post = 0, seen = 0, tryn, i;
+        int reheld = 0;
+
+        static const uint32_t w105_blob[7] = {   /* blob v2 — VERBATIM (W-103) */
+            0xE59F000Cu,   /* ldr r0, [pc, #12]  -> word[5]: MARKER_PA */
+            0xE59F100Cu,   /* ldr r1, [pc, #12]  -> word[6]: MARKER_VAL */
+            0xE5801000u,   /* str r1, [r0]       — the landing-marker store */
+            0xE320F002u,   /* wfe */
+            0xEAFFFFFDu,   /* b <wfe>            — re-sleeping loop */
+            0x9000007Cu,   /* MARKER_PA  = bc[31] */
+            0x5A52F2F2u,   /* MARKER_VAL */
+        };
+        volatile uint8_t *blobp = iram + 0x5A00;             /* PA 0x40309A00 */
+        memcpy((void *)blobp, w105_blob, sizeof w105_blob);
+        if (memcmp((void *)blobp, w105_blob, sizeof w105_blob)) {
+            printf("FAIL: W-105 blob verify\n"); wdt2_disable(); return 1;
+        }
+        printf("W-105: blob v2 at 40309A00 (AUX-target; NO A08 touch)\n");
+
+        bc[3] = (uint32_t)phys;
+        bc[15] = (uint32_t)time(NULL) ^ (uint32_t)phys;   /* run nonce */
+        bc[25] = 0x5A52F301u;                             /* block entered */
+        bc_write(56);
+        aux0_cap = auxf[0]; aux1_cap = auxf[1];           /* FIRST AUX capture */
+        sp = *rstf;
+        printf("W-105: entered; AUX0=%08x AUX1=%08x rst=%08x\n",
+               aux0_cap, aux1_cap, sp);
+
+        { /* fresh WDT2 window (the F2 Edit-4b guard class) */
+            volatile uint32_t *wk = mapdev(0x4A314000ull, 0x100);
+            uint32_t g = wk[0x30 / 4]; wk[0x30 / 4] = ~g;
+        }
+
+        *rstf = 1;                               /* HOLD */
+        __asm__ volatile("dsb" ::: "memory");
+        sp = *rstf;                              /* hold readback (write-echo; FIX 1) */
+        bc[25] = 0x5A52F302u; bc_write(57);
+        printf("W-105: held; rst=%08x\n", sp);
+
+        auxf[1] = 0x40309A00u;                   /* AUX_CORE_BOOT_1 = blob */
+        auxf[0] = (auxf[0] & ~0xCu) | 0x6u;      /* AUX0 status — do_hello VERBATIM */
+        __asm__ volatile("dsb" ::: "memory");
+        printf("W-105: armed AUX1=%08x AUX0=%08x\n", auxf[1], auxf[0]);
+
+        *rstf = 0;                               /* RELEASE */
+        __asm__ volatile("dsb" ::: "memory");
+        __asm__ volatile("sev");                 /* the documented wake event */
+        sp = *rstf;                              /* release readback (write-echo; FIX 1) */
+        bc[25] = 0x5A52F303u; bc_write(58);
+        printf("W-105: released; rst=%08x\n", sp);
+
+        for (i = 0; i < 300u; i++) {             /* bounded marker poll (<=3 s) */
+            if (*mkf == 0x5A52F2F2u) { seen = 1; break; }
+            delay(10);
+        }
+        printf("W-105: marker=%u (waited ~%ums)\n", seen, i * 10u);
+
+        for (tryn = 0; tryn < 3u; tryn++) {      /* RE-HOLD <=3 (write-echo verify; FIX 1) */
+            *rstf = 1;
+            __asm__ volatile("dsb" ::: "memory");
+            if ((*rstf & 1u) == 1u) { reheld = 1; break; }
+        }
+        bc[25] = 0x5A52F304u; bc_write(59);
+        printf("W-105: re-held=%d (tries=%u) rst=%08x\n", reheld,
+               tryn < 3u ? tryn + 1u : 3u, *rstf);
+
+        /* HAND-BACK — do_hello return form VERBATIM (aux[1] = QNX_STARTUP1;
+         * rst=1; rst=0); retried <=3 when the re-hold did not verify. */
+        for (tryn = 0; tryn < (reheld ? 1u : 3u); tryn++) {
+            auxf[1] = QNX_STARTUP1;
+            *rstf = 1;
+            *rstf = 0;
+            __asm__ volatile("dsb" ::: "memory");
+            delay(1000);                         /* let CPU1 re-enter QNX */
+            if ((*rstf & 1u) == 0u) break;       /* pulse took (released) */
+        }
+        bc[25] = seen ? 0x5A52F3E1u : 0x5A52F3E2u;
+        if (!reheld) bc[25] = 0x5A52F3EFu;       /* ESCALATE (write-didn't-stick detector) */
+        bc_write(60);
+        printf("W-105: hand-back done; AUX1=%08x rst=%08x\n", auxf[1], *rstf);
+
+        r_post = mon_call(0x103, 0, 0);          /* informational (TASK-017 Q4) */
+
+        {
+            FILE *f = fopen("/accounts/devuser/kexec-w105.log", "w");
+            if (f) {
+                fprintf(f, "W105 seen=%u reheld=%d aux0=%08x aux1=%08x "
+                        "rst=%08x r103=%08x ladder=%08x\n",
+                        seen, reheld, aux0_cap, aux1_cap, *rstf, r_post, bc[25]);
+                fclose(f); sync();
+            }
+        }
+        printf("W-105: %s (no jump; QNX continues)\n",
+               seen ? "ENGAGED" : "NO-ENGAGEMENT");
+        bc_snapshot_file(60);                    /* kexec-bc.log: step=60 nonce=<place> */
+        wdt2_disable();
+        return 0;
     }
 
     bc_write(39);
@@ -1867,6 +1985,13 @@ int main(int argc, char **argv)
         g_l2on = 1;
         g_sarrep = 1;
         g_f2rel = 1;
+        return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
+                     argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
+                     argc > 4 ? argv[4] : "/tmp/probe.bin");
+    }
+    if (argc > 1 && !strcmp(argv[1], "--engage")) {
+        g_l2on = 1;
+        g_engage = 1;
         return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
                      argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
                      argc > 4 ? argv[4] : "/tmp/probe.bin");
