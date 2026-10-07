@@ -684,6 +684,10 @@ static int g_engage;    /* --engage: W-105 — THE RELEASE-ENGAGED CONTROL (TASK
                          * AUX arm -> release(+SEV) -> marker -> re-hold -> hand-back.
                          * NO JUMP; NO [A08] touch (canonical throughout); ends with
                          * CPU1 back in QNX. One variable: the release sequence. */
+static int g_sarrel;    /* --sarrel: W-106 — THE [A08]-RELAY RELEASE (w105-record.md).
+                         * The warm-path release control: hold -> [A08]<-blob ->
+                         * release(+SEV) -> syscall-free marker spin -> re-hold ->
+                         * [A08]-restore. NO JUMP; end-state HELD+CANONICAL. */
 /* PlayBook W-47 (2026-09-11): the fresh-boot (post-battery-pull) QNX pool
  * has NO 24 MB contiguous run at all (frag=129 on every hinted slot,
  * protected=12 -> NONE, twice) — but the buffer only NEEDS ~9 MB on the
@@ -1384,6 +1388,106 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         return 0;
     }
 
+    /* --- W-106 (session 22): THE [A08]-RELAY RELEASE (--sarrel) ---
+     * The re-derived control (w105-record.md + the ROUND-3 correction): the
+     * warm release follows [A08] (the restoration chain), NOT AUX. Shape:
+     * blob v2 -> HOLD(1) -> REPOINT [A08]=blob -> RELEASE(0)+SEV ->
+     * SYSCALL-FREE bounded marker spin -> RE-HOLD(1) <=3 -> RESTORE [A08]=
+     * canonical -> report. NO JUMP; end-state = HELD + CANONICAL (the
+     * F1-proven cell; CPU1 returns at the next reboot). A release-on-live
+     * wedge may fire (W-105 / 08-30 #2); the hygiene + the WDT cover it;
+     * a wedge with [A08] still diverted = the W-103-r1 stall risk (power
+     * button; minimized by the syscall-free window + the prompt restore).
+     * Channels: bc[25] 0x5A52F4xx, bc[31] marker (blob v2 verbatim),
+     * bc[1] 61-66, /accounts/devuser/kexec-w106.log. Design: W-106-design.md. */
+    if (g_sarrel) {
+        volatile uint32_t *mkf  = mapdev(0x9000007Cull, 4);   /* bc[31] */
+        volatile uint32_t *rstf = mapdev(RSTCTRL_CPU1, 4);
+        volatile uint32_t *sarf = mapdev(0x4A326000ull, 0x1000); /* [A08] */
+        uint32_t sp, rb, seen = 0, tryn, i;
+        int reheld = 0;
+
+        static const uint32_t w106_blob[7] = {   /* blob v2 — VERBATIM (W-103/W-105) */
+            0xE59F000Cu, 0xE59F100Cu, 0xE5801000u, 0xE320F002u,
+            0xEAFFFFFDu, 0x9000007Cu, 0x5A52F2F2u,
+        };
+        volatile uint8_t *blobp = iram + 0x5A00;             /* PA 0x40309A00 */
+        memcpy((void *)blobp, w106_blob, sizeof w106_blob);
+        if (memcmp((void *)blobp, w106_blob, sizeof w106_blob)) {
+            printf("FAIL: W-106 blob verify\n"); wdt2_disable(); return 1;
+        }
+        bc[3] = (uint32_t)phys;
+        bc[15] = (uint32_t)time(NULL) ^ (uint32_t)phys;
+        bc[25] = 0x5A52F401u; bc_write(61);
+        sp = *rstf; rb = sarf[0xA08 / 4];
+        printf("W-106: entered; rst=%08x A08=%08x blob ok\n", sp, rb);
+
+        { /* fresh WDT2 window */
+            volatile uint32_t *wk = mapdev(0x4A314000ull, 0x100);
+            uint32_t g = wk[0x30 / 4]; wk[0x30 / 4] = ~g;
+        }
+
+        /* ===== WINDOW BEGINS: SYSCALL-FREE (W-105: the freeze hit the first
+         * post-release kernel entry). Only device reads/writes + bc_write()
+         * (the static leaf MMIO helper, no kernel entry) + the spin; no
+         * printf/file/mapdev/delay/sync/time here. Timer ticks still enter
+         * the kernel asynchronously — a minimization, not a guarantee. ===== */
+        *rstf = 1;
+        __asm__ volatile("dsb" ::: "memory");
+        sp = *rstf;                              /* hold readback (write-echo; FIX 1) */
+        bc[25] = 0x5A52F402u; bc_write(62);
+        sarf[0xA08 / 4] = 0x40309A00u;           /* REPOINT [A08] -> the blob */
+        __asm__ volatile("dsb" ::: "memory");
+        rb = sarf[0xA08 / 4];
+        if (rb != 0x40309A00u) {                 /* fail path: no release happened;
+                                                  * kernel calls are safe again */
+            sarf[0xA08 / 4] = 0x4A326B00u;       /* abort hygiene: restore */
+            __asm__ volatile("dsb" ::: "memory");
+            bc[25] = 0x5A52F4B0u; bc_write(66);
+            printf("FAIL: W-106 repoint readback %08x\n", rb);
+            wdt2_disable(); return 1;
+        }
+        bc[25] = 0x5A52F403u; bc_write(63);
+        *rstf = 0;                               /* RELEASE */
+        __asm__ volatile("dsb" ::: "memory");
+        __asm__ volatile("sev");                 /* carried (the documented wake event) */
+        sp = *rstf;                              /* release readback (write-echo) */
+        bc[25] = 0x5A52F404u; bc_write(64);
+        for (i = 0; i < 10000000u; i++) {        /* bounded syscall-free marker
+                                                  * spin (~1.0-2.0 s at 10M;
+                                                  * TASK-019: 6 instr/pass) */
+            if (*mkf == 0x5A52F2F2u) { seen = 1; break; }
+        }
+        for (tryn = 0; tryn < 3u; tryn++) {      /* RE-HOLD <=3 (write-echo verify) */
+            *rstf = 1;
+            __asm__ volatile("dsb" ::: "memory");
+            if ((*rstf & 1u) == 1u) { reheld = 1; break; }
+        }
+        sarf[0xA08 / 4] = 0x4A326B00u;           /* RESTORE [A08] = canonical */
+        __asm__ volatile("dsb" ::: "memory");
+        rb = sarf[0xA08 / 4];
+        bc[25] = 0x5A52F405u; bc_write(65);
+        /* ===== WINDOW ENDS ===== */
+
+        printf("W-106: done; seen=%u reheld=%d rst=%08x A08=%08x\n",
+               seen, reheld, *rstf, rb);
+        bc[25] = seen ? 0x5A52F4E1u : 0x5A52F4E2u;
+        if (!reheld) bc[25] = 0x5A52F4EFu;       /* ESCALATE (write-didn't-stick detector) */
+        {
+            FILE *f = fopen("/accounts/devuser/kexec-w106.log", "w");
+            if (f) {
+                fprintf(f, "W106 seen=%u reheld=%d rst=%08x a08=%08x ladder=%08x "
+                        "spinleft=%u\n", seen, reheld, *rstf, rb, bc[25], i);
+                fclose(f); sync();
+            }
+        }
+        printf("W-106: %s (no jump; CPU1 parked, A08 canonical)\n",
+               seen ? "ENGAGED" : "NO-ENGAGEMENT");
+        bc_snapshot_file(65);
+        wdt2_disable();
+        return 0;
+    }
+
     bc_write(39);
     bc[3] = (uint32_t)phys;
     bc[15] = (uint32_t)time(NULL) ^ (uint32_t)phys;   /* run nonce (phys varies per run) */
@@ -1992,6 +2096,13 @@ int main(int argc, char **argv)
     if (argc > 1 && !strcmp(argv[1], "--engage")) {
         g_l2on = 1;
         g_engage = 1;
+        return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
+                     argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
+                     argc > 4 ? argv[4] : "/tmp/probe.bin");
+    }
+    if (argc > 1 && !strcmp(argv[1], "--sarrel")) {
+        g_l2on = 1;
+        g_sarrel = 1;
         return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
                      argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
                      argc > 4 ? argv[4] : "/tmp/probe.bin");
