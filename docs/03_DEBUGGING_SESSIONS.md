@@ -4100,4 +4100,30 @@ cont-restore in place, the r1 stall did not reproduce — restore-before-reset
 VALIDATED at N=1 (the per-draw lottery caveat documented).** Record:
 ~/agent-runs/w104-run1-record.md.
 
+### Run W-104 r2 (F2 r1) (2026-10-07, session 21): THE SMC-CLOBBER FIND — the payload SIGSEGV'd one instruction after a WORKING 0x103; the release executed with NO blob landing; the crash-era WDT2 cycle fired into the restored safe config (clean); fix #167
+
+Fired ≈02:25:2xZ on build #166 (`--f2rel`). Every phase clean: placement
+0xa3500000, memtest clean, blob v2 deployed + byte-verified, A08 repointed
+(readback 40309a00), params[4] armed. The F2 block entered (bc[25]=5A52F201);
+**the pre-103 read ANSWERED (r0=2) — then the payload SIGSEGV'd: `SIGSEGV
+code=2 fltno=11 ip=0804a804 ref=00000103`.** Root cause: the monitor
+DESTROYS callee-saved registers (r4 left holding the service id 0x103);
+`mon_call`'s asm declared no clobbers; GCC kept the marker pointer in r4;
+the poll's `ldr r2,[r4]` aborted at 0x103. QNX survived (rule 1). **The
+release HAD executed pre-crash (disasm + RSTCTRL readback 0) — and produced
+NO blob landing in 6+ min ([31] unchanged) ⇒ the payload-time release does
+NOT wake CPU1 onto [A08] (a hard datum for the wake-target question; F3
+input).** Recovery 02:33:19Z (host-side): A08 → 4a326b00 (readback ✓), then
+the pen re-asserted (RSTCTRL 0x4824380C 0→1, readback ✓ — NS-readable, NEW
+channel), smctest --103 r0=2. **The crash-era WDT2 window then fired
+≈02:34:5x-02:35 (user: RED + the usual USB chain; keeper re-handshake
+02:36:34) — INTO the restored safe config ⇒ a CLEAN warm cycle** (bc page +
+blob v2 intact; A08 canonical) ⇒ safe-cell clean cycles N=2 (1 flown, 1
+accidental). FIX #167: mon_call = `push {r4-r11} … pop {r4-r11}` around the
+SMC in both qnx2linux + smctest (disasm-verified; gcc rejects r7 clobbers).
+qnx2linux 30,584 B sha 827b1c0f5061; smctest 9,401 B sha 5d217e0b798d;
+commit 1317e32. OPEN: the WDT window (~8-8.5 min vs the 58.6 s house figure)
++ the counter-readback model — calibration thread. Record:
+~/agent-runs/w104-run2-record.md.
+
 

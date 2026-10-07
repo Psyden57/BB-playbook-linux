@@ -43,21 +43,18 @@ original conversation history.
 
 ## Current handoff state
 
-- Latest session notes: [session-notes/session-20.md](session-notes/session-20.md)
-  — the W-104 redesign (the reset-safe neutralization: transient diversion
-  + the cont pre-kernel restore) + TASK-013 preflight + build #165 + ★ F1:
-  CLEAN RECOVERY — the W-103 r1 stall did NOT reproduce with the restore in
-  place (restore-before-reset validated at N=1) + the wrap
-- **Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_21.md` — READ IT
-  FIRST** (the tightened read order, the session-20 state, the W-104
-  instrument + the F1 records, the F1 cross-check outcome + the (M) study
-  queue, and the user's note: **you can ask the previous sessions' agents
-  questions** — the user relays them)
-- Next action: **THE (M) MECHANISM/LEVER STUDY FIRST** (per the landed F1
-  cross-check: reset-time [A08] consumption; the release/re-hold sequences +
-  the SMC 0x103 verifies; value-vs-target via the kexec lead) → then the F2
-  delta design; HARD GATE: no A08-touching flight without the re-hold/verify
-  discipline. F1-repeat = optional (log the USB/LED signature on every
-  flight); draws r3+ remain available (--l2on is reset-safe); the 126-family
-  (with the new CMA-failure sub-shape) + the strategic fronts unchanged
+- Latest session notes: [session-notes/session-21.md](session-notes/session-21.md)
+  — the (M) study (TASK-014, accepted/cross-checked) + the F2 design +
+  TASK-015 preflight + ★ F2 r1: the SMC-clobber find (the payload SIGSEGV'd
+  one instruction after a working 0x103; the monitor destroys r4-r11) + the
+  release's no-[A08]-landing datum + fix #167 + the accidental clean cycle
+- **Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_22.md` — READ IT
+  FIRST** (the v4 read order, the session-21 state, the #167 ledger + the
+  crash forensics, the F2-r2 first-action queue; the user's notes: relay =
+  question-driven with the aged sessions; the user owns wrap timing)
+- Next action: **F2 r2 — the re-fly on #167 (user-gated)**; capture the
+  bc-page forensics before firing; then the WDT-window calibration thread;
+  the no-landing datum feeds F3. HARD GATE unchanged: no A08-touching flight
+  without the re-hold/verify discipline. Draws remain available (--l2on);
+  the 126-family + the strategic fronts unchanged.
 - Local-only assets and why: [SETUP.md](SETUP.md) §6

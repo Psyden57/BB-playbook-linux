@@ -1,5 +1,20 @@
 # Known Issues & Open Problems
 
+**SESSION-21 HEADER (2026-10-07): READ BOOTSTRAP_SESSION_22 FIRST.**
+The (M) study (TASK-014) = ACCEPTED/MOSTLY (cross-check folded): no
+*proven*-safe released A08 cell ⇒ the F2 re-hold is REQUIRED; the [A08]
+reset-consumer is NOT in the dumped ROM (hidden 4KB — rule 6 NOT VISIBLE).
+**F2 r1 (build #166) found a NEW BUG CLASS: the monitor DESTROYS
+callee-saved registers; mon_call didn't declare them → the payload
+SIGSEGV'd (ref=0x103) one instruction after a WORKING SMC 0x103 read.
+FIXED in #167 (push/pop r4-r11 in the asm — the pattern for any SMC helper;
+`mon_call_full` still pushes only {r4,r5,r7,lr} — flagged for audit).** F2
+r1's release datum: the payload-time release executed and did NOT land CPU1
+on [A08] (6+ min, no marker). The crash-era WDT2 cycle fired ~8 min later
+into the restored safe config = clean — **a crashed payload is NOT a stable
+end-state; restore immediately; the WDT counter readback is not an
+all-clear.** The historical headers below stand.
+
 **SESSION-20 HEADER (2026-10-06): READ BOOTSTRAP_SESSION_21 FIRST.**
 W-104 (the reset-safe neutralization: transient diversion + the cont
 pre-kernel restore; build #165) is BUILT + FLOWN: **F1 = CLEAN RECOVERY —
