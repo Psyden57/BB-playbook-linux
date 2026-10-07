@@ -43,18 +43,20 @@ original conversation history.
 
 ## Current handoff state
 
-- Latest session notes: [session-notes/session-21.md](session-notes/session-21.md)
-  — the (M) study (TASK-014, accepted/cross-checked) + the F2 design +
-  TASK-015 preflight + ★ F2 r1: the SMC-clobber find (the payload SIGSEGV'd
-  one instruction after a working 0x103; the monitor destroys r4-r11) + the
-  release's no-[A08]-landing datum + fix #167 + the accidental clean cycle
-- **Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_22.md` — READ IT
-  FIRST** (the v4 read order, the session-21 state, the #167 ledger + the
-  crash forensics, the F2-r2 first-action queue; the user's notes: relay =
-  question-driven with the aged sessions; the user owns wrap timing)
-- Next action: **F2 r2 — the re-fly on #167 (user-gated)**; capture the
-  bc-page forensics before firing; then the WDT-window calibration thread;
-  the no-landing datum feeds F3. HARD GATE unchanged: no A08-touching flight
-  without the re-hold/verify discipline. Draws remain available (--l2on);
-  the 126-family + the strategic fronts unchanged.
+- Latest session notes: [session-notes/session-22.md](session-notes/session-22.md)
+  — F2 r2 (release-never-took; clean cycle; the stamp family) + TASK-017 +
+  W-105 (the release-era wedge; the WDT clean cycle; A08 untouched) + the
+  ROUND-3 warm/cold-path correction + **W-106 = ★ THE [A08] LANDING** (the
+  warm release delivers CPU1 to the blob; the full hygiene; the
+  post-completion wedge; the canonical-clean cycle)
+- **Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_23.md` — READ IT
+  FIRST** (the v4 read order, the s22 state, the #169 ledger + the landing
+  forensics, the wedge-study queue; the user's notes: relay = question-driven
+  with the aged sessions; the user owns wrap timing)
+- Next action: **the WEDGE-MECHANISM STUDY (offline-source first; then a
+  discrimination flight design) — it gates W-107 (the jump-integration)**;
+  the WDT-window thread; the W-105/W-106 LED stamps (ask the user); smalls.
+  HARD GATE unchanged: no A08-touching flight without the re-hold/verify
+  discipline. Draws remain available (--l2on); the 126-family + the
+  strategic fronts unchanged.
 - Local-only assets and why: [SETUP.md](SETUP.md) §6

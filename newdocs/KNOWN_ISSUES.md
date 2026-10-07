@@ -1,5 +1,7 @@
 # Known Issues & Open Problems
 
+**SESSION-22 HEADER (2026-10-07): READ BOOTSTRAP_SESSION_23 FIRST.** ★ THE [A08] LANDING: W-106 proved the WARM release follows [A08] (the restoration chain) — CPU1 landed on the parked blob (`bc[31]=0x5A52F2F2`, µs-scale; `w106-record.md`) — and the full hygiene (re-hold + `[A08]`-restore-canonical + `kexec-w106.log`) completed BEFORE the release-on-live wedge fired (3rd instance: 08-30 #2 / W-105 / W-106; variable timing; the WDT + the canonical restore = a clean recovery — **the W-103-r1 stall class defeated by the restore ordering**). **The residual wedge = THE TOP OPEN PROBLEM (it gates the jump-integration, W-107).** Also: the AUX path is the cold-boot pen ONLY (the TASK-017 AUX-target claim superseded — the dated-notes chain); RSTCTRL readbacks = write-echoes (not independent verifies); the payload cross-build deltas = `.strtab`/build-id metadata only (rule-16 refinement). The historical headers below stand.
+
 **SESSION-21 HEADER (2026-10-07): READ BOOTSTRAP_SESSION_22 FIRST.**
 The (M) study (TASK-014) = ACCEPTED/MOSTLY (cross-check folded): no
 *proven*-safe released A08 cell ⇒ the F2 re-hold is REQUIRED; the [A08]

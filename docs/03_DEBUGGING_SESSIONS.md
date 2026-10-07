@@ -4126,4 +4126,38 @@ commit 1317e32. OPEN: the WDT window (~8-8.5 min vs the 58.6 s house figure)
 + the counter-readback model — calibration thread. Record:
 ~/agent-runs/w104-run2-record.md.
 
+### Run W-105 (--engage, session 22, 2026-10-07): THE RELEASE-ERA WEDGE — the corrected sequence executed through the release; the box froze; the WDT cycle clean; A08 never touched
+
+Fired 22:15:40Z (`PAYLOAD_MODE=--engage ./poll-jump.sh zImage`; build #168). The
+block executed blob→captures→fresh kick→hold→AUX-arm→release(+SEV) —
+bc[25]=0x5A52F303 + bc[1]=58 (the same statement) landed; the re-hold (304/59)
+never did: **the freeze hit at the first post-release kernel entry.** No marker;
+no file. ssh died ≈+50 s; **the fresh-kick WDT2 window fired at +111 s
+(= kick+58.6 ±1; the user's LED OFF); RED +2 s; network-back +254 s-class; a
+CLEAN cycle; A08 canonical pre AND post (never touched); the staged recovery =
+zero writes; QNX fully healthy.** The ROUND-3 archaeology (SESSION-HANDOFF.md:
+295–313) then corrected the mechanism: **the CPU1 WARM release follows `[A08]`
+(the restoration chain) — AUX_CORE_BOOT_0/1 are the cold-boot pen ONLY** (the
+TASK-017 AUX-target model superseded; the dated notes chain). Record:
+~/agent-runs/w105-record.md (+ the w105-* file set; TASK-018 preflight;
+W-105-design.md).
+
+### Run W-106 (--sarrel, session 22, 2026-10-07): ★ THE [A08] LANDING — the warm release delivers CPU1 to the blob (the marker); the full hygiene completes; the post-completion wedge; the canonical-clean cycle
+
+Fired 22:42:46Z (`PAYLOAD_MODE=--sarrel ./poll-jump.sh zImage`; build #169). The
+block COMPLETED: hold → `[A08]`←0x40309A00 → release(+SEV) → **bc[31]=0x5A52F2F2
+— THE MARKER, the first landing in project history; `spinleft=109/10,000,000`
+(≈ µs — the landing is near-instant)** → re-hold → **`[A08]`←canonical
+(readback ✓)** → `kexec-w106.log` (`W106 seen=1 reheld=1 rst=00000001
+a08=4a326b00 ladder=5a52f4e1 spinleft=109`). **Then the release-on-live wedge
+fired anyway — post-completion** (`bc_snapshot_file(65)` never landed;
+kexec-bc.log unchanged; `wdt2_disable` never ran). The still-armed WDT window
+(kick≈+28–30; fire≈+88–90 = kick+58.6) → **a CLEAN cycle (canonical — the
+W-103-r1 stall class defeated by the restore ordering)**; the device returned
+fully healthy; the staged recovery = zero writes. **The stale-resume hypothesis
+defeated (the diversion works — CPU1 ran the blob); the residual wedge = the
+top open problem (3rd instance; variable timing).** Record:
+~/agent-runs/w106-record.md (+ the w106-* set; TASK-019 preflight;
+W-106-design.md).
+
 
