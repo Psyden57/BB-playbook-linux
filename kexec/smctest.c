@@ -34,10 +34,13 @@ static inline uint32_t mon_call(uint32_t api, uint32_t a0, uint32_t a1)
     register uint32_t r0 __asm__("r0") = a0;
     register uint32_t r1 __asm__("r1") = a1;
     register uint32_t r12v __asm__("r12") = api;
-    __asm__ volatile("dsb\n\tsmc #0\n\tdmb"
+    /* 2026-10-07: the monitor destroys callee-saved registers (seen in the
+     * F2 payload: r4 left holding the service id). Save/restore r4-r11 IN
+     * the asm — this gcc also rejects r7 in clobber lists. */
+    __asm__ volatile("push {r4-r11}\n\tdsb\n\tsmc #0\n\tdmb\n\tpop {r4-r11}"
                      : "+r"(r0)
                      : "r"(r1), "r"(r12v)
-                     : "memory");
+                     : "r2", "r3", "cc", "memory");
     return r0;
 }
 

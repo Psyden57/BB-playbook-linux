@@ -278,10 +278,16 @@ static uint32_t mon_call(uint32_t api, uint32_t a0, uint32_t a1)
     register uint32_t r0 __asm__("r0") = a0;
     register uint32_t r1 __asm__("r1") = a1;
     register uint32_t r12v __asm__("r12") = api;
-    __asm__ volatile("dsb\n\tsmc #0\n\tdmb"
+    /* 2026-10-07 (F2 run 1 SIGSEGV, ref=0x103): the monitor DESTROYS
+     * registers (observed: r4 left holding the service id) — the SMC is
+     * NOT a normal call. Save/restore r4-r11 IN the asm (the mon_call_full /
+     * SAR-blob convention): every caller's live r4-r11 stay valid across
+     * it, and this sidesteps the older QNX gcc's "rN cannot be used in
+     * asm" clobber limitations. */
+    __asm__ volatile("push {r4-r11}\n\tdsb\n\tsmc #0\n\tdmb\n\tpop {r4-r11}"
                      : "+r"(r0)
                      : "r"(r1), "r"(r12v)
-                     : "memory");
+                     : "r2", "r3", "cc", "memory");
     return r0;
 }
 
