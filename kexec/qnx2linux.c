@@ -695,6 +695,15 @@ static int g_holdwin;   /* --holdwin: W-108 — THE HOLD-ONLY CONTROL (TASK-020
                          * state HELD+CANONICAL. Tests whether MERE CPU1 loss
                          * wedges QNX at a kernel entry (pure-loss H1) vs the
                          * release-edge reading (H4). Design: W-108-design.md. */
+static int g_holdslow;  /* --holdslow: W-108b — THE SLOW/IDLE HOLD WINDOW
+                         * (TASK-022). One variable vs --holdwin: the window's
+                         * TRAFFIC SHAPE (N=100 x delay(500) vs 2000 x
+                         * delay(10)). Wall-time stamps (bc[27] = master-counter
+                         * delta; bc[26] = kick anchor) + PWRSTST (bc[29/30]) +
+                         * an incremental kexec-w108b.log = observation-only.
+                         * Segment WDT2 re-kicks at n==25/50/75 (plain MMIO).
+                         * NO RELEASE; NO [A08] write; NO JUMP; end-state
+                         * HELD+CANONICAL. Design: W-108b-design.md. */
 /* PlayBook W-47 (2026-09-11): the fresh-boot (post-battery-pull) QNX pool
  * has NO 24 MB contiguous run at all (frag=129 on every hinted slot,
  * protected=12 -> NONE, twice) — but the buffer only NEEDS ~9 MB on the
@@ -1589,6 +1598,111 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         return 0;
     }
 
+    /* --- W-108b (session 24): THE SLOW/IDLE HOLD WINDOW (--holdslow) ---
+     * TASK-022: one variable vs W-108 = the traffic shape. 100 x delay(500)
+     * (~100 kernel entries over >=50 s) vs 2000 x delay(10). Wall-time stamps
+     * (bc[27] per iteration = master-counter delta since the kick; bc[26] =
+     * kick anchor), PWRSTST in bc[29/30], incremental kexec-w108b.log, and
+     * segment WDT2 re-kicks at n==25/50/75 (plain MMIO — the >=50 s window
+     * needs the extended armed span; TASK-023 F2). NO RELEASE; NO [A08]
+     * write; NO JUMP; end-state HELD+CANONICAL. Ladder bc[25] 0x5A52F5xx
+     * (501/502/503/504/E1/EF); bc[1] 74..173 heartbeats (death index =
+     * bc[1]-74, 0..99), 174 done. OUTCOME channel = ladder + bc[26/27/29/30]
+     * + kexec-w108b.log + battery (ssh may die at the hold — never an
+     * outcome). Design: W-108b-design.md. */
+    if (g_holdslow) {
+        volatile uint32_t *mkf  = mapdev(0x9000007Cull, 4);   /* bc[31] */
+        volatile uint32_t *rstf = mapdev(RSTCTRL_CPU1, 4);
+        volatile uint32_t *sarf = mapdev(0x4A326000ull, 0x1000); /* [A08] RO */
+        volatile uint32_t *pw0  = mapdev(0x48243404ull, 4);   /* PWRSTST CPU0 */
+        volatile uint32_t *pw1  = mapdev(0x48243804ull, 4);   /* PWRSTST CPU1 */
+        volatile uint32_t *tmr  = mapdev(0x48243200ull, 8);   /* master count */
+        volatile uint32_t *wk   = mapdev(0x4A314000ull, 0x100); /* WDT2 */
+        uint32_t sp, rb, p0a, p1a, p0b, p1b, p0c, p1c, n, t0;
+
+        static const uint32_t w108b_blob[7] = {  /* blob v2 — VERBATIM */
+            0xE59F000Cu, 0xE59F100Cu, 0xE5801000u, 0xE320F002u,
+            0xEAFFFFFDu, 0x9000007Cu, 0x5A52F2F2u,
+        };
+        volatile uint8_t *blobp = iram + 0x5A00;             /* PA 0x40309A00 */
+        memcpy((void *)blobp, w108b_blob, sizeof w108b_blob);
+        if (memcmp((void *)blobp, w108b_blob, sizeof w108b_blob)) {
+            printf("FAIL: W-108b blob verify\n"); wdt2_disable(); return 1;
+        }
+        bc[31] = 1u;
+        bc[3] = (uint32_t)phys;
+        bc[15] = (uint32_t)time(NULL) ^ (uint32_t)phys;
+        bc[25] = 0x5A52F501u; bc_write(71);
+        sp = *rstf; rb = sarf[0xA08 / 4];
+        p0a = *pw0; p1a = *pw1;              /* PWRSTST first-touch (pre-kick) */
+        (void)tmr[0]; (void)tmr[1];          /* master-counter first-touch
+                                              * (pre-kick; the W-28 class) */
+        printf("W-108b: entered; rst=%08x A08=%08x pw=%08x/%08x "
+               "tmr=%08x/%08x blob ok\n", sp, rb, p0a, p1a, tmr[0], tmr[1]);
+
+        { /* fresh WDT2 window; kick TIME anchored */
+            uint32_t g = wk[0x30 / 4]; wk[0x30 / 4] = ~g;
+        }
+        t0 = tmr[0];                         /* the anchor (kick-time) */
+        bc[26] = t0;
+
+        /* pre-hold log line (before the danger zone) */
+        {
+            FILE *f = fopen("/accounts/devuser/kexec-w108b.log", "w");
+            if (f) {
+                fprintf(f, "W108b PRE rst=%08x a08=%08x pw=%08x/%08x "
+                        "kick=%08x\n", *rstf, rb, p0a, p1a, t0);
+                fclose(f); sync();
+            }
+        }
+
+        *rstf = 1;                           /* HOLD — the ONE state change */
+        __asm__ volatile("dsb" ::: "memory");
+        sp = *rstf;                          /* write-echo detector ONLY */
+        bc[25] = 0x5A52F502u; bc_write(72);
+        p0b = *pw0; p1b = *pw1;
+        bc[29] = p0b; bc[30] = p1b;          /* PWRSTST across the hold */
+
+        /* ===== THE WINDOW: 100 x {heartbeat; wall-stamp; optional re-kick;
+         * delay(500)} — ~100 kernel entries over >=50 s ===== */
+        bc[25] = 0x5A52F503u; bc_write(73);
+        for (n = 0; n < 100u; n++) {
+            bc_write(74u + n);
+            bc[27] = tmr[0] - t0;            /* wall-time since kick (ticks) */
+            if (n == 25u || n == 50u || n == 75u) {  /* segment re-kicks
+                                          * (MMIO; TASK-023 F2 — each armed
+                                          * segment 12.5 s vs 58.6) */
+                uint32_t g = wk[0x30 / 4]; wk[0x30 / 4] = ~g;
+            }
+            delay(500);
+        }
+        bc[25] = 0x5A52F504u; bc_write(174u);
+        p0c = *pw0; p1c = *pw1;
+        bc[29] = p0c; bc[30] = p1c;          /* end-reads (overwrote iff 504) */
+        /* ===== WINDOW ENDS ===== */
+
+        printf("W-108b: window done; CPU1 HELD, A08 canonical, mk=%08x "
+               "elapsed=%08x\n", *mkf, bc[27]);
+        {
+            FILE *f = fopen("/accounts/devuser/kexec-w108b.log", "w");
+            if (f) {
+                fprintf(f, "W108b n=100 rst=%08x a08=%08x "
+                        "pw_pre=%08x/%08x pw_hold=%08x/%08x pw_end=%08x/%08x "
+                        "kick=%08x elapsed=%08x mk=%08x ladder=%08x\n",
+                        *rstf, rb, p0a, p1a, p0b, p1b, p0c, p1c,
+                        t0, bc[27], *mkf, bc[25]);
+                fclose(f); sync();
+            }
+        }
+        bc[25] = (*mkf == 1u) ? 0x5A52F5E1u : 0x5A52F5EFu;
+        printf("W-108b: %s (no jump; CPU1 held, A08 canonical)\n",
+               (*mkf == 1u) ? "COMPLETE" : "MARKER-MOVED");
+        bc_snapshot_file(77);                /* step 77 = W-108b (TASK-023 F5b:
+                                              * distinct from W-108's 76) */
+        wdt2_disable();
+        return 0;
+    }
+
     bc_write(39);
     bc[3] = (uint32_t)phys;
     bc[15] = (uint32_t)time(NULL) ^ (uint32_t)phys;   /* run nonce (phys varies per run) */
@@ -2211,6 +2325,13 @@ int main(int argc, char **argv)
     if (argc > 1 && !strcmp(argv[1], "--holdwin")) {
         g_l2on = 1;
         g_holdwin = 1;
+        return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
+                     argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
+                     argc > 4 ? argv[4] : "/tmp/probe.bin");
+    }
+    if (argc > 1 && !strcmp(argv[1], "--holdslow")) {
+        g_l2on = 1;
+        g_holdslow = 1;
         return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
                      argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
                      argc > 4 ? argv[4] : "/tmp/probe.bin");
