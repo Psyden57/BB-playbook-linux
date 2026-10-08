@@ -688,6 +688,13 @@ static int g_sarrel;    /* --sarrel: W-106 — THE [A08]-RELAY RELEASE (w105-rec
                          * The warm-path release control: hold -> [A08]<-blob ->
                          * release(+SEV) -> syscall-free marker spin -> re-hold ->
                          * [A08]-restore. NO JUMP; end-state HELD+CANONICAL. */
+static int g_holdwin;   /* --holdwin: W-108 — THE HOLD-ONLY CONTROL (TASK-020
+                         * F1). The release, REMOVED: fresh kick -> hold(1) ->
+                         * delay-heartbeat window -> report. NO RELEASE; NO
+                         * [A08] write (canonical, read-only); NO JUMP; end
+                         * state HELD+CANONICAL. Tests whether MERE CPU1 loss
+                         * wedges QNX at a kernel entry (pure-loss H1) vs the
+                         * release-edge reading (H4). Design: W-108-design.md. */
 /* PlayBook W-47 (2026-09-11): the fresh-boot (post-battery-pull) QNX pool
  * has NO 24 MB contiguous run at all (frag=129 on every hinted slot,
  * protected=12 -> NONE, twice) — but the buffer only NEEDS ~9 MB on the
@@ -1488,6 +1495,100 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         return 0;
     }
 
+    /* --- W-108 (session 23): THE HOLD-ONLY CONTROL (--holdwin) ---
+     * TASK-020 F1: the RELEASE, REMOVED (the single variable vs W-106).
+     * blob v2 deployed (inert; bc[31] = the stray-landing detector) ->
+     * fresh WDT2 kick -> HOLD(1) -> BOUNDED DELAY-HEARTBEAT WINDOW (each
+     * iteration = bc_write MMIO + delay(10) = one kernel entry — the class
+     * that dies if mere CPU1 loss wedges QNX) -> report -> abort hygiene.
+     * NO RELEASE; NO [A08] write (canonical, read-only verify); NO JUMP.
+     * End-state = HELD + CANONICAL (the flight-proven cell; CPU1 returns at
+     * the next reset — NEVER release it here). SSH may die at the hold (the
+     * jump.sh-era note) — the OUTCOME channel = bc[25]/bc[1] + kexec-w108.log
+     * + the battery, NEVER ssh liveness. A mere-loss wedge (if it fires) is
+     * WDT2-recoverable (kick+58.6); the window END must precede that fire.
+     * Channels: bc[25] 0x5A52F1xx; bc[1] 74..74+N (death index = bc[1]-74);
+     * bc[31]=1 init (0x5A52F2F2 = STRAY LANDING — alarm);
+     * /accounts/devuser/kexec-w108.log. Design: W-108-design.md. */
+    if (g_holdwin) {
+        volatile uint32_t *mkf  = mapdev(0x9000007Cull, 4);   /* bc[31] */
+        volatile uint32_t *rstf = mapdev(RSTCTRL_CPU1, 4);
+        volatile uint32_t *sarf = mapdev(0x4A326000ull, 0x1000); /* [A08] RO */
+        volatile uint32_t *pw0  = mapdev(0x48243404ull, 4);   /* PWRSTST CPU0 */
+        volatile uint32_t *pw1  = mapdev(0x48243804ull, 4);   /* PWRSTST CPU1 */
+        uint32_t sp, rb, p0a, p1a, p0b, p1b, p0c, p1c, n;
+        const uint32_t w108_n = 2000u;   /* ~20-35 s of delay(10) iterations */
+
+        static const uint32_t w108_blob[7] = {   /* blob v2 — VERBATIM (W-103/W-105/W-106) */
+            0xE59F000Cu, 0xE59F100Cu, 0xE5801000u, 0xE320F002u,
+            0xEAFFFFFDu, 0x9000007Cu, 0x5A52F2F2u,
+        };
+        volatile uint8_t *blobp = iram + 0x5A00;             /* PA 0x40309A00 */
+        memcpy((void *)blobp, w108_blob, sizeof w108_blob);
+        if (memcmp((void *)blobp, w108_blob, sizeof w108_blob)) {
+            printf("FAIL: W-108 blob verify\n"); wdt2_disable(); return 1;
+        }
+        bc[31] = 1u;                     /* fresh-slot init: 1 = no landing */
+        bc[3] = (uint32_t)phys;
+        bc[15] = (uint32_t)time(NULL) ^ (uint32_t)phys;
+        bc[25] = 0x5A52F101u; bc_write(71);
+        sp = *rstf; rb = sarf[0xA08 / 4];
+        /* PWRSTST FIRST-TOUCH PROBE (pre-kick, pre-hold): a new register
+         * class is read with NO armed window and NO state change (the
+         * external-abort class, W-28). Live-verified 2026-10-07 (s23):
+         * NS-readable; rest baseline cpu0=02000037 cpu1=00000000. */
+        p0a = *pw0; p1a = *pw1;
+        printf("W-108: entered; rst=%08x A08=%08x pw=%08x/%08x blob ok\n",
+               sp, rb, p0a, p1a);
+
+        { /* fresh WDT2 window */
+            volatile uint32_t *wk = mapdev(0x4A314000ull, 0x100);
+            uint32_t g = wk[0x30 / 4]; wk[0x30 / 4] = ~g;
+        }
+
+        *rstf = 1;                           /* HOLD — the ONE state change */
+        __asm__ volatile("dsb" ::: "memory");
+        sp = *rstf;                          /* write-echo: write-landed
+                                              * detector ONLY, not a verify */
+        bc[25] = 0x5A52F102u; bc_write(72);
+        p0b = *pw0; p1b = *pw1;              /* PWRSTST across the hold */
+
+        /* ===== THE WINDOW (the deliberate kernel entries). If mere CPU1
+         * loss wedges QNX at a kernel entry, the heartbeats STOP here and
+         * bc[1]-74 = the death index. ===== */
+        bc[25] = 0x5A52F103u; bc_write(73);
+        for (n = 0; n < w108_n; n++) {
+            bc_write(74u + n);
+            delay(10);
+        }
+        bc[25] = 0x5A52F104u; bc_write(74u + w108_n);
+        p0c = *pw0; p1c = *pw1;              /* PWRSTST window-end */
+        /* ===== WINDOW ENDS ===== */
+
+        printf("W-108: window done (%u); CPU1 HELD, A08 canonical, mk=%08x\n",
+               w108_n, *mkf);
+        {
+            FILE *f = fopen("/accounts/devuser/kexec-w108.log", "w");
+            if (f) {
+                fprintf(f, "W108 n=%u rst=%08x a08=%08x "
+                        "pw_pre=%08x/%08x pw_hold=%08x/%08x pw_end=%08x/%08x "
+                        "mk=%08x ladder=%08x\n",
+                        w108_n, *rstf, rb, p0a, p1a, p0b, p1b, p0c, p1c,
+                        *mkf, bc[25]);
+                fclose(f); sync();
+            }
+        }
+        bc[25] = (*mkf == 1u) ? 0x5A52F1E1u : 0x5A52F1EFu;
+        /* E1 = COMPLETE (healthy; NO cycle expected). EF = bc[31] MOVED =
+         * a stray landing/release happened — investigate as release-class
+         * BEFORE any further flight. */
+        printf("W-108: %s (no jump; CPU1 held, A08 canonical)\n",
+               (*mkf == 1u) ? "COMPLETE" : "MARKER-MOVED");
+        bc_snapshot_file(76);
+        wdt2_disable();
+        return 0;
+    }
+
     bc_write(39);
     bc[3] = (uint32_t)phys;
     bc[15] = (uint32_t)time(NULL) ^ (uint32_t)phys;   /* run nonce (phys varies per run) */
@@ -2103,6 +2204,13 @@ int main(int argc, char **argv)
     if (argc > 1 && !strcmp(argv[1], "--sarrel")) {
         g_l2on = 1;
         g_sarrel = 1;
+        return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
+                     argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
+                     argc > 4 ? argv[4] : "/tmp/probe.bin");
+    }
+    if (argc > 1 && !strcmp(argv[1], "--holdwin")) {
+        g_l2on = 1;
+        g_holdwin = 1;
         return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
                      argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
                      argc > 4 ? argv[4] : "/tmp/probe.bin");
