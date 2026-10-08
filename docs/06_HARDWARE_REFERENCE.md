@@ -83,7 +83,7 @@
 | Offset | Register | Notes |
 |--------|----------|-------|
 | 0x24 | WCLR | prescaler: (1<<5)\|(PTV<<2); PTV=0 on this unit |
-| 0x28 | WCRR | current counter — down-counting from 0xFFFFFFFF |
+| 0x28 | WCRR | current counter — **UP-counts from WLDR toward overflow at 0xFFFFFFFF**; elapsed = CRR − WLDR (TRM 22.3.4.3 "upward 32-bit counter"; TASK-024 F3 correction 2026-10-08 — the earlier "down-counting" line was wrong) |
 | 0x2C | WLDR | load value — **0xFFE2B400 = 58.6 s** @ 32.768 kHz, PTV=0 |
 | 0x30 | WTGR | TRIGGER — **ANY write reloads CRR from WLDR** (value ignored) |
 | 0x48 | WSPR | start/stop service: 0xBBBB then 0x4444 = start; 0xAAAA then 0x5555 = stop |

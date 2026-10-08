@@ -704,6 +704,14 @@ static int g_holdslow;  /* --holdslow: W-108b — THE SLOW/IDLE HOLD WINDOW
                          * Segment WDT2 re-kicks at n==25/50/75 (plain MMIO).
                          * NO RELEASE; NO [A08] write; NO JUMP; end-state
                          * HELD+CANONICAL. Design: W-108b-design.md. */
+static int g_holdidle;  /* --holdidle: W-108c — THE ZERO-KERNEL-ENTRY WINDOW
+                         * (the w108b record's recommendation). One variable
+                         * vs --holdslow: the window contains NO kernel entries
+                         * at all — a user-space spin paced by MMIO (heartbeats
+                         * + the WDT2 CRR clock + segment re-kicks). Tests the
+                         * strand's kernel-entry mediation (T1 vs T5). NO
+                         * RELEASE; NO [A08] write; NO JUMP; end-state
+                         * HELD+CANONICAL. Design: W-108c-design.md. */
 /* PlayBook W-47 (2026-09-11): the fresh-boot (post-battery-pull) QNX pool
  * has NO 24 MB contiguous run at all (frag=129 on every hinted slot,
  * protected=12 -> NONE, twice) — but the buffer only NEEDS ~9 MB on the
@@ -1703,6 +1711,121 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         return 0;
     }
 
+    /* --- W-108c (session 24): THE ZERO-KERNEL-ENTRY WINDOW (--holdidle) ---
+     * The strand family's invariant: every strand landed at/near a post-hold
+     * KERNEL ENTRY. This window makes NONE — a pure user-space spin paced by
+     * MMIO only (heartbeats; the WDT2 CRR clock; segment re-kicks). Completion
+     * => the strand is kernel-entry-mediated (T1; 08-30 reconciled; W-107's
+     * call-free exposure analysis holds). A strand INSIDE the spin => the
+     * mechanism lives below the kernel-entry layer (T5/interrupt/hardware).
+     * NO RELEASE; NO [A08] write; NO JUMP; end-state HELD+CANONICAL.
+     * Ladder bc[25] 0x5A52F6xx (601/602/603/604/E1/EF); bc[1] 74..473 (death
+     * index = bc[1]-74); bc[27] = CRR ticks since the last kick; bc[28] =
+     * re-kick count (wall = bc[28]*15 s + bc[27]/32768 s).
+     * OUTCOME channel = ladder + bc[26/27/28/29/30] + kexec-w108c.log +
+     * battery (ssh may die at the hold — never an outcome).
+     * Design: W-108c-design.md. */
+    if (g_holdidle) {
+        volatile uint32_t *mkf  = mapdev(0x9000007Cull, 4);   /* bc[31] */
+        volatile uint32_t *rstf = mapdev(RSTCTRL_CPU1, 4);
+        volatile uint32_t *sarf = mapdev(0x4A326000ull, 0x1000); /* [A08] RO */
+        volatile uint32_t *pw0  = mapdev(0x48243404ull, 4);   /* PWRSTST CPU0 */
+        volatile uint32_t *pw1  = mapdev(0x48243804ull, 4);   /* PWRSTST CPU1 */
+        volatile uint32_t *wk   = mapdev(0x4A314000ull, 0x100); /* WDT2 page */
+        uint32_t sp, rb, p0a, p1a, p0b, p1b, p0c, p1c, n, inner;
+        uint32_t ldr, seg = 0, kicks = 0;
+
+        static const uint32_t w108c_blob[7] = {  /* blob v2 — VERBATIM */
+            0xE59F000Cu, 0xE59F100Cu, 0xE5801000u, 0xE320F002u,
+            0xEAFFFFFDu, 0x9000007Cu, 0x5A52F2F2u,
+        };
+        volatile uint8_t *blobp = iram + 0x5A00;             /* PA 0x40309A00 */
+        memcpy((void *)blobp, w108c_blob, sizeof w108c_blob);
+        if (memcmp((void *)blobp, w108c_blob, sizeof w108c_blob)) {
+            printf("FAIL: W-108c blob verify\n"); wdt2_disable(); return 1;
+        }
+        bc[31] = 1u;
+        bc[3] = (uint32_t)phys;
+        bc[15] = (uint32_t)time(NULL) ^ (uint32_t)phys;
+        bc[25] = 0x5A52F601u; bc_write(71);
+        sp = *rstf; rb = sarf[0xA08 / 4];
+        p0a = *pw0; p1a = *pw1;
+        (void)wk[0x28 / 4];                  /* WDT2 CRR first-touch (pre-kick) */
+        ldr = wk[0x2C / 4];                  /* the reload value (the clock) */
+        printf("W-108c: entered; rst=%08x A08=%08x pw=%08x/%08x ldr=%08x "
+               "blob ok\n", sp, rb, p0a, p1a, ldr);
+
+        { /* fresh WDT2 window */
+            uint32_t g = wk[0x30 / 4]; wk[0x30 / 4] = ~g;
+        }
+        bc[26] = wk[0x28 / 4];               /* the kick-time CRR anchor */
+
+        /* pre-hold log (before the danger zone); perror on fail (W-108b
+         * lesson: the silent guard lost the log) */
+        {
+            FILE *f = fopen("/accounts/devuser/kexec-w108c.log", "w");
+            if (f) {
+                fprintf(f, "W108c PRE rst=%08x a08=%08x pw=%08x/%08x "
+                        "kick=%08x ldr=%08x\n", *rstf, rb, p0a, p1a,
+                        bc[26], ldr);
+                fclose(f); sync();
+            } else {
+                perror("W-108c PRE fopen");
+            }
+        }
+
+        *rstf = 1;                           /* HOLD — the ONE state change */
+        __asm__ volatile("dsb" ::: "memory");
+        sp = *rstf;                          /* write-echo detector ONLY */
+        bc[25] = 0x5A52F602u; bc_write(72);
+        p0b = *pw0; p1b = *pw1;
+        bc[29] = p0b; bc[30] = p1b;          /* PWRSTST across the hold */
+
+        /* ===== THE WINDOW: ZERO kernel entries — register math + MMIO only.
+         * If the strand needs a kernel entry (T1), this window COMPLETES. ===== */
+        bc[25] = 0x5A52F603u; bc_write(73);
+        for (n = 0; n < 400u; n++) {
+            bc_write(74u + n);
+            seg = wk[0x28 / 4] - ldr;        /* ticks since the last kick */
+            bc[27] = seg;
+            bc[28] = kicks;
+            for (inner = 0; inner < 50000000u; inner++)   /* ~100 ms user-space */
+                __asm__ volatile("nop");
+            if ((wk[0x28 / 4] - ldr) >= 0x78000u) {  /* >=15 s: segment re-kick
+                                          * (MMIO; keeps the box armed) */
+                uint32_t g = wk[0x30 / 4]; wk[0x30 / 4] = ~g;
+                kicks++;
+            }
+        }
+        bc[25] = 0x5A52F604u; bc_write(474u);
+        p0c = *pw0; p1c = *pw1;
+        bc[29] = p0c; bc[30] = p1c;
+        /* ===== WINDOW ENDS (the report below = the first kernel entries) ===== */
+
+        printf("W-108c: window done; CPU1 HELD, A08 canonical, mk=%08x "
+               "seg=%08x kicks=%u\n", *mkf, seg, kicks);
+        {
+            FILE *f = fopen("/accounts/devuser/kexec-w108c.log", "w");
+            if (f) {
+                fprintf(f, "W108c n=400 rst=%08x a08=%08x "
+                        "pw_pre=%08x/%08x pw_hold=%08x/%08x pw_end=%08x/%08x "
+                        "kick=%08x ldr=%08x seg=%08x kicks=%u mk=%08x "
+                        "ladder=%08x\n",
+                        *rstf, rb, p0a, p1a, p0b, p1b, p0c, p1c,
+                        bc[26], ldr, seg, kicks, *mkf, bc[25]);
+                fclose(f); sync();
+            } else {
+                perror("W-108c FINAL fopen");
+            }
+        }
+        bc[25] = (*mkf == 1u) ? 0x5A52F6E1u : 0x5A52F6EFu;
+        printf("W-108c: %s (no jump; CPU1 held, A08 canonical)\n",
+               (*mkf == 1u) ? "COMPLETE" : "MARKER-MOVED");
+        bc_snapshot_file(78);                /* step 78 = W-108c */
+        wdt2_disable();
+        return 0;
+    }
+
     bc_write(39);
     bc[3] = (uint32_t)phys;
     bc[15] = (uint32_t)time(NULL) ^ (uint32_t)phys;   /* run nonce (phys varies per run) */
@@ -2332,6 +2455,13 @@ int main(int argc, char **argv)
     if (argc > 1 && !strcmp(argv[1], "--holdslow")) {
         g_l2on = 1;
         g_holdslow = 1;
+        return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
+                     argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
+                     argc > 4 ? argv[4] : "/tmp/probe.bin");
+    }
+    if (argc > 1 && !strcmp(argv[1], "--holdidle")) {
+        g_l2on = 1;
+        g_holdidle = 1;
         return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
                      argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
                      argc > 4 ? argv[4] : "/tmp/probe.bin");
