@@ -4504,3 +4504,42 @@ modes (nearly confound-free: with `g_l2on` the SMC it protects is already
 skipped, so for these flights the block guards a path the build never takes).
 Recommendation: W-107h is the fastest route to the cont; W-107f is the honest
 one.
+
+### Build W-107h (--parkabort, the pre-SMC clean skipped), session 24, 2026-10-09: ledger #176 — THE BYPASS (the killer's page-0 globals clean gated off under the park modes); flight PENDING (user-gated)
+
+`bash build.sh` rc=0 (4 warnings = the pre-existing family). Backup first:
+qnx2linux.pre-w107h (40,869 B sha 1151dac3b223682… = #175, verified). Artifact:
+**40,869 B sha bd43ef2c1260654354f2d798a7e1931ed33cc716fb887aba9b0e8d3822ab6e35**
+(#176). Kernel #163 unchanged; the cont byte-identical to #175 (stub3.S
+untouched).
+
+**The confound assessment, EVIDENCED (not asserted):** the pre-SMC clean's
+stated purpose is the run-14 DRAM-truth guarantee for the post-SMC-disable path
+— and `mon_call(0x102)` sits in **g_l2on's ELSE branch (:2132)**, while both
+park modes set g_l2on. So under the park flights the L2 is never disabled and
+the guarantee protects a path the build never takes ⇒ the bypass is nearly
+confound-free. The edit is ONE gate (`if (!(g_parkjump || g_parkabort))` at
+:2020, the block's body verbatim inside) + an `else` writing **bc[20] = 0xF0**
+(the proof-of-skip marker, the only writer of that value tree-wide).
+
+Rule-16: **the size delta is 0 B** (#175 and #176 are both 40,869 B — the
+metadata-zone coincidence the skill warns about; size is a hint in both
+directions), so the proof is the disasm: **instruction count 5912 → 5913 =
+exactly +1**; the new `804c288 mov r2,#240 / 804c28c str r2,[r3,#80]` (0xF0 to
+offset 0x50 = bc[20]); the gate compiled at 804c020-804c03c (loads the words at
++0x38 and +0x3C = g_parkjump / g_parkabort, tests each, both branches to the
+F0 path = `!(g_parkjump || g_parkabort)`); **the old bc[20] 0xE1 "block entered"
+store is GONE** (now inside the non-park branch) and the **bc[21] E-family is
+BYTE-IDENTICAL to #175** (the same 10 sites at offset 0x54); the ~2,500 remaining
+diffs are all ±4-byte branch/pool displacements (the one-insertion cascade).
+Build record: ~/agent-runs/w107h-build-record.md; shipped copy at
+~/agent-runs/qnx2linux.w107h; a FRESH capture path staged (w107h-recovery.sh).
+
+**Decode (bc[20] first):** 0xF0 + bc[1]=79 + bc[25]=702 + bc[21]=EE ⇒ ★★ **the
+cont is reachable** (the payload ran the tail without the clean, reached the
+abort, F1 re-enabled the GICD) ⇒ re-fly **--parkjump** for the arc's goal
+state. 0xF0 + bc[1]=51 ⇒ the killer is NOT only the pre-SMC clean (shared with
+the rest of the window) ⇒ W-107f is the decisive instrument. 0xF0 + a cont
+marker (21/211/212/213/23) ⇒ the cont RAN and the release span itself died
+(the release-span lottery). An E-family value at death ⇒ the gate did not take:
+STOP and rule-16 the deployed payload. Design: W-107h-design.md.

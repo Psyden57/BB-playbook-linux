@@ -2010,7 +2010,14 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
      * post-disable path reads comes from DRAM instead of lines stranded
      * dirty in the about-to-be-bypassed L2. mon_call itself touches zero
      * stack (leaf, verified in disassembly). */
-    {
+    /* W-107h: the park modes SKIP the pre-SMC clean (see the else at the end of
+     * this block). Its purpose is the run-14 DRAM-truth guarantee for the
+     * post-SMC-disable path — and mon_call(0x102) is in g_l2on's ELSE branch
+     * (:2132), so under the park modes the L2 is NEVER disabled and the
+     * guarantee protects a path the build never takes. W-107e proved this
+     * block's page-0 globals clean is the r1/r2/w107d/w107e killer
+     * (bc[20]=0x100). ONE variable: the gate. Design: W-107h-design.md. */
+    if (!(g_parkjump || g_parkabort)) {
         off64_t gpa = 0, spa = 0;
         uint64_t cg = 0, cs = 0;
         volatile char *gv = (volatile char *)&bc;   /* .data/.bss anchor */
@@ -2049,6 +2056,12 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         /* stack slots for post-SMC code rewritten here so their lines are
          * dirty-in-L1 only if touched again before the disable (gpa/spa
          * live in registers through the mon_call — leaf-safe) */
+    } else {
+        /* W-107h: the park modes skip the clean entirely. bc[20]=0xF0 is the
+         * proof-of-skip marker — distinct from the E-family (E1..EF) and the
+         * page counters (0x1NN/0x2NN), so a death after it is definitively
+         * past the gate. */
+        if (g_parkjump || g_parkabort) bc[20] = 0xF0u;   /* SKIPPED (W-107h) */
     }
     {
         /* PlayBook W-90 (session 13): the wide stale-line cure — see
