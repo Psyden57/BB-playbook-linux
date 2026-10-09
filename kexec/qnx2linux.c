@@ -712,6 +712,14 @@ static int g_holdidle;  /* --holdidle: W-108c — THE ZERO-KERNEL-ENTRY WINDOW
                          * strand's kernel-entry mediation (T1 vs T5). NO
                          * RELEASE; NO [A08] write; NO JUMP; end-state
                          * HELD+CANONICAL. Design: W-108c-design.md. */
+static int g_parkjump;  /* --parkjump: W-107 — THE JUMP-INTEGRATION. Stages
+                         * blob v2 at 0x40309A00 + arms params[5]; the cont's
+                         * W-107 block (stub3.S) does repoint -> release(+SEV)
+                         * -> landing poll -> [A08]-restore at the pre-kernel
+                         * tail, leaving CPU1 PARKED-ALIVE on the blob
+                         * (Running/ON = SCU-coherent — the TLB-test regime).
+                         * No-landing degrades safe (re-hold + restore = the
+                         * held shape). Design: W-107-design.md. */
 /* PlayBook W-47 (2026-09-11): the fresh-boot (post-battery-pull) QNX pool
  * has NO 24 MB contiguous run at all (frag=129 on every hinted slot,
  * protected=12 -> NONE, twice) — but the buffer only NEEDS ~9 MB on the
@@ -1826,6 +1834,35 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         return 0;
     }
 
+    /* --- W-107 (session 23): THE JUMP-INTEGRATION staging (--parkjump) ---
+     * Stages blob v2 at 0x40309A00 + arms params[5] = 0x5A52F7A7 (the cont's
+     * W-107 gate). The release sequence itself lives in stub3.S's continuation
+     * (repoint -> release(+SEV) -> landing poll -> [A08]-restore) so the
+     * release->jump span is µs-scale. wdt2_kick() = the REAL recovery net
+     * (the raw TGR-complement kick is a measured no-op — w108c bc[26]).
+     * Ladder bc[25] 0x5A52F7xx (701 armed); the cont writes bc[1] 214
+     * (parked-alive landed) / 215 (no-landing; re-held). Design: W-107-design.md. */
+    if (g_parkjump) {
+        volatile uint32_t *mkf  = mapdev(0x9000007Cull, 4);   /* bc[31] */
+        volatile uint32_t *parp = (volatile uint32_t *)(iram + 0x5800);
+
+        static const uint32_t w107_blob[7] = {   /* blob v2 — VERBATIM */
+            0xE59F000Cu, 0xE59F100Cu, 0xE5801000u, 0xE320F002u,
+            0xEAFFFFFDu, 0x9000007Cu, 0x5A52F2F2u,
+        };
+        volatile uint8_t *blobp = iram + 0x5A00;             /* PA 0x40309A00 */
+        memcpy((void *)blobp, w107_blob, sizeof w107_blob);
+        if (memcmp((void *)blobp, w107_blob, sizeof w107_blob)) {
+            printf("FAIL: W-107 blob verify\n"); wdt2_disable(); return 1;
+        }
+        *mkf = 1u;                           /* no-landing init / detector */
+        parp[5] = 0x5A52F7A7u;               /* the cont's arm gate */
+        bc[25] = 0x5A52F701u; bc_write(80);
+        wdt2_kick();                         /* SPR-enable form = the real net */
+        printf("W-107: armed (params5=%08x); blob staged; jumping\n", parp[5]);
+        /* falls through to the jump tail (bc_write(39) ...) */
+    }
+
     bc_write(39);
     bc[3] = (uint32_t)phys;
     bc[15] = (uint32_t)time(NULL) ^ (uint32_t)phys;   /* run nonce (phys varies per run) */
@@ -2462,6 +2499,13 @@ int main(int argc, char **argv)
     if (argc > 1 && !strcmp(argv[1], "--holdidle")) {
         g_l2on = 1;
         g_holdidle = 1;
+        return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
+                     argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
+                     argc > 4 ? argv[4] : "/tmp/probe.bin");
+    }
+    if (argc > 1 && !strcmp(argv[1], "--parkjump")) {
+        g_l2on = 1;
+        g_parkjump = 1;
         return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
                      argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
                      argc > 4 ? argv[4] : "/tmp/probe.bin");

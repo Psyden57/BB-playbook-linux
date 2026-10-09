@@ -93,6 +93,49 @@ cont_start:                                 @ PC == PA from here on
         str     r0, [r1]
         dsb
 .Lw104_no_restore:
+        @ --- W-107 (session 23): THE PARKED-ALIVE RELEASE (jump-integration).
+        @ Armed iff params[5] (0x40309814) == 0x5A52F7A7 (the --parkjump C
+        @ block stages blob v2 at 0x40309A00 + this arm). MMU is OFF: plain
+        @ physical stores, NO SMC (the file's rule). r9/r11 preserved.
+        ldr     r2, =0x40309800
+        ldr     r0, [r2, #0x14]             @ params[5]: the arm gate
+        ldr     r1, =0x5A52F7A7
+        cmp     r0, r1
+        bne     .Lw107_skip
+        ldr     r3, =0x4A326A08             @ CPU1_WAKEUP_NS_PA_ADDR
+        ldr     r0, =0x40309A00             @ the parked blob v2
+        str     r0, [r3]                    @ REPOINT [A08] -> the blob
+        dsb
+        ldr     r4, =0x4824380C             @ RSTCTRL_CPU1
+        mov     r0, #0
+        str     r0, [r4]                    @ RELEASE (1 -> 0)
+        dsb
+        sev                                 @ the documented wake event
+        mov     r2, #0x10000                @ bounded landing poll (sub-ms)
+.Lw107_poll:
+        ldr     r0, [r11, #0x7C]            @ bc[31] = the blob's marker slot
+        ldr     r1, =0x5A52F2F2
+        cmp     r0, r1
+        beq     .Lw107_landed
+        subs    r2, r2, #1
+        bne     .Lw107_poll
+        @ POLL EXPIRED (no landing): degrade safe — RE-HOLD + restore.
+        mov     r0, #1
+        str     r0, [r4]                    @ RE-HOLD (today's held shape)
+        dsb
+        ldr     r0, =0x4A326B00             @ canonical
+        str     r0, [r3]                    @ RESTORE [A08]
+        dsb
+        mov     r0, #215
+        str     r0, [r11, #4]               @ bc = 215 (no-landing; re-held)
+        b       .Lw107_skip
+.Lw107_landed:
+        ldr     r0, =0x4A326B00             @ canonical
+        str     r0, [r3]                    @ RESTORE [A08] (load-bearing:
+        dsb                                 @ any later reset must see this)
+        mov     r0, #214
+        str     r0, [r11, #4]               @ bc = 214 (PARKED-ALIVE)
+.Lw107_skip:
         mov     r0, #0                      @ ARM Linux boot convention
         mvn     r1, #0                      @ r1 = 0xffffffff
         @ r2 = DTB phys from the params block (0x40309800+4) — the register
