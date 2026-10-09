@@ -4387,3 +4387,43 @@ new code + strings + the 0x5A52F702 store + metadata). Build record:
 ~/agent-runs/w107d-build-record.md; the shipped copy is snapshotted at
 ~/agent-runs/qnx2linux.w107d. Kernel #163 unchanged (5,223,233 B / sha
 ee303813…).
+
+### Run W-107d r1 (--parkabort, session 24, 2026-10-09): ★★★ N=3 — THE SWEEP BLOCK IS THE KILLER — the tail ran complete 3× across 3 placements and 2 payload builds and died at bc=51 every time (bc[29]=8192, bc[19]=0); the jump, kernel and release all removed from the picture; clean recovery
+
+Fired 22:55:2xZ (build #174, 40,489 B sha 607679869d41c213…). THE NO-JUMP
+CONTROL: the instrument that removes the jump, the kernel AND the release (the
+cont is unreachable by construction) and still dies at the same place. Live
+frames: t=7s bc35 (the whole-DRAM sweep running, bc[29]=0xef3=3795 chunks) →
+t=25s bc31 (placement 0xa1a00000 LANDED) → t=40s bc44 (the memtest CLEAN) →
+t=48s **bc49 + the final nonce ef6b339a** → FROZEN. ONE invocation (python:
+ef6b339a ^ a1a00000 = 4ecb339a; delta 40 s = the payload's own
+interim→final setup time). Recovery (22:59:12Z — the SECOND capture in
+w107-run2-recovery.txt; the first is run 2's): bc[1]=**0x33=51**, bc[3]=bc[18]=
+0xa1a00000, nonce ef6b339a FRESH, bc[25]=5a52f701 (armed), bc[29]=0x2000=8192,
+**bc[19]=0**, bc[31]=1 (never moved — no landing, no stray release), mirror
+0/2 = 51, ring counts 0.
+
+**★★ THE VERDICT:** with the jump removed, the kernel removed, and the release
+removed — and with THREE different placements (a1e00000 / a2d00000 / a1a00000)
+and TWO payload builds (#173 ×2, #174) — the death at bc=51 with bc[29]=8192
+and bc[19]=0 reproduced. **⇒ the `51->48` window (the pre-SMC DRAM-truth clean
+:2003-2020 and/or the tail three-sweep block's first chunks :2050-2065) kills
+the payload ON ITS OWN.** The W-107 mechanism is one span away (the cont's
+release = 0.26 ms bounded) but the payload cannot currently REACH the cont —
+that is now the project's blocking unknown, and it is PRE-EXISTING (the same
+window as the historical W-90b note, this file's W-90b entry: "died INSIDE the
+sweep block", bc[1]=51), not W-107-introduced. **The F1 fold (`*gicd = 1`) was
+never exercised** (the abort block was never reached): the family-first
+GICD-off→on + return-to-QNX combination remains unflown but the precaution
+stands. Safety: 5th clean cycle of the family — [A08] canonical pre AND post,
+ZERO writes by the recovery, RSTCTRL=0 (the boot's re-baseline), PWRSTST
+02000037/00000037, smctest r0=2, blob intact; reboot-wait 22:56:17Z → ssh up
+22:59:01Z ⇒ reset→network-back ≈ 164 s (band holds); the release-class risk
+line was never engaged. Protocol note: the staged recovery script's OUT path
+still pointed at run 2's file, so this capture APPENDED there (two timestamped
+sections) — complete and unambiguous, but the next flight must use a FRESH
+capture path. LED: PENDING (ask; the OFF would be the reset dark, not the jump).
+Record: ~/agent-runs/w107d-run1-record.md. NEXT: W-107e (per-chunk heartbeats
+inside 51->48 — one variable, observation-only) / W-107f (the sweep bypass,
+trades a variable) / W-107g (move the arm after the sweep block) — all
+offline-decidable; do NOT re-fly #174 as-is.
