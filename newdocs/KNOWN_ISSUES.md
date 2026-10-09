@@ -1,5 +1,26 @@
 # Known Issues & Open Problems
 
+**SESSION-23 HEADER (2026-10-08): READ BOOTSTRAP_SESSION_24 FIRST.** ★ THE
+WEDGE-MECHANISM ARC: the strand is REAL, kernel-entry-FREE, and a LOTTERY.
+W-108 (the hold-only control — NO release) stranded at window index
+1781/2000; W-108b (100 × delay(500)) stranded at its FIRST call; W-108c (a
+pure user-space spin, ZERO kernel entries) stranded at n≈2 after **64.5 ms**
+⇒ the mechanism is event-driven below the syscall layer (T5 SCU-in-ISR /
+tick-preemption / ISR cross-CPU handshake) and the latency is a lottery
+(64 ms → 40 s → 1781 calls); 08-30 #1's survival = draw luck. **The raw
+TGR-complement kick is a measured NO-OP** (bc[26] = LDR+0.182 s at the anchor;
+the family's recoveries = wdtkick's cadence + 58.6 s). The LED lit-freeze
+variant = N=6. The recovery chain: 6-for-6 clean cycles (1 manual + 5
+self-recovered). **W-107 (--parkjump, #173) is BUILT + preflighted GO: the
+kernel boots with CPU1 PARKED-ALIVE (SCU-coherent — the TLB-test regime) —
+its flight is session 24's first action and CARRIES the release-class risk
+line (the 08-30 #2 manual-power-cycle shape).** Instrument lessons: the
+master counter 0x48243200 is a DUD from NS; the WDT2 CRR is the working clock
+(UP-counting — docs/06 fixed); stash in-flight state in bc slots (/tmp wipes);
+perror on fopen. The subagent provider route was 503-down from mid-session
+(TASK-025 on) — audits ran root-side with probe evidence. The headers below
+stand (with the dated corrections in the TASK-020/022 task files).
+
 **SESSION-22 HEADER (2026-10-07): READ BOOTSTRAP_SESSION_23 FIRST.** ★ THE [A08] LANDING: W-106 proved the WARM release follows [A08] (the restoration chain) — CPU1 landed on the parked blob (`bc[31]=0x5A52F2F2`, µs-scale; `w106-record.md`) — and the full hygiene (re-hold + `[A08]`-restore-canonical + `kexec-w106.log`) completed BEFORE the release-on-live wedge fired (3rd instance: 08-30 #2 / W-105 / W-106; variable timing; the WDT + the canonical restore = a clean recovery — **the W-103-r1 stall class defeated by the restore ordering**). **The residual wedge = THE TOP OPEN PROBLEM (it gates the jump-integration, W-107).** Also: the AUX path is the cold-boot pen ONLY (the TASK-017 AUX-target claim superseded — the dated-notes chain); RSTCTRL readbacks = write-echoes (not independent verifies); the payload cross-build deltas = `.strtab`/build-id metadata only (rule-16 refinement). The historical headers below stand.
 
 **SESSION-21 HEADER (2026-10-07): READ BOOTSTRAP_SESSION_22 FIRST.**

@@ -43,20 +43,25 @@ original conversation history.
 
 ## Current handoff state
 
-- Latest session notes: [session-notes/session-22.md](session-notes/session-22.md)
-  — F2 r2 (release-never-took; clean cycle; the stamp family) + TASK-017 +
-  W-105 (the release-era wedge; the WDT clean cycle; A08 untouched) + the
-  ROUND-3 warm/cold-path correction + **W-106 = ★ THE [A08] LANDING** (the
-  warm release delivers CPU1 to the blob; the full hygiene; the
-  post-completion wedge; the canonical-clean cycle)
-- **Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_23.md` — READ IT
-  FIRST** (the v4 read order, the s22 state, the #169 ledger + the landing
-  forensics, the wedge-study queue; the user's notes: relay = question-driven
-  with the aged sessions; the user owns wrap timing)
-- Next action: **the WEDGE-MECHANISM STUDY (offline-source first; then a
-  discrimination flight design) — it gates W-107 (the jump-integration)**;
-  the WDT-window thread; the W-105/W-106 LED stamps (ask the user); smalls.
-  HARD GATE unchanged: no A08-touching flight without the re-hold/verify
-  discipline. Draws remain available (--l2on); the 126-family + the
-  strategic fronts unchanged.
+- Latest session notes: [session-notes/session-23.md](session-notes/session-23.md)
+  — ★ THE WEDGE-MECHANISM ARC: TASK-020/TASK-022 (the studies) → **W-108 =
+  THE MERE-LOSS WEDGE** (the hold-only control, NO release, stranded at index
+  1781/2000) → **W-108b = the first-entry strand** (delay(500) at n=0; the
+  timeout-duration lead) → **W-108c = ★★ THE STRAND WITHOUT A KERNEL ENTRY**
+  (the pure user-space spin died at n≈2 after 64.5 ms; the mechanism is
+  event-driven below the syscall layer; the latency is a lottery; **the raw
+  TGR-complement kick = a measured no-op**) → **W-107 (`--parkjump`, #173)
+  DESIGNED + PREFLIGHTED GO + BUILT** (the release in the continuation; CPU1
+  enters the kernel PARKED-ALIVE = SCU-coherent — the TLB-test regime)
+- **Latest bootstrap: `SESSION-HANDOFF/BOOTSTRAP_SESSION_24.md` — READ IT
+  FIRST** (the v5 read order, the s23 state, the #173 ledger + the W-107
+  decode keys + the staged `w107-recovery.sh`, the ranked queue with **W-107's
+  flight as queue 1 = session 24's first action** and its RISK LINE, the
+  relay note: **session-23's agent remains reachable for session-24's
+  questions**)
+- Next action: **FLY W-107 (user-gated; the release-class risk line stands)**
+  → then the N≥3-draw spectrum (the parked-alive-vs-held TLB comparison) → the
+  mechanism memo's final thread (NOT offline-decidable — QNX's timer config
+  is NOT VISIBLE). The A08 disciplines unchanged; draws remain available
+  (--l2on); the 126-family + the strategic fronts unchanged.
 - Local-only assets and why: [SETUP.md](SETUP.md) §6

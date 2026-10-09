@@ -4161,3 +4161,85 @@ top open problem (3rd instance; variable timing).** Record:
 W-106-design.md).
 
 
+
+### Run W-108 (--holdwin, session 23, 2026-10-08): ★ THE MERE-LOSS WEDGE — the hold-only control wedged with NO release (bc[25]=5A52F103, bc[1]=1855 = index 1781/2000)
+
+Fired 01:49:10Z (`PAYLOAD_MODE=--holdwin ./poll-jump.sh zImage`; build #170;
+35,133 B sha d9820531). THE FIRST DISCRIMINATION FLIGHT (TASK-020's F1): the
+release REMOVED. The block: blob v2 (inert) → bc[31]=1 → ladder 101 → pre-reads
+(PWRSTST first-touch) → fresh kick → HOLD(1) at ≈+40 s (ssh dies = the
+documented hold-death) → 103 (window) → heartbeats 74..1855 land (index
+1781/2000) → **STRAND**; 104/E1/kexec-w108.log absent. Post (w108-recovery.txt,
+zero writes): bc[25]=5a52f103 fresh (base 5a52f4e1), bc[1]=0x73f=1855 fresh
+(base 0x41, mirrored 94000004/9fe00004), bc[31]=1 fresh (base 5a52f2f2 ⇒ no
+landing), A08 canonical pre AND post (never written), RSTCTRL=0 post (the
+boot's re-baseline), TGR=0x0000666e (the kick-reload family), smctest r0=2,
+blob intact. **⇒ THE H1-FAVORING CELL: mere CPU1 loss strands live QNX at a
+kernel entry without any release — the release-edge reading superseded.**
+Recovery: the armed WDT fired ≈+141 s (LED OFF; the wdtkick-cadence anchor —
+the raw-kick prediction was +97) → RED +2 → clean cycle → network +286 s;
+zero writes; device healthy. LED (user): 05/22/01:51/01:53 (blue/magenta/
+off/red; the lit-freeze variant N=4; magenta lit 119 s through the strand);
+USB: the usual chain. Record: ~/agent-runs/w108-run1-record.md (+ led). THE
+IN-FLIGHT PWRSTST WAS LOST (/tmp wipe) — the design's instrument lesson.
+
+### Run W-108b (--holdslow, session 23, 2026-10-08): the FIRST-ENTRY STRAND — delay(500) at n=0 vs W-108's 1781 × delay(10) (bc[1]=74, ladder 5A52F503); the timeout-duration lead; the WDT anchor
+
+Fired 04:00:59Z (`PAYLOAD_MODE=--holdslow`; #171; 36,808 B sha 5c8e4c5b). One
+variable = the traffic shape (100 × delay(500) + the stamp channels). The spin
+of instruments: PWRSTST-in-bc WORKED (bc[29/30]=02000037/00000037 — CPU1 power-
+ON under the hold; the F1 sweep disambiguation held); the master counter = a
+DUD (0x48243200 stuck at 3 across 3 reads); the PRE-hold log silently failed
+(the fopen guard). The block ran to 503 (window-start) then **bc[1]=74 = the
+FIRST heartbeat; bc[27]=0; the first delay(500) NEVER RETURNED (n=0)**; no
+504/E1/log-final. **⇒ The pair with W-108 kills per-call and wall-time models
+(1 vs 1781 entries; ~1 s vs 19-41 s) ⇒ the TIMEOUT DURATION is the
+discriminator** (a CPU1-dependent long-timeout path) — or two lottery draws
+(N=1 each). Recovery: the WDT fired at +85 s (LED OFF — the anchor implies the
+last-effective kick at +26.4, BEFORE the strand = instant death, no limp) →
+clean cycle; zero writes; device healthy. LED (user): 05/14/01:25/01:27;
+lit-freeze N=5; USB normal. Record: ~/agent-runs/w108b-run1-record.md.
+
+### Run W-108c (--holdidle, session 23, 2026-10-08): ★★ THE STRAND WITHOUT A KERNEL ENTRY — the pure user-space spin died at n≈2 after 64.5 ms (bc[1]=76, bc[27]−bc[26]=2112 ticks, ladder 5A52F603); the raw kick = a no-op
+
+Fired 06:15:36Z (`PAYLOAD_MODE=--holdidle`; #172; 38,587 B sha 3e8eb29b). One
+variable vs W-108b: the window contains NO kernel entries — a user-space nop
+spin paced by MMIO (heartbeats + the WDT2 CRR clock + clock-triggered segment
+re-kicks). The cont of #172 was object-verified: the window's only `bl`
+targets = bc_write. The block: blob v2 → 601 → pre-reads (the CRR first-touch)
+→ kick (bc[26]=ffe2cb57) → the PRE-hold log LANDS (`W108c PRE … kick=ffe2cb57
+ldr=ffe2b400` — the perror-era instrument works) → HOLD → 602 (PWRSTST pair
+landed) → 603 → heartbeats n=0,1,2 → **STRAND**: bc[1]=76, bc[27]=0x1F97,
+bc[28]=0, no 604/E1/log-final. The wall math (python): the spin lived
+bc[27]−bc[26] = 2,112 ticks = **64.5 ms**; and bc[26] = LDR+0.182 s at the
+anchor ⇒ **the raw TGR-complement kick is almost certainly a NO-OP** (a reload
+would read ≈0) — the family's recoveries ride wdtkick's cadence + 58.6 s.
+**⇒ THE KERNEL-ENTRY FRAMING IS SUPERSEDED: the strand is event-driven below
+the syscall layer (T5/tick/ISR); the latency is a lottery (64 ms → 40 s →
+1781 calls); 08-30 #1's survival = draw luck.** Recovery: the WDT fired at
++101 s (LED OFF) → +102 RED → clean cycle; zero writes; device healthy. LED
+(user): 05/23/01:41/01:42; lit-freeze N=6; USB normal. Record:
+~/agent-runs/w108c-run1-record.md.
+
+### Build W-107 (--parkjump, session 23, 2026-10-08): THE JUMP-INTEGRATION — the parked-alive release in the continuation (#173; BUILT; flight PENDING at wrap)
+
+The release arc's goal state: the kernel boots with CPU1 PARKED-ALIVE on blob
+v2 (Running/ON = SCU-coherent — the TLB-test regime) instead of held in reset.
+qnx2linux.c: a --parkjump staging block (blob v2 VERBATIM to 0x40309A00 +
+verify; bc[31]=1; params[5]=0x5A52F7A7 (the cont's gate; [0..3] = the
+unconditional params site, [4] = the W-104 arm ⇒ [5] verified FREE);
+bc[25]=0x5A52F701+bc_write(80); **wdt2_kick()** = the REAL recovery net) that
+falls through to the jump tail. stub3.S (the cont, MMU-off, inserted between
+the W-104 restore and the Linux boot convention): armed iff params[5] matches →
+REPOINT [A08]→0x40309A00 → RELEASE (RSTCTRL 0x4824380C ← 0) → sev → a bounded
+landing poll (bc[31]==0x5A52F2F2, budget 0x10000 ≈ 0.26 ms) → LANDED:
+[A08]←0x4A326B00 + bc[1]=214; EXPIRED: RE-HOLD + the same restore + bc[1]=215
+— every path ends [A08]-canonical. Preflight GO (root-side TASK-026 — the
+subagent provider route 503'd; the `$AS` encoding probe: `mov r2,#0x10000` = a
+single instruction e3a02801; the /tmp stub3.S splice assembles with the pool
+INSIDE [cont_start, cont_end); r9/r11 never written). 39,197 B sha
+f25d9c5cc60c; commit 1eb7381. **THE FLIGHT CARRIES THE RELEASE-CLASS RISK LINE
+(08-30 #2: hard crash, no watchdog, MANUAL POWER-CYCLE — mitigated structurally
+by diversion-first + restore-on-every-path + the no-landing re-hold, but not
+eliminated; the user's call).** w107-recovery.sh staged; the full procedure +
+decode keys in BOOTSTRAP_SESSION_24 (queue 1). Design: W-107-design.md.
