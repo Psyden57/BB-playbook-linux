@@ -4329,3 +4329,35 @@ was the OTHER sweep's slot). The W-107 staging (blob + params[5] + bc[25] + the
 kick) has now completed TWICE; the death is 100% before enter_stub. The cont's
 W-107 block never ran; no release, no [A08] write, no release-class wedge.
 Records: w107-run1-record.md / w107-run2-record.md.
+
+### Design W-107d (--parkabort, session 24, 2026-10-09): THE NO-JUMP CONTROL — designed + preflighted GO-WITH-FIXES (F1 folded); build PENDING
+
+THE ISOLATION INSTRUMENT for the r1/r2 wall: `--parkabort` runs the ENTIRE
+W-107 pre-jump tail (staging + the whole-DRAM sweep + the hold + the GICD-off +
+the pre-SMC clean + the three tail sweeps, bc 49/50/51 -> 52) and then ABORTS
+(`wdt2_disable()` + `kexec-w107d.log` + `return 1`) instead of calling
+`enter_stub`. NO jump, NO kernel, NO release, NO [A08] write. One variable vs
+W-107: abort instead of jump. Outcomes: bc[1]=79 (+bc[25]=0x5A52F702) = the tail
+ran complete => the sweep block is NOT the killer (the r1/r2 wall is inside
+enter_stub or after) => re-fly W-107 proper; bc[1]=51 again = the sweep block is
+the killer, isolated with the jump confound removed => W-107b (per-chunk
+heartbeats) next. The subagent preflight (TASK-027, the resumed route on the
+root's model, high reasoning) reached the same verdict but was rate-limited
+(HTTP 429 x3) before writing its report — its findings were harvested from the
+agent log and root re-verified every load-bearing claim from source.
+
+**★ THE FOLD (F1, mandatory): the abort block re-enables the GICD FIRST**
+(`*gicd = 1` + dsb, the do_l2test phase-D shape at :2286 — the only proven
+off->on->QNX-I/O sequence, and our L2 is ON by construction). Without it the
+abort's fopen/printf/sync run with the GICD off: a hang is saved by the armed
+WDT2 (a clean ~58.6 s cycle), but a SUCCEEDING write followed by wdt2_disable()
++ return 1 leaves QNX alive with the GICD off (dead network) AND the WDT2 off
+(no recovery) = **the silent-zombie / manual-power-cycle class** — exactly the
+class the design's first draft wrongly called "structurally excluded". Also
+folded: the design's line-number precedent citations (:1856/:1862 and
+:1933/:1957-1959 claimed post-GICD-off) were FALSE — all before :1987; there is
+NO existing post-GICD-off QNX-side traffic in the tail, so the abort block would
+have been the first. Slot census (root grep): bc_write(79) / bc_snapshot_file(79)
+/ 0x5A52F702 all FREE; the family's snapshots are 76/77/78; the cont's markers
+(21/211/212/213/23/214/215) do not collide with 79. Designs + verdict:
+~/agent-runs/W-107d-design.md + TASK-027-w107d-preflight.md (appended review).
