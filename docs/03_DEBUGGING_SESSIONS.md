@@ -4466,3 +4466,41 @@ at recovery — E1 = the mem_offset64 class; 0x1NN/0x2NN = the clean's page NN;
 EE+E1 = the dest sweep's first chunk; EE+E3/E5 = the buffer/tramp sweeps;
 EE+EE (+ the abort's 79) = the window survived (provisional — the instrument's
 ~22 extra DRAM stores could have perturbed the killer favorably; re-fly for N).
+
+### Run W-107e r1 (--parkabort + the instrumented window), session 24, 2026-10-09: ★★★★ THE INSTRUMENT NAILED IT — bc[20]=0x100 = the death is in the pre-SMC clean's GLOBALS loop, page 0, inside l2c_ns_clean_range(), with the GICD OFF; both mem_offset64() calls RETURNED (candidate A falsified)
+
+Fired 23:14:2xZ (build #175, 40,869 B sha 1151dac3b223682…). THE W-107e
+INSTRUMENT (bc[20] = the pre-SMC stage/page counter; bc[21] = the tail sweep
+stage marker) WORKED ON ITS FIRST FLIGHT. Live frames: t=7s bc35 (the whole-DRAM
+sweep) → t=25s bc31 (placement 0xa1f00000 — a 4TH distinct draw) → t=31s
+bc[1]=47 (the re-verify heartbeat) → then the window and death. ONE invocation
+(python: ef3b3800 ^ a1f00000 = 4ecb3800; delta 28 s).
+
+Recovery (a FRESH capture path, w107e-recovery.txt): **bc[20] = 0x00000100 =
+the GLOBALS loop, page 0**; bc[21] = 0x19550100 = RESIDUE (the tail sweeps were
+never reached); bc[1]=51 frozen; bc[19]=0; bc[29]=0x2000 (the whole-DRAM sweep
+COMPLETED); bc[25]=5a52f701 (armed); nonce ef3b3800 FRESH; bc[31]=1 (never
+moved); [A08] canonical, ZERO writes; PWRSTST healthy; smctest r0=2; blob
+intact; reboot-wait 23:14:59Z → ssh up 23:17:47Z ⇒ reset→network-back ≈168 s.
+
+**★★★ WHAT THIS SETTLES:** the payload reached the pre-SMC clean block, BOTH
+`mem_offset64()` calls RETURNED successfully (bc[20] = 0x100 > 0xE2), the
+globals loop STARTED, and the death is at/inside the FIRST
+`l2c_ns_clean_range(gpa & ~0xFFF, 0x1000)` — a PL310 by-PA clean+inv of the
+payload's own .data/.bss page, WITH THE GICD OFF. **FALSIFIED: candidate A (a
+kernel call with the GICD off — the prime suspect), candidate C (the tail dest
+sweep), candidate D (the buffer/tramp sweeps), and "the sweep block's bulk".**
+Not resolved: the exact sub-position (the line-op loop / the sync poll / the
+function's return) — the heartbeat is written BEFORE the call. Mechanism
+candidates: (1) the `pl310_ns[0x730/4] & 1` sync poll behaving differently on a
+DEVICE read post-GICD-off (the rule-9 device class), or (2) cleaning the page
+that holds the loop's own live state (a self-inflicted stranded-line effect, by
+PA, on the running code's own lines). Record: ~/agent-runs/w107e-run1-record.md.
+NEXT (all offline-decidable): **W-107f** — move the 20 page-cleans BEFORE the
+GICD-off (one variable; tests the state-combination hypothesis and would cure it
+if the GICD is the discriminator) / **W-107g** — a sub-position instrument
+inside l2c_ns_clean_range / **W-107h** — SKIP the pre-SMC clean under the park
+modes (nearly confound-free: with `g_l2on` the SMC it protects is already
+skipped, so for these flights the block guards a path the build never takes).
+Recommendation: W-107h is the fastest route to the cont; W-107f is the honest
+one.
