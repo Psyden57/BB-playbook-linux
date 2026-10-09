@@ -2016,13 +2016,35 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
         volatile char *gv = (volatile char *)&bc;   /* .data/.bss anchor */
         volatile char *sv = (volatile char *)&gpa;  /* stack anchor */
         pl310_ns = pl310;
+        /* W-107e: the pre-SMC clean block INSTRUMENTED (this window killed
+         * r1/r2/w107d at bc=51). bc[20] = the stage/page counter; plain DRAM
+         * stores only (the bc_write class). Gate = the park modes, so every
+         * other mode's window is byte-identical. Design: W-107e-design.md. */
+        if (g_parkjump || g_parkabort) bc[20] = 0xE1u;      /* block entered */
         if (mem_offset64((void *)gv, NOFD, 0x4000, &gpa, &cg) == 0 &&
             mem_offset64((void *)sv, NOFD, 0x4000, &spa, &cs) == 0) {
-            off64_t b = gpa & ~0xFFFULL, e = b + 0x4000;
-            for (; b < e; b += 0x1000) l2c_ns_clean_range(b, 0x1000);
-            b = (spa & ~0xFFFULL) - 0x8000;
-            e = (spa & ~0xFFFULL) + 0x8000;
-            for (; b < e; b += 0x1000) l2c_ns_clean_range(b, 0x1000);
+            if (g_parkjump || g_parkabort) bc[20] = 0xE2u;  /* both calls returned */
+            {
+                off64_t gb0 = gpa & ~0xFFFULL;
+                off64_t b = gb0, e = gb0 + 0x4000;
+                for (; b < e; b += 0x1000) {
+                    if (g_parkjump || g_parkabort)
+                        bc[20] = 0x100u + (uint32_t)((b - gb0) >> 12);
+                    l2c_ns_clean_range(b, 0x1000);
+                }
+            }
+            {
+                off64_t sb0 = (spa & ~0xFFFULL) - 0x8000;
+                off64_t b = sb0, e = (spa & ~0xFFFULL) + 0x8000;
+                for (; b < e; b += 0x1000) {
+                    if (g_parkjump || g_parkabort)
+                        bc[20] = 0x200u + (uint32_t)((b - sb0) >> 12);
+                    l2c_ns_clean_range(b, 0x1000);
+                }
+            }
+            if (g_parkjump || g_parkabort) bc[20] = 0xEEu;  /* pre-SMC block done */
+        } else {
+            if (g_parkjump || g_parkabort) bc[20] = 0xEFu;  /* mem_offset64 FAILED */
         }
         /* stack slots for post-SMC code rewritten here so their lines are
          * dirty-in-L1 only if touched again before the disable (gpa/spa
@@ -2062,17 +2084,26 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
             uint32_t used, to;
             if ((off64_t)end > phys)
                 end = (uint32_t)phys & ~0x1Fu;
+            /* W-107e: the tail sweeps INSTRUMENTED (the other half of the
+             * bc=51 killer window). bc[21] = the stage marker; plain DRAM
+             * stores only. Gate = the park modes. Design: W-107e-design.md. */
+            if (g_parkjump || g_parkabort) bc[21] = 0xE1u;   /* dest entered */
             bc[26] = l2c_ns_line_range(0x7F0, 0xA0000000ull,
                                        end - 0xA0000000u, &bc[19]);
+            if (g_parkjump || g_parkabort) bc[21] = 0xE2u;   /* dest done */
             used = blob_off + padded + dlen;
             if (used > g_bufsize)
                 used = g_bufsize;
             if (used > 0x1000u) {
+                if (g_parkjump || g_parkabort) bc[21] = 0xE3u;  /* buffer entered */
                 to = l2c_ns_line_range(0x770, phys + 0x1000, used - 0x1000,
                                        &bc[27]);
                 bc[28] = to;
+                if (g_parkjump || g_parkabort) bc[21] = 0xE4u;  /* buffer done */
             }
+            if (g_parkjump || g_parkabort) bc[21] = 0xE5u;      /* tramp entered */
             l2c_ns_line_range(0x7F0, phys, 0x1000, NULL);
+            if (g_parkjump || g_parkabort) bc[21] = 0xEEu;      /* all sweeps done */
             bc_write(48);   /* heartbeat: all sweeps survived */
         }
     }

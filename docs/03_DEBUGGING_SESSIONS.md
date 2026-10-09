@@ -4427,3 +4427,42 @@ Record: ~/agent-runs/w107d-run1-record.md. NEXT: W-107e (per-chunk heartbeats
 inside 51->48 — one variable, observation-only) / W-107f (the sweep bypass,
 trades a variable) / W-107g (move the arm after the sweep block) — all
 offline-decidable; do NOT re-fly #174 as-is.
+
+### Build W-107e (--parkabort + the instrumented window), session 24, 2026-10-09: ledger #175 — THE KILLER-WINDOW INSTRUMENT (bc[20] stage counter + bc[21] stage marker); flight PENDING (user-gated)
+
+`bash build.sh` rc=0, 0 errors, 4 warnings (the pre-existing mem_offset64
+family). Backup first: qnx2linux.pre-w107e (40,489 B sha 607679869d41c213… =
+#174, verified). Artifact: **40,869 B sha 1151dac3b22368221134de56848c46d824a14fc9b232b6850c4d96237ba6b185**
+(#175). Kernel #163 unchanged.
+
+**Why (what the N=3 deaths narrowed it to):** bc[29]=0x2000=8192 is the
+WHOLE-DRAM sweep's completion (0x40000000/32/4096 = 8192 chunks — python) while
+bc[19]=0 is the TAIL dest sweep's counter (its span = 0x1069000/32/4096 = 131
+chunks). ⇒ the death is in the pre-SMC clean's two `mem_offset64()` kernel
+calls (candidate A, the W-86/87 class: the prime suspect), its 20 page-cleans
+(B), the tail dest sweep's first chunk (C), or the buffer/tramp sweeps (D).
+
+**The two edits (both gated on `g_parkjump || g_parkabort` — every other mode's
+window is byte-identical):** (1) the pre-SMC clean block writes **bc[20] =
+0x90000050** = E1 entered / E2 both calls returned / 0x100+page in the globals
+loop / 0x200+page in the stack loop / EE done / EF failed; (2) the tail sweeps
+write **bc[21] = 0x900054** = E1 dest / E2 dest done / E3 buffer / E4 buffer
+done / E5 tramp / EE all done. Slot census: 0x50/0x54 verified FREE tree-wide
+(the payload-era writes are 16/17/18/25/26/27/28/30/31 only).
+
+Rule-16 on the shipped binary: the E-constants encode as single `mov`
+immediates — 804c064 `mov r2,#0xe1; str [r3,#80]` (bc[20] E1), **804c148
+`add r2,r2,#256; str [r1,#80]` (bc[20] = 0x100+page, the globals loop)**,
+**804c1f0 `add r3,r3,#512; str [r2,#80]` (bc[20] = 0x200+page, the stack
+loop)**, each immediately preceding its `l2c_ns_clean_range` call (804c158 /
+804c204); bc[21] via `str [r,#84]` at 804c2fc/804c348/804c408/804c89c/804c8d4/
+804c904/804c93c. 7 sites at offset 80 + 11 at offset 84 = the full instrument.
+Size delta +380 B, fully attributed; **the cont region is byte-identical to
+#174 (308 B sha 1f14199e41a9f3e0, once in the payload)** — stub3.S untouched.
+Build record: ~/agent-runs/w107e-build-record.md; shipped copy at
+~/agent-runs/qnx2linux.w107e; a FRESH recovery capture path is staged
+(w107e-recovery.sh — the shared-path lesson). Decode: read bc[20]/bc[21] FIRST
+at recovery — E1 = the mem_offset64 class; 0x1NN/0x2NN = the clean's page NN;
+EE+E1 = the dest sweep's first chunk; EE+E3/E5 = the buffer/tramp sweeps;
+EE+EE (+ the abort's 79) = the window survived (provisional — the instrument's
+~22 extra DRAM stores could have perturbed the killer favorably; re-fly for N).
