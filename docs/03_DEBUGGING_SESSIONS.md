@@ -4294,3 +4294,38 @@ user — and note this run's OFF, if seen, is the RESET dark, not the jump: the
 payload died pre-jump and never emitted the magenta). Record:
 ~/agent-runs/w107-run1-record.md. Design: W-107-design.md; preflight:
 TASK-026-w107-preflight.md (GO).
+
+### Run W-107 r2 (--parkjump, session 24, 2026-10-09): ★★ N=2 — THE SAME SPAN DEATH (bc=51, bc[29]=8192 chunks) — the 51→48 sweep block is a RECURRING death window; the W-107 mechanism still untested; clean recovery
+
+THE AS-IS RE-FLY (payload #173 unchanged, no variable changed; a fresh file set
+only). The pre-fire battery again caught the page as run 1's residue (same live
+boot; nonce ef2b21e9 unchanged) ⇒ the run's own frames are the base. Live
+frames: t=7s bc[1]=35 (the whole-DRAM sweep heartbeat, **bc[29]=0x167b=5755
+chunks — the sweep actively running**), t=13s bc43 (probe read), t=19s bc31
+(placement LANDED, bc[18]=0xa2d00000 FRESH — a new placement, so this is a
+different draw), t=36s bc49 (re-verify start, final nonce ec1b299d) — then
+FROZEN. **ONE invocation confirmed by the nonce arithmetic** (python):
+`ec1b299d ^ a2d00000 = 4ecb299d`; `4ecb299d − 4ecb297f = 30 s` = the payload's
+own interim(:771)→final(:1868) setup time.
+
+Recovery (`w107-run2-recovery.txt`): **bc[1]=0x33=51**, bc[3]=bc[18]=0xa2d00000,
+nonce ec1b299d FRESH, **bc[25]=5a52f701 (the W-107 arm landed AGAIN)**,
+**bc[29]=0x2000=8192 chunks**, bc[31]=1 (never moved), mirror0/2 = 51, ring
+counts 0, smctest r0=2, [A08] canonical pre AND post, RSTCTRL=0 (the boot's
+re-baseline), PWRSTST 02000037/00000037. **Zero writes by the recovery.** Host
+timeline: DARK t=71 s; reboot-wait 22:13:42Z → ssh up 22:16:34Z ⇒
+reset→network-back ≈ 172 s (band holds); clean WDT2 cycle; device healthy.
+
+**★ THE N=2 READING:** with bc=51 AND bc[29]=8192 reproducing across two runs
+at different placements (0xa1e00000 / 0xa2d00000), the `51→48` window is a
+REPRODUCIBLE death span — run 1's "single lottery instance" framing is
+DOWNGRADED. And the heartbeat-slot census (read-verified this session) pins it
+tighter: the whole-DRAM sweep's heartbeat is `&bc[29]` (qnx2linux.c:871-873)
+while the TAIL dest sweep's is `&bc[19]` (:2055-2056) — **bc[19] reads 0 at
+recovery ⇒ the tail sweep never got past its first chunk**, so the death is at
+the very START of the 51→48 window (the pre-SMC clean :2003-2020 or the tail
+sweep's first chunks), NOT mid-sweep at 33.5M lineops (run 1's bc[29] reading
+was the OTHER sweep's slot). The W-107 staging (blob + params[5] + bc[25] + the
+kick) has now completed TWICE; the death is 100% before enter_stub. The cont's
+W-107 block never ran; no release, no [A08] write, no release-class wedge.
+Records: w107-run1-record.md / w107-run2-record.md.
