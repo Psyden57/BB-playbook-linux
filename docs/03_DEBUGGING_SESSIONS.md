@@ -4543,3 +4543,51 @@ the rest of the window) ⇒ W-107f is the decisive instrument. 0xF0 + a cont
 marker (21/211/212/213/23) ⇒ the cont RAN and the release span itself died
 (the release-span lottery). An E-family value at death ⇒ the gate did not take:
 STOP and rule-16 the deployed payload. Design: W-107h-design.md.
+
+### Run W-107h r1 (--parkabort + the pre-SMC clean SKIPPED), session 24, 2026-10-09): ★★★★★ THE WALL IS BREACHED — the gate took (bc[20]=0xF0), the tail sweeps completed, the abort ran (F1's GICD re-enable included), and ring1 holds a LIVE KERNEL CONSOLE; the cont is now reachable
+
+Fired 23:26:12Z (build #176, 40,869 B sha bd43ef2c12606543…). The kill window's
+cause (W-107e-pinned: the pre-SMC clean's page-0 globals `l2c_ns_clean_range()`
+call) was GATED OFF under the park modes, with a `bc[20]=0xF0` proof-of-skip
+marker. **It worked on the first try:** the payload ran the ENTIRE pre-jump tail,
+the abort block executed (its bc[25]=0x5A52F702 is only reachable AFTER
+`*gicd = 1` — so **F1's GICD off→on + return-to-QNX combination is now FLOWN and
+benign**, the family's first), and the device went on to BOOT — ring1 holds a
+live kernel console read with the standing decoder: "booting Linux on physical
+CPU 0", "CPU: ARMv7 Processor rev 2", "Machine model: BlackBerry PlayBook
+(winchester)", "All CPU(s) started in SVC mode", "OMAP4430 ES2.2". bc[1]=75 (a
+value the payload never writes ⇒ the kernel overwrote it — the deep-draw caveat,
+exactly as the design predicted). Battery: bc[20]=0xF0, bc[21]=0x002020ee (the
+low byte EE = all sweeps done), bc[19]=…a4, bc[29]=0x2008=8200 chunks (the
+whole-DRAM sweep completed), bc[31]=9 (never moved — no landing), PWRSTST
+CPU0=0x02000037 / CPU1=0x00000000 (CPU1 power-gated = the held shape; this flight
+released nothing), smctest r0=2, [A08] canonical pre AND post, ZERO writes by
+the recovery.
+
+⇒ ★★ **THE KILLER WINDOW WAS SUFFICIENT TO KILL THE PAYLOAD: skipping it let the
+whole tail run.** The mechanism is now causally established (not merely
+correlated), the W-107e instrument is validated (it named the window; W-107h
+gated it; the 0xF0 marker proved the gate took on a FRESH post-run battery), and
+**the cont is now REACHABLE — the release in the continuation is the last
+untested span of the arc.**
+
+Timeline: fire 23:26:12Z → the payload's ssh death t=50s → DARK t=85s →
+reboot-wait 23:27:18Z → **ssh up 23:34:58Z ⇒ dark ≈ 7 min 40 s** (a reset-path
+stall that cleared itself; the user's power-cycle closed it out — the keeper
+re-handshaked at 23:37:04Z). **RECORDED CORRECTION: root claimed "~25 min dark"
+mid-analysis — WRONG (the clock was never checked; the true window ≈ 8 min, per
+the wrapper's own stamps).** The live frames during the run showed a STALE page
+(bc[20]=0x100 = W-107e's residue, nonce ef3b3800 at t=3s — the device had not
+power-cycled) and root briefly theorized the gate had failed; the fresh post-run
+battery settled it. Record: ~/agent-runs/w107h-run1-record.md. Design:
+W-107h-design.md. LED: PENDING.
+
+**NEXT: re-fly `--parkjump` (#176, unchanged).** NOTE — `--parkjump` ALSO skips
+the pre-SMC clean (the gate is `!(g_parkjump || g_parkabort)`), so verify
+bc[20]=0xF0 on that flight too. **That flight CARRIES THE RELEASE-CLASS RISK
+LINE (the 08-30 #2 manual-power-cycle shape) — the mitigations are structural
+(diversion-first, restore-on-every-path, the no-landing re-hold, the real
+wdt2_kick) but not eliminations; the user's call.** Decode: 214 + a kernel
+ladder = the parked-alive regime entered (the TLB-test data begins; N≥3 draws);
+215 = the poll expired, degraded safe; 21/211/212/213/23 = a death inside the
+release span.
