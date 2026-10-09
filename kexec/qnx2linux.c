@@ -720,6 +720,14 @@ static int g_parkjump;  /* --parkjump: W-107 — THE JUMP-INTEGRATION. Stages
                          * (Running/ON = SCU-coherent — the TLB-test regime).
                          * No-landing degrades safe (re-hold + restore = the
                          * held shape). Design: W-107-design.md. */
+static int g_parkabort;  /* --parkabort: W-107d — THE NO-JUMP CONTROL. Runs the
+                         * SAME pre-jump tail as --parkjump (staging + sweeps +
+                         * hold + GICD-off) but ABORTS before enter_stub: NO
+                         * jump, NO kernel, NO release, NO [A08] write. The
+                         * GICD is re-enabled first (the do_l2test phase-D
+                         * shape) so the post-abort QNX-side file write is
+                         * safe. Isolates the r1/r2 51->48 sweep-block death
+                         * from the jump. Design: W-107d-design.md. */
 /* PlayBook W-47 (2026-09-11): the fresh-boot (post-battery-pull) QNX pool
  * has NO 24 MB contiguous run at all (frag=129 on every hinted slot,
  * protected=12 -> NONE, twice) — but the buffer only NEEDS ~9 MB on the
@@ -1841,8 +1849,10 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
      * release->jump span is µs-scale. wdt2_kick() = the REAL recovery net
      * (the raw TGR-complement kick is a measured no-op — w108c bc[26]).
      * Ladder bc[25] 0x5A52F7xx (701 armed); the cont writes bc[1] 214
-     * (parked-alive landed) / 215 (no-landing; re-held). Design: W-107-design.md. */
-    if (g_parkjump) {
+     * (parked-alive landed) / 215 (no-landing; re-held). Design: W-107-design.md.
+     * W-107d (--parkabort) reuses this block VERBATIM (its cont gate is inert:
+     * the cont never runs) so the no-jump control flies the IDENTICAL staging. */
+    if (g_parkjump || g_parkabort) {
         volatile uint32_t *mkf  = mapdev(0x9000007Cull, 4);   /* bc[31] */
         volatile uint32_t *parp = (volatile uint32_t *)(iram + 0x5800);
 
@@ -2100,6 +2110,52 @@ static int do_t3(const char *zpath, const char *dtbpath, const char *probepath)
      * magenta devctl froze the payload here, 2/2). The LED color is set
      * before the GICD-off now. NO kernel calls, NO printf, NO syscalls
      * from here to enter_stub. */
+    /* --- W-107d (--parkabort): THE NO-JUMP CONTROL ---
+     * The pre-jump tail has now run COMPLETE: staging + the whole-DRAM sweep
+     * + the hold + the GICD-off + the pre-SMC clean + the three tail sweeps
+     * (bc 49/50/51 -> 52). If we are here ALIVE, the 51->48 sweep block did
+     * NOT kill the payload => the r1/r2 death is that block's. ABORT instead
+     * of enter_stub: NO jump, NO kernel, NO release, NO [A08] write.
+     * ★ F1 (TASK-027 preflight): the GICD is re-enabled FIRST (do_l2test
+     * phase-D, :2286 — the only proven off->on->QNX-I/O shape). The L2 is ON
+     * by construction (g_l2on skips the SMC) so do_l2test's L2 ordering
+     * hazard is absent; cpsid if is NOT run before this (it lives in
+     * enter_stub), so IRQs flow normally once the GICD is back. Without the
+     * re-enable a SUCCEEDING write + wdt2_disable() + return leaves QNX alive
+     * with the GICD off AND the WDT2 off = the silent-zombie class.
+     * wdt2_disable() comes AFTER the re-enable but BEFORE the file write: a
+     * hanging write then still has an armed net (a clean ~58.6 s cycle).
+     * Channels: bc[1]=79 (reached the abort), bc[25]=0x5A52F702 (aborted),
+     * /accounts/devuser/kexec-w107d.log (persistent), live bc/rings.
+     * Design: W-107d-design.md. */
+    if (g_parkabort) {
+        volatile uint32_t *sard = mapdev(0x4A326000ull, 0x1000); /* [A08] RO */
+        *gicd = 1;                     /* GICD back ON — F1 (see above) */
+        __asm__ volatile("dsb" ::: "memory");
+        *rst = 1;                      /* (was held) re-hold = the safe cell */
+        __asm__ volatile("dsb" ::: "memory");
+        bc[25] = 0x5A52F702u;          /* ladder: ABORTED (alive) */
+        bc_write(79);                  /* distinct from 76/77/78 (verified) */
+        wdt2_disable();                /* after the GICD, before the write */
+        printf("W-107d: ABORT — the pre-jump tail ran complete; no jump\n");
+        {
+            FILE *f = fopen("/accounts/devuser/kexec-w107d.log", "w");
+            if (f) {
+                fprintf(f, "W107d ABORT — the pre-jump tail completed\n"
+                           "rst=%08x (re-held) a08=%08x (canonical, untouched)\n"
+                           "phys=%08x kern_phys=%08x dtb_phys=%08x bc25=%08x\n"
+                           "nonce=%08x bc29=%08x bc19=%08x bc27=%08x bc28=%08x\n",
+                        *rst, sard[0xA08 / 4], (uint32_t)phys, kern_phys,
+                        dtb_phys, bc[25], bc[15], bc[29], bc[19], bc[27],
+                        bc[28]);
+                fclose(f); sync();
+            } else {
+                perror("W-107d ABORT fopen");
+            }
+        }
+        bc_snapshot_file(79);          /* kexec-bc.log: step=79 nonce=<place> */
+        return 1;                      /* payload exits; QNX keeps running */
+    }
     enter_stub(0x40304000u,
                probepath ? 0x40309000u : kern_phys + 0x8000u,
                bcmir[0], 0x90000000u,
@@ -2506,6 +2562,13 @@ int main(int argc, char **argv)
     if (argc > 1 && !strcmp(argv[1], "--parkjump")) {
         g_l2on = 1;
         g_parkjump = 1;
+        return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
+                     argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
+                     argc > 4 ? argv[4] : "/tmp/probe.bin");
+    }
+    if (argc > 1 && !strcmp(argv[1], "--parkabort")) {
+        g_l2on = 1;
+        g_parkabort = 1;
         return do_t3(argc > 2 ? argv[2] : "/tmp/zImage",
                      argc > 3 ? argv[3] : "/tmp/omap4-winchester.dtb",
                      argc > 4 ? argv[4] : "/tmp/probe.bin");

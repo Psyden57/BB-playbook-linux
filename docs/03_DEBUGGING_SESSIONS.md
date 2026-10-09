@@ -4361,3 +4361,29 @@ have been the first. Slot census (root grep): bc_write(79) / bc_snapshot_file(79
 / 0x5A52F702 all FREE; the family's snapshots are 76/77/78; the cont's markers
 (21/211/212/213/23/214/215) do not collide with 79. Designs + verdict:
 ~/agent-runs/W-107d-design.md + TASK-027-w107d-preflight.md (appended review).
+
+### Build W-107d (--parkabort, session 24, 2026-10-09): ledger #174 — THE NO-JUMP CONTROL BUILT (40,489 B sha 607679869d41c…) + rule-16 verified; flight PENDING (user-gated)
+
+`bash build.sh` rc=0 (4 warnings = the pre-existing mem_offset64 family). Backup
+taken first: `~/agent-runs/w104-artifacts/qnx2linux.pre-w107d` (39,197 B sha
+f25d9c5cc60c… = #173, verified identical). **stub3.S / stub3.o UNTOUCHED** — the
+extracted `.text[0x30:0x164]` (308 B, sha 1f14199e41a9f3e0) is byte-identical to
+#173's cont and appears exactly once in the #174 payload, so the W-107 release
+block is present-and-inert for both modes and `&cont_end-&cont_start` is
+unchanged.
+
+The four edits (A flag :723 / B dispatch :2569 / C staging guard
+`g_parkjump || g_parkabort` :1855 / D the abort block :2131) were grep-verified
+in the source BEFORE the build. Rule-16 on the SHIPPED binary (not the log):
+all six new strings found (`--parkabort`, `g_parkabort`, `W-107d: ABORT`,
+`W-107d ABORT fopen`, `kexec-w107d.log`, `W107d ABORT`); the abort block read
+instruction-by-instruction in the disasm — **804c2b0 `*gicd = 1` (F1's
+re-enable) with its dsb, 804c2c0/c4 the `movw #0xf702` / `movt #0x5a52` pair
+(ONE tree-wide), 804c2c8 `bc[25]=0x5A52F702`, 804c2cc `mov r0,#79` +
+`bl bc_write`, 804c2d4 `bl wdt2_disable` (AFTER the GICD — F1's ordering),
+804c2f8 `ldr r3,[r5,#0xA08]` = the sard [A08] read, 804c368 the snapshot(79),
+804c370 `mov r0,#1` = the return 1**. Size delta +1,292 B, fully attributed (the
+new code + strings + the 0x5A52F702 store + metadata). Build record:
+~/agent-runs/w107d-build-record.md; the shipped copy is snapshotted at
+~/agent-runs/qnx2linux.w107d. Kernel #163 unchanged (5,223,233 B / sha
+ee303813…).
