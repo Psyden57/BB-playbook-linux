@@ -4243,3 +4243,54 @@ f25d9c5cc60c; commit 1eb7381. **THE FLIGHT CARRIES THE RELEASE-CLASS RISK LINE
 by diversion-first + restore-on-every-path + the no-landing re-hold, but not
 eliminated; the user's call).** w107-recovery.sh staged; the full procedure +
 decode keys in BOOTSTRAP_SESSION_24 (queue 1). Design: W-107-design.md.
+
+### Run W-107 r1 (--parkjump, session 24, 2026-10-09): ★ A SPAN DEATH BEFORE THE RELEASE — the cont's W-107 block NEVER RAN; the payload died at bc=51 INSIDE the dest sweep (bc[29]=0x2000, the sweep running); the release-class risk line was never engaged
+
+Fired 21:39:23Z (`PAYLOAD_MODE=--parkjump ./poll-jump.sh zImage`; build #173;
+39,197 B sha f25d9c5cc60c). THE ARC'S GOAL-STATE FLIGHT — first attempt. The
+artifact chain was clean end-to-end (deployed 39,197/5,223,233/87,321 B all
+match the ledgers; the cont's W-107 region verbatim in the shipped payload at
+offset 0x5fe4; the blob's 7 words verified at 0x40309A00 post-run). **The
+pre-fire battery caught the page as W-108c RESIDUE** (nonce ed88f7f4 identical
+to w108c-recovery — the device had not power-cycled) ⇒ the run's own frames are
+the base (fresh-slot discipline).
+
+Live poller frames: the page came alive at t=7s with a fresh nonce 4ecb21d0,
+attempt #1 climbed 31 (placement found) → **44 (memtest clean)** → 49
+(re-verify start); a SECOND invocation appeared at t=32s with fresh nonce
+ef2b21e9 and placement 0xa1e00000, armed **bc[25]=0x5A52F701** (the W-107
+ladder landed) — and died at **bc[1]=51** (49→51 seen; then frozen). At
+recovery (post-cycle, 21:44:15Z): bc[1]=0x33=51, bc[3]=0xa1e00000, nonce
+ef2b21e9 FRESH, bc[25]=5a52f701, bc[29]=**0x2000** (8192 chunks = 33.5M
+lineops — the dest sweep WAS running), bc[31]=1 (never moved), mirror0/2 = 51,
+ring1/ring3 counts 0.
+
+**The death window, read from source (not memory):** bc_write(51)
+(qnx2linux.c:1996) → the pre-SMC DRAM-truth clean → the three `g_l2on` sweeps
+(:2050-2065, dest 0x7F0 CIPA with the bc[19] heartbeat, buffer INV-ONLY,
+trampoline page) → bc_write(48) (:2066). bc=51 + the sweep heartbeat at 8192
+chunks = the death is INSIDE that block — the same window as the historical
+W-90b note (this file, the W-90b run). The device-op cliff is the standing
+suspect, but 33.5M stores completed here (vs the historical "cliff" claim at
+~4-5k) ⇒ a lottery instance inside the sweep, not a deterministic cliff.
+
+**⇒ THE W-107 MECHANISM IS UNTESTED.** The cont's W-107 block (stub3.S
+:96-140) lives AFTER enter_stub; bc never reached 21/23 ⇒ **the release, the
+repoint, the poll and the restore never executed.** [A08] was never written
+(canonical pre AND post); RSTCTRL=0 post-cycle = the boot's re-baseline (the
+recovery's look-only rule correctly followed — NOT a deviation); the 214/215
+markers were never written, so the no-landing datapoint is uninformative.
+**The release-class risk line was never engaged — no release, no [A08] write,
+no release-class wedge.** The design/build/preflight all stand; nothing here
+contradicts them. The flight must be RE-FLOWN with a fresh file set.
+
+Recovery: the WDT2 cycle was clean — keeper log `Connection lost … Connection
+reset by peer` 21:43:54Z → `Authenticated` 21:43:55Z (the USB re-enumeration
+chain ran) → ssh up 21:43:57Z ⇒ reset→network-back ≈ 192 s (inside the
+131–272 s band); total clean cycle ≈ 4 min 34 s; zero writes by the recovery
+([A08] canonical, pen untouched); PWRSTST 02000037/00000037 = the healthy idle
+shape; smctest --103 r0=2; blob intact; device healthy. LED: PENDING (ask the
+user — and note this run's OFF, if seen, is the RESET dark, not the jump: the
+payload died pre-jump and never emitted the magenta). Record:
+~/agent-runs/w107-run1-record.md. Design: W-107-design.md; preflight:
+TASK-026-w107-preflight.md (GO).
