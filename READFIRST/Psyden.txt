@@ -597,11 +597,4 @@ For example, if you're using it to do assembly code/work, you should probably kn
 
 
 And perhaps a good goal to have while using AI, is to learn from it while also doing the thing you need to do.
-to then not need to use it again and just do it yourself.
-
-And, on a personal note, it seems i might've gone through an "LLM Cognitive Virus", or perhaps a light "AI-induced psychosis"
-If you know anyone who heavily uses AI, and you notice they're a little weird lately, i'd recommend pointing them to this paper:
-https://arxiv.org/abs/2609.03344v1
-It helped me understand some of what's been happening to me, and get ahold of myself eventually.
-
-And, i'm a bit scared of AI for the time being, so i'm leaving this project on hold, for now.
+to then not need to use it again and just do it yourself. (Using your real creativity and intelligence, rather than a sub-par artificial one)
