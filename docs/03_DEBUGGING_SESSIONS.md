@@ -4590,3 +4590,45 @@ and the GAP acknowledged.** `--parkjump` shares the skip gate, so verify
 bc[20]=0xF0 on that flight too. Decode: 214 + a kernel ladder = the parked-alive
 regime entered; 215 = the poll expired, degraded safe; 21/211/212/213/23 = a death
 inside the release span.
+
+### Run W-107 PARKJUMP r1 (--parkjump, session 24, 2026-10-09): ★★★ THE PARKED-ALIVE LANDING — CPU1 EXECUTED THE PARKED BLOB (bc[31]=0x5A52F2F2) and the KERNEL BOOTED with CPU1 alive (bc[1]=142 + kernel-era slot writes); the cont's [A08]-restore landed; clean WDT recovery
+
+Fired 23:54:30Z (build #176, 40,869 B sha bd43ef2c12606543…). **THE ARC'S GOAL
+STATE IS ACHIEVED.** Live frames: t=43 s bc[1]=0x31 (the re-verify stage),
+bc[25]=**0x5A52F701 (the arm landed)**, bc[31]=0x00000001 (the no-landing init),
+bc[20]=**0xF0 (the skip gate took on this flight too**) — then dark. Recovery
+(23:59:2xZ, a fresh capture): **bc[31] = 0x5A52F2F2 — THE LANDING MARKER**, the
+only writer of which anywhere in the project is the blob v2's own store at PA
+0x40309A00 ⇒ **CPU1 executed the parked blob** (the first landing since W-106,
+and the first ever in the kernel era). The kernel-era slot writes are present
+and fresh — bc[22]=0xa3703348 (the fixed-map FDT region), bc[23]=0xa0008000
+(zreladdr/decompressor dest), bc[27]=0x29, bc[25]=0xffffffff (the kernel's
+overwrite) and **bc[1]=0x8e=142 (the head.S-tail/fixup region)** ⇒ the kernel
+booted and climbed with **CPU1 alive-and-spinning on the blob** (the SCU-coherent
+TLB-test regime). The 214 marker is unreadable (the kernel ladder overwrote
+bc[1] — the design's deep-draw caveat), so the outcome rests on the blob's own
+store + the kernel-era slots, which are this-run/fresh values on a FRESH capture.
+The ring's kernel-console text is explicitly NOT claimed as evidence (the W-107h
+lesson: ring1 is a shared page across boots).
+
+**SAFETY — the release class WAS engaged and the worst-recorded shape did NOT
+occur:** ssh gone t=45 s → DARK t=75 s → reboot-wait 23:55:52Z → **ssh up
+23:59:15Z ⇒ reset→network-back ≈ 203 s** (python; inside the 131–272 s band).
+**[A08] = 4a326b00 canonical post-run — the cont's restore landed on its path and
+the recovery's [A08] gate never fired (ZERO WRITES).** RSTCTRL=0 post-cycle (the
+boot's re-baseline). PWRSTST CPU0=0x02000037 / CPU1=**0x00000037** — CPU1
+power-gated at idle in the FRESH boot ⇒ the boot re-owns CPU1 (the design's
+prediction; the "pen persists" worry does not apply to this full cycle). smctest
+r0=2. Device healthy.
+
+⇒ **Established: the parked-alive release works end-to-end (repoint →
+release(+SEV) → the µs-scale landing → the [A08]-restore → jump, all in the
+continuation); the kernel boots with CPU1 alive; the pre-SMC clean was the ONLY
+blocker (the skip gate took here too); and the W-107h gap did not block the goal
+state.** This draw died at 142 = the W-35-era placement-lottery class, NOT the
+SCU/TLB family — the first datapoint leans in the prediction's favour (the
+126-family/SCU classes vanish; the placement-lottery classes remain). **N≥3
+draws are needed** for any "wall" claim about the parked-alive regime, and on a
+deep draw the class must be read from the KERNEL's ladder + the ring, not our
+markers. Record: ~/agent-runs/w107-parkjump-run1-record.md. LED: PENDING.
+
