@@ -4763,3 +4763,41 @@ delta +20 B fully attributed. The battery needs ONE addition:
 ~/agent-runs/qnx2linux.w107i. Decode (draw 4+): 0x9FE000A4 = 0x5A52F7F2 ⇒ the
 landing happened (any depth); 0x5A52F7F1 ⇒ the poll expired; anything else ⇒ a
 span death before the marker.
+
+### Run W-107 PARKJUMP draw 4 (--parkjump, session 24, 2026-10-11): ★★★★ THE DEEPEST KERNEL DRAW ON RECORD — bc[1]=111 = setup_arch() RETURNED, with the W-94 snapshot's bc[31]=1 (memblock init reached) and the DTB magic in bc[23]; the durable marker's residue flaw makes it uninformative this draw; the landing question stays OPEN
+
+Fired 21:25:3xZ (build #177, 40,917 B sha e93185babfbbc704…). **The pre-fire
+battery caught the durable marker already at `0x9FE000A4 = 5a52f7f2`** — draw
+3's residue, since a warm reset does not clear that word and a repeat landing
+writes the SAME value. Predicted pre-fire, confirmed at recovery: the durable
+marker is **UNINFORMATIVE on a repeat landing** (the fresh-slot problem realized
+in the instrument itself).
+
+Recovery: **bc[1]=0x6f=111 = `setup_arch()` RETURNED** (kernel patch :2095) — the
+DEEPEST kernel progress on record (the prior best was 146/147 in the iotable
+region; every prior draw died between 126 and 156); **bc[31]=0x00000001 = the
+W-94 snapshot value (memblock.memory.cnt) ⇒ the kernel reached memblock init**
+(the DEPTH channel = DEEP); bc[23]=**0x5c4d0100 = the DTB magic** ⇒ the FDT was
+parsed; bc[28]=0x1fe00000 (a pmd-class word); bc[29]/bc[30]=**0x5a5aa5a5 /
+0xa5a55a5a (the memtest patterns ⇒ the kernel WROTE DRAM)**; bc[16]=0x110=272
+(the W-102 PASS class); nonce edadc1b6 fresh; `[A08]` canonical, ZERO writes;
+ssh up 21:30:09Z ⇒ reset→network-back ≈ 183 s (the band holds); the release
+class engaged 4-for-4 with clean recoveries.
+
+⇒ **THE SPECTRUM (N=4):** 142 (placement) / 126 (SCU/TLB, the landing OPEN) /
+142 (placement) / **111 (past setup_arch — a NEW class, deeper than any
+recorded)**. **3 of 4 draws are NOT the 126 family, and the deepest draw in the
+project's history occurred under parked-alive.** The prediction (the SCU/TLB
+family vanishes) has 3 non-126 datapoints out of 4, with the single 126
+unproven — the ledger now leans in the prediction's favour more strongly than
+N=3 did.
+
+**THE INSTRUMENT'S FLAW (its fix's limit, realized):** the durable marker's
+fresh-slot problem — `0x9FE000A4` is not cleared by a warm reset and a repeat
+landing writes the same value, so the channel is uninformative when the previous
+draw landed. **W-107j's fix (one line either way):** the cont writes a per-run
+nonce into a second word (0x9FE000A8) alongside the marker, OR the C block zeros
+0x9FE000A4 at setup — either gives fresh-slot semantics. Record:
+~/agent-runs/w107-parkjump-draw4-record.md. LED: PENDING (and note: with a
+DEEPER draw the off→red band may run longer than the 68 s jump band — the WDT
+fires at the kernel's death).
