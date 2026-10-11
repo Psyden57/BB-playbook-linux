@@ -4764,6 +4764,19 @@ delta +20 B fully attributed. The battery needs ONE addition:
 landing happened (any depth); 0x5A52F7F1 ⇒ the poll expired; anything else ⇒ a
 span death before the marker.
 
+### Draw-4 LED (user stamps, 2026-10-11): off = the jump at +36 s (the family's fastest), off→red = 67 s ≈ the 68 s band — my "deeper draw ⇒ longer band" speculation is DISCONFIRMED (the WDT anchor is the kick cadence + 58.6 s, not the kernel's runtime)
+
+User stamps (draw 4): 00:05 BLUE / 00:15 MAGENTA / 00:36 OFF / 01:43 RED.
+Anchored (python): blue +5 s, magenta **+15 s (the family's earliest; r1 +19, d2
++24, d3 +21)**, off **+36 s (the family's earliest jump; d2 +44, d3 +48)**, red
++103 s. Deltas: 5 / 10 / 21 / **67**. The OFF at +36 s is the jump (and it is
+FINER than the wrapper's "ssh gone" t=50 s — that line is the 4-miss DECLARATION,
+since the poller polls every 3 s and jump.sh every 5 s). **off→red = 67 s ≈ the
+68 s band ⇒ the WDT fired ~67 s after the jump; RED→network-back ≈ 166 s (the
+band holds).** ★ The pre-flight speculation that a DEEPER draw would run a LONGER
+band is **disconfirmed** (67 ≈ 68) ⇒ the WDT anchor is the kick cadence + 58.6 s,
+not a function of the kernel's runtime — recorded so it isn't re-asserted.
+
 ### Run W-107 PARKJUMP draw 4 (--parkjump, session 24, 2026-10-11): ★★★ THE DEEPEST **PARKED-ALIVE** DRAW — bc[1]=111 = setup_arch() RETURNED (the first parked-alive run to clear setup_arch), with the W-94 snapshot's bc[31]=1 (memblock init reached) and the DTB magic in bc[23]; ★★ NOT the project's deepest (the era's record = bc[1]=184/185, the initcall loop, W-100 r3 — the user's correction, folded); the durable marker's residue flaw makes it uninformative this draw; the landing question stays OPEN
 
 Fired 21:25:3xZ (build #177, 40,917 B sha e93185babfbbc704…). **The pre-fire
