@@ -4674,3 +4674,40 @@ landing happened and the kernel overwrote bc[31], OR the landing did not happen
 stands as a valid 126-class datapoint in the parked-alive (or
 attempted-parked-alive) regime; draw 1's LED stamps are not available. LED
 deltas: 4 / 20 / 24 / 68 — the normal-shape instance (NOT the lit-freeze).
+
+### Run W-107 PARKJUMP draw 3 (--parkjump, session 24, 2026-10-11): ★★★ THE LANDING MARKER SURVIVED AND READS AT RECOVERY (bc[31]=0x5A52F2F2) — CPU1 executed the parked blob, the kernel climbed to 142 (the placement class again), and DRAW 2'S AMBIGUITY RESOLVES: the kernel overwrites bc[31] on the 126 draws (not a no-landing... INVERTED: on the 142 draws it survives; draw 2's 126 + bc[31]=1 = the HELD-shape 126)
+
+Fired 02:12:1xZ (build #176). Live frames: the page came alive at t=8s (fresh
+nonce ef3cb368) → t=23s bc31 (the placement 0xa1f00000 LANDED — a 3rd distinct
+draw) → t=41s bc[1]=0x31(49) with **bc[25]=0x5A52F701 (the arm landed)** → dark.
+ONE invocation (ef3cb368 ^ a1f00000 = 0x4ecbb368). Recovery (02:16:4xZ, a fresh
+capture): **bc[31] = 0x5A52F2F2 — THE LANDING MARKER, READABLE AT RECOVERY** ⇒
+**CPU1 executed the parked blob** (2-for-3 draws now proven), and
+**bc[1]=0x8e=142 — the head.S-tail/fixup region (the placement class AGAIN)**;
+bc[22]=0xa2503348 (the fixed-map FDT region, a 2nd distinct address), bc[23]=
+0xa0008000 (zreladdr, identical to draw 1), bc[25]=0xffffffff (the kernel's
+overwrite), [A08] canonical (the cont's restore landed), ZERO writes by the
+recovery; ssh up 02:16:34Z ⇒ reset→network-back ≈ 166 s.
+
+**★★ DRAW 2'S AMBIGUITY RESOLVES (the parsimonious reading):** draw 3's landing
+marker SURVIVED a 142 draw (the kernel's ladder wrote bc[1]/bc[25] but did NOT
+overwrite bc[31]) — so a 126 draw reading bc[31]=1 (draw 2) is consistent with
+**the no-landing init (the poll expired → the degraded-safe re-hold), i.e. draw
+2's 126 is the HELD-shape 126, not a parked-alive 126.** The prediction (the
+126-family vanishes under parked-alive) SURVIVES draw 2's apparent
+counter-datapoint, and the remaining question is a **wake-path reliability**
+one (the poll expired or the landing was missed), not a coherency one.
+
+**⇒ THE SPECTRUM LEDGER (N=3):** draw 1 = 0xa3200000, **142** (the placement
+class), the landing PROVEN · draw 2 = 0xa3700000, **126** (the SCU/TLB family),
+the landing NOT PROVEN · draw 3 = 0xa1f00000, **142** (the placement class), the
+landing PROVEN. **The prediction HOLDS so far: both PROVEN-landing draws died in
+the predicted-to-remain placement class, and the predicted-to-vanish 126 draw is
+the unproven-landing one.** N=3 is suggestive, not established. Record:
+~/agent-runs/w107-parkjump-draw3-record.md. LED: PENDING.
+
+**NEXT: draw 4+ to N≥5, OR the cheaper instrument — W-107i: move the landing
+marker to a slot the kernel's ladder does NOT overwrite (bc[31] survives a 142
+draw but not a 126 draw — bc[12]/bc[13], or a second cont write), turning every
+future draw's landing question into a direct read. One variable;
+observation-only.**
