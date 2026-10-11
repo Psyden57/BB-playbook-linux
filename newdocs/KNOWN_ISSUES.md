@@ -1,5 +1,28 @@
 # Known Issues & Open Problems
 
+**SESSION-24 HEADER (2026-10-11): READ BOOTSTRAP_SESSION_25 FIRST.** ★★★ THE
+W-107 ARC CLOSED: **the parked-alive release LANDED** (`bc[31]=0x5A52F2F2` — CPU1
+executed the parked blob, the first kernel-era landing in project history) and
+the kernel booted with CPU1 alive; the release class engaged 4× with clean
+recoveries and ZERO writes. The blocker was a PRE-EXISTING payload killer (the
+`51→48` window = the pre-SMC clean's globals `l2c_ns_clean_range()` call, page 0,
+with the GTC off — W-107e's `bc[20]=0x100`), now instrumented to the instruction
+and bypassed under the park modes (W-107h, the confound EVIDENCED). **The
+spectrum (N=4): 142 / 126 (the landing OPEN) / 142 / 111 (`setup_arch()` returned
+— the family's deepest; the era's record 184/185 ran in the held shape). 3 of 4
+draws are NOT the 126 family ⇒ the prediction (the SCU/TLB class vanishes under
+parked-alive) HOLDS so far.** ★ THE KERNEL WRITES bc[31] (`pb_bc_put(0xD000007C,
+memblock.memory.cnt)`, patch :1607) ⇒ bc[31] is a DEPTH channel (0x5A52F2F2 =
+died pre-memblock; 1 = reached memblock); **the durable landing marker lives at
+0x9FE000A4** (0x5A52F7F2 landed / 0x5A52F7F1 expired) — **BUT it is not cleared
+by a warm reset and a repeat landing writes the SAME value ⇒ uninformative on
+repeat landings (W-107j's one-line fix is the next step).** LED: off→red = 67-68
+s on every jump flight (the WDT anchor = the kick cadence + 58.6 s, NOT a function
+of the kernel's runtime — the "deeper draw ⇒ longer band" speculation is
+DISCONFIRMED). Three user corrections are folded in the records (~25-min-dark,
+flags-in-IRAM, "deepest draw") with the pattern named: **claim the scoped truth
+and cite the repo's record beside it.**
+
 **SESSION-23 HEADER (2026-10-08): READ BOOTSTRAP_SESSION_24 FIRST.** ★ THE
 WEDGE-MECHANISM ARC: the strand is REAL, kernel-entry-FREE, and a LOTTERY.
 W-108 (the hold-only control — NO release) stranded at window index
