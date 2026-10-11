@@ -4733,4 +4733,3 @@ on every draw. The cont grows by 8 bytes (2 new pool words; cont_end 0x164 →
 0x16C; the memcpy/verify sites are length-dynamic — EVIDENCED). Design:
 W-107i-design.md (the pool arithmetic python-verified in §3). The draw-3 record
 is corrected in place.
-x
