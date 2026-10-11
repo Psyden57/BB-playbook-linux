@@ -4675,7 +4675,7 @@ stands as a valid 126-class datapoint in the parked-alive (or
 attempted-parked-alive) regime; draw 1's LED stamps are not available. LED
 deltas: 4 / 20 / 24 / 68 — the normal-shape instance (NOT the lit-freeze).
 
-### Run W-107 PARKJUMP draw 3 (--parkjump, session 24, 2026-10-11): ★★★ THE LANDING MARKER SURVIVED AND READS AT RECOVERY (bc[31]=0x5A52F2F2) — CPU1 executed the parked blob, the kernel climbed to 142 (the placement class again), and DRAW 2'S AMBIGUITY RESOLVES: the kernel overwrites bc[31] on the 126 draws (not a no-landing... INVERTED: on the 142 draws it survives; draw 2's 126 + bc[31]=1 = the HELD-shape 126)
+### Run W-107 PARKJUMP draw 3 (--parkjump, session 24, 2026-10-11): ★★★ THE LANDING MARKER SURVIVED AND READS AT RECOVERY (bc[31]=0x5A52F2F2) — CPU1 executed the parked blob, the kernel climbed to 142 (the placement class again); ★★ RECORD CORRECTED BELOW (the W-107i census found the kernel's bc[31] writer)
 
 Fired 02:12:1xZ (build #176). Live frames: the page came alive at t=8s (fresh
 nonce ef3cb368) → t=23s bc31 (the placement 0xa1f00000 LANDED — a 3rd distinct
@@ -4711,3 +4711,26 @@ marker to a slot the kernel's ladder does NOT overwrite (bc[31] survives a 142
 draw but not a 126 draw — bc[12]/bc[13], or a second cont write), turning every
 future draw's landing question into a direct read. One variable;
 observation-only.**
+
+### ★★★ Draw-3 record CORRECTED + W-107i DESIGNED (session 24, 2026-10-11): the kernel WRITES bc[31] (the W-94 snapshot: pb_bc_put(0xD000007C, memblock.memory.cnt), patch :1607) — draw 2's bc[31]=0x1 is the SNAPSHOT value, not the no-landing init; draw 2's landing question is RE-OPENED and the 126 counter-datapoint is back to UNRESOLVED; the fix = W-107i (the landing marker relocates to 0x9FE000A4, a word the kernel never writes)
+
+The draw-3 record's "the kernel spares bc[31] on 142 draws" inference is
+WITHDRAWN: the W-107i slot census read the W-94 snapshot's actual writer in the
+kernel patch — **`pb_bc_put(0xD000007C, memblock.memory.cnt)`** — so on any
+boot that reaches memblock init, bc[31] = the memory-region count (1 on a normal
+single-bank boot). **Draw 2's kernel reached memblock init ⇒ its bc[31]=0x1 is
+the snapshot value ⇒ the landing could have happened and been overwritten ⇒
+draw 2's landing question is RE-OPENED and the 126 counter-datapoint (the
+prediction's miss) is back to UNRESOLVED.** Draws 1/3's surviving
+0x5A52F2F2 markers mean those kernels died at 142 BEFORE the snapshot — the
+survival was DEPTH, not sparing. **⇒ W-107i: the cont's landing marker relocates
+to 0x9FE000A4** (the trap page's neighbor word — outside the abort handler's
+0x9FE000A0 flag, outside the ring writers at +0x80+, and outside the entire bc
+page the kernel writes) **with values 0x5A52F7F2 (landed) / 0x5A52F7F1 (expired)**
+— the old bc[31] write STAYS (it is now a DEPTH indicator: 0x5A52F2F2 = died
+pre-memblock; 1 = reached memblock), so the two channels give (landing?, depth?)
+on every draw. The cont grows by 8 bytes (2 new pool words; cont_end 0x164 →
+0x16C; the memcpy/verify sites are length-dynamic — EVIDENCED). Design:
+W-107i-design.md (the pool arithmetic python-verified in §3). The draw-3 record
+is corrected in place.
+x
