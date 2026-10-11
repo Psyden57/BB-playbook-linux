@@ -128,6 +128,16 @@ cont_start:                                 @ PC == PA from here on
         dsb
         mov     r0, #215
         str     r0, [r11, #4]               @ bc = 215 (no-landing; re-held)
+        @ W-107i: the DURABLE landing marker (0x9FE000A4 — a word the kernel
+        @ never writes: outside the abort handler's 0x9FE000A0 flag, the ring
+        @ writers at +0x80+, and the whole bc page the W-94 snapshot claims).
+        @ The old bc[31] write STAYS (it is now a DEPTH indicator: the W-94
+        @ snapshot writes memblock.memory.cnt there on every boot that reaches
+        @ memblock init — 1 on a single-bank boot). Design: W-107i-design.md.
+        ldr     r1, =0x9FE000A4
+        ldr     r0, =0x5A52F7F1             @ EXPIRED (the poll ran out)
+        str     r0, [r1]
+        dsb
         b       .Lw107_skip
 .Lw107_landed:
         ldr     r0, =0x4A326B00             @ canonical
@@ -135,6 +145,10 @@ cont_start:                                 @ PC == PA from here on
         dsb                                 @ any later reset must see this)
         mov     r0, #214
         str     r0, [r11, #4]               @ bc = 214 (PARKED-ALIVE)
+        ldr     r1, =0x9FE000A4
+        ldr     r0, =0x5A52F7F2             @ LANDED (durable)
+        str     r0, [r1]
+        dsb
 .Lw107_skip:
         mov     r0, #0                      @ ARM Linux boot convention
         mvn     r1, #0                      @ r1 = 0xffffffff

@@ -4733,3 +4733,33 @@ on every draw. The cont grows by 8 bytes (2 new pool words; cont_end 0x164 →
 0x16C; the memcpy/verify sites are length-dynamic — EVIDENCED). Design:
 W-107i-design.md (the pool arithmetic python-verified in §3). The draw-3 record
 is corrected in place.
+
+### Build W-107i (--parkjump/--parkabort, the durable landing marker), session 24, 2026-10-11: ledger #177 — the cont grows 308 → 352 bytes; the landing question becomes a direct read on every draw; flight PENDING (user-gated)
+
+`bash build.sh` rc=0 (4 warnings = the pre-existing family). Backup first:
+qnx2linux.pre-w107i (40,869 B sha bd43ef2c12606543… = #176, verified). Artifact:
+**40,917 B sha e93185babfbbc70401bfe353cd247f7cf03dc0f4756601bc8ea94f3d4a940b7c**
+(#177). Kernel #163 unchanged.
+
+**The one edit (stub3.S, the cont):** two durable-marker stores — the expired
+branch writes **0x5A52F7F1** and the landed branch writes **0x5A52F7F2**, both
+to **0x9FE000A4** (the trap page's neighbor word: outside the abort handler's
+0x9FE000A0 flag, the ring writers at +0x80+, and the entire bc page). The old
+bc[31] write STAYS — it is now a DEPTH indicator (the W-94 snapshot writes
+memblock.memory.cnt there: 0x5A52F2F2 = died pre-memblock, 1 = reached
+memblock), so the two channels give (landing?, depth?) on every draw.
+
+Rule-16: **the cont grew 308 → 352 bytes** (cont_end 0x164 → 0x190; the design
+predicted 8 bytes for the pool but the assembler placed the two `ldr =const`
+pairs as code + 3 pool words, for +44); **the pool lands at 0x168-0x18F — inside
+[cont_start, cont_end)** (the .ltorg constraint holds); **the payload's
+embedded cont is the new 352-byte region, byte-exact, exactly once**, with all
+3 new pool words present; the new stores verified in the disasm (expired at
+0x11c-0x128, landed at 0x144-0x150); **r1 liveness PASS** (r0/r1/r2 reloaded by
+the boot convention; r3 dead after the landed restore; r9/r11 untouched); size
+delta +20 B fully attributed. The battery needs ONE addition:
+`memdump3 9FE000A0 8` (BOTH words — the abort flag at 0xA0 and the marker at
+0xA4). Build record: ~/agent-runs/w107i-build-record.md; shipped copy at
+~/agent-runs/qnx2linux.w107i. Decode (draw 4+): 0x9FE000A4 = 0x5A52F7F2 ⇒ the
+landing happened (any depth); 0x5A52F7F1 ⇒ the poll expired; anything else ⇒ a
+span death before the marker.
