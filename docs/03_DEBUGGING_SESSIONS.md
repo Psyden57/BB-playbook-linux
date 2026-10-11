@@ -4632,3 +4632,30 @@ draws are needed** for any "wall" claim about the parked-alive regime, and on a
 deep draw the class must be read from the KERNEL's ladder + the ring, not our
 markers. Record: ~/agent-runs/w107-parkjump-run1-record.md. LED: PENDING.
 
+### Run W-107 PARKJUMP draw 2 (--parkjump, session 24, 2026-10-11): ★ THE SPECTRUM'S FIRST 126-FAMILY INSTANCE IN THE PARKED-ALIVE REGIME — the kernel climbed to bc[1]=126 (the SCU/TLB class) with CPU1 armed; the landing question is AMBIGUOUS (bc[31] read at recovery = 1, the no-landing init OR a kernel overwrite); clean recovery
+
+Fired 01:56:20Z (build #176; the host had restarted — the keeper re-established
+01:55:18Z). Live frames: the page came alive at t=7s (fresh nonce edbcafb3) →
+t=25s bc31 (the placement 0xa3700000 LANDED) → **t=40s bc[1]=0x28(40) with
+bc[25]=0x5A52F701 (the W-107 arm landed) and bc[31] re-inited to 1** → dark. ONE
+invocation (edbcafb3 ^ a3700000 = 0x4ecbafb3). Recovery (02:00:5xZ, a fresh
+capture): **bc[1]=0x7e=126 — THE 126-FAMILY (the SCU/TLB class)**, bc[25]=
+0xa0000000 (kernel-era), bc[31]=**0x00000001** (the no-landing init OR a kernel
+overwrite — **AMBIGUOUS**), bc[20]=0xedfe0dd0 (the DTB magic overwrote the
+instrument slot), bc[29]=0x5a5aa5a5 (kernel-era), [A08] canonical (the cont's
+restore landed), RSTCTRL=0, PWRSTST CPU0=0x02000037 / CPU1=0x00000037 (the fresh
+boot re-owns CPU1), smctest r0=2, ZERO writes by the recovery; ssh up 02:00:45Z
+⇒ reset→network-back ≈ 160 s.
+
+⇒ **The prediction's first counter-datapoint**: the 126-family was predicted to
+VANISH in the parked-alive regime; this draw hit it (N=1 instance). BUT the
+central caveat cuts both ways: if bc[31]=1 is the kernel's overwrite of a
+landing marker, the parked-alive regime was entered and still hit 126 (the
+prediction fails); if bc[31]=1 is the payload's no-landing init (the poll
+expired → re-held → the degraded-safe shape), the kernel ran the HELD shape and
+126 is EXPECTED there. **The two are not separable on this draw** — the
+discriminator for future draws is reading bc[31] from the poller's first
+post-dark frame, not the recovery (the W-107h lesson, now load-bearing). The
+spectrum ledger: draw 1 = 142 (the placement class, the landing PROVEN), draw 2
+= 126 (the SCU/TLB family, the landing AMBIGUOUS). N≥3 stands; draw 3 resolves
+the ambiguity. Record: ~/agent-runs/w107-parkjump-draw2-record.md. LED: PENDING.
