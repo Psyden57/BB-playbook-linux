@@ -4659,3 +4659,18 @@ post-dark frame, not the recovery (the W-107h lesson, now load-bearing). The
 spectrum ledger: draw 1 = 142 (the placement class, the landing PROVEN), draw 2
 = 126 (the SCU/TLB family, the landing AMBIGUOUS). N≥3 stands; draw 3 resolves
 the ambiguity. Record: ~/agent-runs/w107-parkjump-draw2-record.md. LED: PENDING.
+
+### ★ Draw-2 LED RESOLUTION (user stamps, 2026-10-11): THE OFF WAS THE JUMP — the ambiguity collapses toward the kernel-overwrite reading, and the 126 datapoint stands in the parked-alive regime
+
+User stamps (draw 2): 00:04 BLUE / 00:24 MAGENTA / 00:48 OFF / 01:56 RED.
+Anchored to the fire (python): off +48 s, red +116 s — **off→red = 68 s, THE
+JUMP'S BAND** (not the payload-death shape where off→red collapses to ~1 s).
+The OFF coincides with the payload's ssh death (host t=50 s), and the full 68 s
+band ran to RED ⇒ **the payload reached enter_stub and JUMPED; the kernel ran
+and died at 126; the WDT fired at the kernel's death.** The draw-2 recovery's
+bc[31]=1 ambiguity therefore collapses toward the kernel-overwrite reading (the
+landing happened and the kernel overwrote bc[31], OR the landing did not happen
+— but the flight was a JUMP either way, NOT a pre-jump payload death). Draw 2
+stands as a valid 126-class datapoint in the parked-alive (or
+attempted-parked-alive) regime; draw 1's LED stamps are not available. LED
+deltas: 4 / 20 / 24 / 68 — the normal-shape instance (NOT the lit-freeze).
