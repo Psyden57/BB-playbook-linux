@@ -4764,7 +4764,7 @@ delta +20 B fully attributed. The battery needs ONE addition:
 landing happened (any depth); 0x5A52F7F1 ⇒ the poll expired; anything else ⇒ a
 span death before the marker.
 
-### Run W-107 PARKJUMP draw 4 (--parkjump, session 24, 2026-10-11): ★★★★ THE DEEPEST KERNEL DRAW ON RECORD — bc[1]=111 = setup_arch() RETURNED, with the W-94 snapshot's bc[31]=1 (memblock init reached) and the DTB magic in bc[23]; the durable marker's residue flaw makes it uninformative this draw; the landing question stays OPEN
+### Run W-107 PARKJUMP draw 4 (--parkjump, session 24, 2026-10-11): ★★★ THE DEEPEST **PARKED-ALIVE** DRAW — bc[1]=111 = setup_arch() RETURNED (the first parked-alive run to clear setup_arch), with the W-94 snapshot's bc[31]=1 (memblock init reached) and the DTB magic in bc[23]; ★★ NOT the project's deepest (the era's record = bc[1]=184/185, the initcall loop, W-100 r3 — the user's correction, folded); the durable marker's residue flaw makes it uninformative this draw; the landing question stays OPEN
 
 Fired 21:25:3xZ (build #177, 40,917 B sha e93185babfbbc704…). **The pre-fire
 battery caught the durable marker already at `0x9FE000A4 = 5a52f7f2`** — draw
@@ -4774,8 +4774,13 @@ marker is **UNINFORMATIVE on a repeat landing** (the fresh-slot problem realized
 in the instrument itself).
 
 Recovery: **bc[1]=0x6f=111 = `setup_arch()` RETURNED** (kernel patch :2095) — the
-DEEPEST kernel progress on record (the prior best was 146/147 in the iotable
-region; every prior draw died between 126 and 156); **bc[31]=0x00000001 = the
+DEEPEST **PARKED-ALIVE** draw (the first parked-alive run to clear setup_arch);
+**★★ the user's correction (a repo grep, 2026-10-11): this is NOT the project's
+deepest draw — the era's reached-depth record is bc[1]=184/185, the INITCALL LOOP
+(core level, hero `rcu_init_tasks_generic`, past rest_init/kernel_init/
+do_basic_setup), set by W-100 r3 on 2026-10-05 ("THE REACHED-DEPTH RECORD OF THE
+CURRENT ERA: r3 = initcall core level") — draw 4 is ~73 markers short of it, and
+that record ran in the HELD shape**; **bc[31]=0x00000001 = the
 W-94 snapshot value (memblock.memory.cnt) ⇒ the kernel reached memblock init**
 (the DEPTH channel = DEEP); bc[23]=**0x5c4d0100 = the DTB magic** ⇒ the FDT was
 parsed; bc[28]=0x1fe00000 (a pmd-class word); bc[29]/bc[30]=**0x5a5aa5a5 /
@@ -4785,12 +4790,15 @@ ssh up 21:30:09Z ⇒ reset→network-back ≈ 183 s (the band holds); the releas
 class engaged 4-for-4 with clean recoveries.
 
 ⇒ **THE SPECTRUM (N=4):** 142 (placement) / 126 (SCU/TLB, the landing OPEN) /
-142 (placement) / **111 (past setup_arch — a NEW class, deeper than any
-recorded)**. **3 of 4 draws are NOT the 126 family, and the deepest draw in the
-project's history occurred under parked-alive.** The prediction (the SCU/TLB
-family vanishes) has 3 non-126 datapoints out of 4, with the single 126
-unproven — the ledger now leans in the prediction's favour more strongly than
-N=3 did.
+142 (placement) / **111 (past setup_arch — the deepest in the PARKED-ALIVE
+family)**. **3 of 4 draws died in the two classes the parked-alive regime was
+predicted to REMOVE or LEAVE BEHIND, and the deepest draw IN THIS FAMILY occurred
+here** — but the project's overall depth record (bc[1]=184/185, the initcall loop,
+W-100 r3, the held shape) stands well ahead of it, so the comparison that matters
+for the parked-alive question is *within* this family, not against the era's best.
+The prediction (the SCU/TLB family vanishes) has 3 non-126 datapoints out of 4,
+with the single 126 unproven — the ledger leans in the prediction's favour more
+strongly than N=3 did.
 
 **THE INSTRUMENT'S FLAW (its fix's limit, realized):** the durable marker's
 fresh-slot problem — `0x9FE000A4` is not cleared by a warm reset and a repeat
