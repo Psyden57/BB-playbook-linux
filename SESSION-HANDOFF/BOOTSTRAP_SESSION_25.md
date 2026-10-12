@@ -66,6 +66,13 @@ recoveries, zero writes in every recovery, no release-class casualty.**
    instruction).
 8. On demand: the W-107d/e/h/i designs, the TASK-027 preflight verdict, the four
    PARKJUMP draw records, and the three corrections (see §"THE CORRECTIONS").
+   **★ ALSO: `~/agent-runs/REVIEW-claude-orchestration-2026-10-12.md` — the
+   ground-truthed response to an external (Claude) critique of this
+   orchestration system, with a recommended improvement order.** The operator
+   asked for it; its headline answer is that **Hermes HAS enforceable
+   `pre_tool_call` hooks that can BLOCK a tool call** (VERIFIED), which makes the
+   "turn the GO gate into code" recommendation buildable. The document's §5
+   ordering is the proposal — the operator decides what to adopt.
 
 ## THE EXTERNAL REPORTS — THE FOURTH KNOWLEDGE HOME (keep them current)
 
