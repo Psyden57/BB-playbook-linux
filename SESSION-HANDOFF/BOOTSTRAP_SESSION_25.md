@@ -12,12 +12,15 @@ holder of that in-session reasoning). No cross-check is pending at this wrap.
 
 ## ★ THE SUBAGENT MODEL (the user's standing instruction, 2026-10-09)
 
-**Subagents spawn with the SAME model/provider as the root agent:
-stepfun/step-5-preview-free via provider kilo, `--reasoning high` RETAINED.**
-The skill `playbook-dev-orchestration` + `references/subagent-delegation.md`
-still carry the old `deepseek/deepseek-v4.1-flash` constant — **leave them as-is
-(the user's call: the change is temporary)**; the spawn deviates deliberately and
-the deviation is recorded in W-107i-design.md §11. The rest of the recipe
+**Subagents spawn on the SAME model/provider as the root session, at spawn time
+— whatever the root is actually running on (check the runtime metadata; the
+root's model can change between sessions, and it changed mid-session-24), with
+`--reasoning high` RETAINED.** Do NOT hard-code a model name here: the standing
+rule is "the root's current model/provider", not a fixed slug. The skill
+`playbook-dev-orchestration` + `references/subagent-delegation.md` still carry
+the old `deepseek/deepseek-v4.1-flash` constant — **leave them as-is (the user's
+call: the change is temporary)**; the spawn deviates deliberately and the
+deviation is recorded in W-107i-design.md §11. The rest of the recipe
 (`--oneshot --query-file`, the bracket-pgrep discipline, the post-spawn
 `sessions.model` audit) is unchanged. One caution: TASK-027's run ended in an
 HTTP 429 mid-report — harvest the agent log and root-verify any claim that never
@@ -63,6 +66,38 @@ recoveries, zero writes in every recovery, no release-class casualty.**
    instruction).
 8. On demand: the W-107d/e/h/i designs, the TASK-027 preflight verdict, the four
    PARKJUMP draw records, and the three corrections (see §"THE CORRECTIONS").
+
+## THE EXTERNAL REPORTS — THE FOURTH KNOWLEDGE HOME (keep them current)
+
+Two share-bound documents live in the user's HOME (NOT the repo — they are for
+readers with no repo access, and they are NOT project state):
+
+- `~/playbook-orchestration-report.md` — how the project is RUN.
+- `~/playbook-project-explainer.md` — what the project IS.
+
+**They are LIVING documents: update them IN PLACE, never datestamped siblings.**
+Conventions: the skill's `references/external-reports.md`. Read them if a task
+touches explaining the project (and `READFIRST/Psyden.txt` + 
+`~/agent-runs/HOW-IT-WORKS.md` — the operator's own narrative and the internal
+memory-system guide, the reports' two siblings).
+
+**★ THEY ARE NOW STALE (both dated 2026-10-08, pre-session-24) — a KNOWN debt:**
+- The explainer's §9 lists *"W-107, the jump integration — gated on the wedge
+  mechanism being understood"* — **W-107 FLEW and the parked-alive release
+  LANDED** (session 24).
+- The orchestration report's §10 calls the *"residual release-on-live wedge …
+  the top open problem"* and puts the frontier on the second core — session 24
+  engaged the release class **4× with 10 clean recoveries and no casualty**, and
+  the frontier moved to the **boot-depth spectrum + the parked-alive regime**.
+- Both carry pre-session-24 counts ("23 numbered sessions") and the session-23
+  "64.5 ms" frontier.
+
+**⇒ A wrap-time duty: when a session moves the state these documents snapshot
+(the frontier, the open problems, the counts), refresh their §"where it stands"
+sections in the SAME wrap — they are the only home for the project's
+OUTSIDE-facing framing (including the end-goal: a usable Linux needing the
+PlayBook's own display/touch drivers, the postmarketOS-style target), and
+nothing else in the chain carries it.**
 
 ## SOURCES & TREES (paths)
 
@@ -202,6 +237,12 @@ recoveries, zero writes in every recovery, no release-class casualty.**
 
 ## THE DECISION QUEUE FOR SESSION 25 (ranked)
 
+**★ FIRST ACTION: build W-107j (the durable marker's fresh-slot fix) — it is a
+one-line cont change (or a one-line C-block zero); build it → rule-16 (the cont
+length grows again — re-verify the pool-in-range constraint) → then the flight
+is user-gated.** Read this bootstrap's read order first, verify live state (git
+HEAD, the payload hash, the keeper), then start here.
+
 1. **★ W-107j (the fresh-slot fix — my recommendation FIRST).** ONE line either
    way: the cont writes a per-run nonce into 0x9FE000A8 alongside the marker, OR
    the C block zeros 0x9FE000A4 at setup. It makes the landing question decidable
@@ -219,7 +260,22 @@ recoveries, zero writes in every recovery, no release-class casualty.**
    instrument limitation, explicitly NOT to be re-chased.
 5. Smalls: the 215 (poll-expired) path is still unflown; `mon_call_full`'s
    {r4,r5,r7,lr} stack audit; TASK-005 follow-ups.
-6. Strategic: the 185-path; the F3-family; the memory-tree threads.
+6. **Strategic** — ⚠ **TWO of these three are INHERITED SHORTHAND with NO
+   definition on record: resolve them from the records (or ask the user/relay) —
+   do NOT guess.**
+   - the **F3-family** = the W-104 release-staging ladder's stages (F1 = re-fly +
+     the restore alone, the recovery outcome IS the measurement; F2 = the
+     release; **F3 = the kernel-side control**) — traceable in the F-series
+     records and PROJECT_STATE:15-17.
+   - the **185-path** — ⚠ UNDEFINED: the term appears only as a queue-item LABEL
+     (PROJECT_STATE:166 "read BOOTSTRAP_SESSION_17; the W-101 decision; the
+     185-path; the CPU1…") and in the bootstraps; no expansion exists. Given the
+     era's depth record IS bc[1]=184/185 (the initcall loop), the likeliest
+     reading is "the route past the initcall-loop marker to a deeper boot" — but
+     that is an INFERENCE, not a record.
+   - the **memory-tree threads** — ⚠ UNDEFINED: the term appears ONLY in
+     BOOTSTRAP_SESSION_23/24/25 — three handoffs, no expansion anywhere, no
+     source record. Resolve or ask.
 
 ## THE STANDING RULES (the short list)
 
@@ -256,7 +312,7 @@ recoveries, zero writes in every recovery, no release-class casualty.**
 - git commit + push every state change; the bootstrap = the wrap product.
 - **`pgrep` self-match discipline**: run stray-wrapper checks with the bracket
   form (`[j]ump\.sh`, `[B]erryShell`).
-- **Subagent spawn**: the ROOT's model/provider (stepfun/step-5-preview-free via
-  kilo) with `--reasoning high` — see the ★ note at the top; audit
-  `state.db sessions.model` after spawning; if the route fails, run the work
-  root-side with probe evidence.
+- **Subagent spawn**: the ROOT's current model/provider at spawn time (check the
+  runtime metadata; do not hard-code a slug) with `--reasoning high` — see the ★
+  note at the top; audit `state.db sessions.model` after spawning; if the route
+  fails, run the work root-side with probe evidence.
